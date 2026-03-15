@@ -21,7 +21,7 @@ A VSCode extension that provides a Salesforce utilities cockpit. It connects to 
 Alternatively, install from the terminal:
 
 ```bash
-code --install-extension force-cockpit-0.0.1.vsix
+code --install-extension force-cockpit-<version>.vsix
 ```
 
 ### Prerequisites
@@ -355,6 +355,29 @@ js: |
 
 ---
 
+## Releases
+
+New versions are published automatically via GitHub Actions.
+
+To create a release:
+
+1. Go to the **Actions** tab in the GitHub repository.
+2. Select **Release** → **Run workflow**.
+3. Choose the version bump type (`patch`, `minor`, or `major`) or enter an explicit version string.
+4. Click **Run workflow**.
+
+The workflow will:
+- Bump the version in `package.json`
+- Update `CHANGELOG.md` with the version and date
+- Push a version commit and git tag to `main`
+- Build and package the `.vsix`
+- Create a **GitHub Release** with the `.vsix` attached
+- Publish the extension to the **VS Code Marketplace**
+
+The `.vsix` for every release is available on the [GitHub Releases page](https://github.com/noriabits/force-cockpit/releases).
+
+---
+
 ## Development
 
 ```bash
@@ -362,5 +385,5 @@ npm install
 npm run build       # Build extension (copy assets + esbuild bundle)
 npm run watch       # Build in watch mode
 npm run compile     # TypeScript type-check only
-yes | npm run package     # Build + create .vsix
+npm run package     # Build + create .vsix
 ```
