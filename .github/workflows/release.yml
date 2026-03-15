@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type (used if explicit version is not set)'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+      version:
+        description: 'Explicit version string (e.g. 1.0.0) — overrides version_type if set'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  HUSKY: 0
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine new version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            NEW_VERSION="${{ github.event.inputs.version }}"
+          else
+            TYPE="${{ github.event.inputs.version_type }}"
+            NEW_VERSION=$(node -e "
+              const p = require('./package.json').version.split('.').map(Number);
+              if ('$TYPE' === 'major') { p[0]++; p[1] = 0; p[2] = 0; }
+              else if ('$TYPE' === 'minor') { p[1]++; p[2] = 0; }
+              else { p[2]++; }
+              console.log(p.join('.'));
+            ")
+          fi
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "New version: $NEW_VERSION"
+
+      - name: Bump package.json version
+        run: npm version ${{ steps.version.outputs.new_version }} --no-git-tag-version
+
+      - name: Update CHANGELOG.md
+        run: |
+          VERSION=${{ steps.version.outputs.new_version }}
+          DATE=$(date -u '+%Y-%m-%d')
+          # Replace "## [Unreleased]" with the versioned heading and re-add [Unreleased] above it
+          sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" CHANGELOG.md
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit version bump
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore: release v${{ steps.version.outputs.new_version }}"
+
+      - name: Create git tag
+        run: git tag "v${{ steps.version.outputs.new_version }}"
+
+      - name: Push commit and tag
+        run: |
+          git push origin main
+          git push origin "v${{ steps.version.outputs.new_version }}"
+
+      - name: Build and package VSIX
+        run: npm run package
+
+      - name: Locate VSIX file
+        id: vsix
+        run: |
+          VSIX_PATH=$(ls *.vsix | head -n 1)
+          echo "path=$VSIX_PATH" >> "$GITHUB_OUTPUT"
+          echo "VSIX: $VSIX_PATH"
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION=${{ steps.version.outputs.new_version }}
+          # Extract content between this version's heading and the next ## [ heading
+          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # Write to a temp file to safely pass multiline content to gh
+          echo "$NOTES" > /tmp/release-notes.md
+          cat /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "v${{ steps.version.outputs.new_version }}" \
+            "${{ steps.vsix.outputs.path }}" \
+            --title "v${{ steps.version.outputs.new_version }}" \
+            --notes-file /tmp/release-notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      #- name: Publish to VS Code Marketplace
+      #  run: npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}" --pat "${{ secrets.VSCE_PAT }}"
