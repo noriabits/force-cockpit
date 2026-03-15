@@ -2,11 +2,11 @@
   "name": "force-cockpit",
   "displayName": "Force Cockpit",
   "description": "Salesforce utilities cockpit for VSCode",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "MIT",
   "author": {
-      "name": "Pablo Fernández Posadas",
-      "email": "pablo@noriabits.com"
+    "name": "Pablo Fernández Posadas",
+    "email": "pablo@noriabits.com"
   },
   "engines": {
     "vscode": "^1.96.0"
