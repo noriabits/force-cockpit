@@ -1,0 +1,264 @@
+#monitoring-panel {
+  padding: 12px 0;
+}
+
+.monitoring-toolbar {
+  margin-bottom: 16px;
+}
+
+.monitoring-toolbar-top {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.monitoring-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+/* ── Grid ── */
+.monitoring-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+/* ── Card ── */
+.monitoring-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.monitoring-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitoring-card-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monitoring-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.monitoring-chart-type-select {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  cursor: pointer;
+}
+
+.monitoring-chart-type-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Canvas wrapper ── */
+.monitoring-canvas-wrapper {
+  position: relative;
+  height: 240px;
+  width: 100%;
+}
+
+.monitoring-canvas-wrapper canvas {
+  max-height: 240px;
+}
+
+/* ── Status line ── */
+.monitoring-status {
+  display: block;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  min-height: 16px;
+}
+
+/* ── Edit form ── */
+.monitoring-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.monitoring-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.monitoring-form-row--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitoring-form-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.monitoring-soql-input {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* ── Value fields ── */
+.monitoring-value-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.monitoring-value-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.monitoring-value-field-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.monitoring-vf-threshold-input {
+  width: 80px;
+  flex: none;
+}
+
+.monitoring-vf-condition-select {
+  flex: none;
+}
+
+.monitoring-remove-vf-btn {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  font-size: 14px;
+  line-height: 1;
+  background: none;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.monitoring-remove-vf-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.monitoring-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Metric card ── */
+.monitoring-metric-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+  gap: 6px;
+}
+
+.monitoring-metric-number {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--vscode-foreground);
+}
+
+.monitoring-metric-label {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ── Table card ── */
+.monitoring-table-wrapper {
+  overflow-y: auto;
+  max-height: 300px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+}
+
+.monitoring-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.monitoring-table-th {
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+  padding: 6px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.monitoring-table-th:hover {
+  color: var(--vscode-foreground);
+}
+
+.monitoring-table-td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-foreground);
+}
+
+.monitoring-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.monitoring-table tbody tr:hover td {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* ── Format select in value field row ── */
+.monitoring-vf-format-select {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 4px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  flex-shrink: 0;
+  width: 90px;
+}
+
+/* ── Preview wrapper (edit form) ── */
+.monitoring-preview-wrapper {
+  position: relative;
+  min-height: 60px;
+}

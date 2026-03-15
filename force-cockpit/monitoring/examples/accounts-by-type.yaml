@@ -1,0 +1,13 @@
+name: Accounts by Type
+description: Distribution of account types.
+soql: |-
+  SELECT Type, COUNT(Id) Total
+  FROM Account
+  WHERE Type != null
+  GROUP BY Type
+labelField: Type
+valueFields:
+  - field: Total
+    label: Accounts
+chartType: bar
+refreshInterval: 0

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+             img-src ${cspSource};
+             style-src ${cspSource} 'nonce-${nonce}';
+             script-src 'nonce-${nonce}';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="${cssUri}" nonce="${nonce}" />
+    <title>${panelTitle}</title>
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="cockpit-header">
+      <div class="header-left">
+        <span class="header-title">${panelTitle}</span>
+      </div>
+      <div class="header-right" id="connection-status">
+        <span class="status-dot disconnected" id="status-dot" aria-hidden="true"></span>
+        <span id="status-label">Not connected</span>
+      </div>
+    </header>
+
+    <!-- Tab bar -->
+    <nav class="tab-bar" id="tab-bar" role="tablist">
+      <button
+        class="tab active"
+        data-tab="overview"
+        role="tab"
+        aria-selected="true"
+        aria-controls="tab-overview"
+      >
+        🔍 Overview
+      </button>
+      <button
+        class="tab"
+        data-tab="utils"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-utils"
+      >
+        🛠️ Utils
+      </button>
+      <button
+        class="tab"
+        data-tab="monitoring"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-monitoring"
+      >
+        📊 Monitoring
+      </button>
+    </nav>
+
+    <!-- Production org warning -->
+    <div id="production-warning" class="production-warning" style="display: none">
+      Production org — changes will affect live data.
+    </div>
+
+    <main class="cockpit-main">
+      <!-- ═══════════════════ TAB: Overview ═══════════════════ -->
+      <div class="tab-content active" id="tab-overview" role="tabpanel">
+        <!-- Logo -->
+        <div class="cockpit-logo-wrapper">
+          <img src="${logoUri}" alt="${panelTitle}" class="cockpit-logo" />
+        </div>
+
+        <!-- No connection state -->
+        <section class="empty-state" id="empty-state">
+          <div class="empty-icon">&#9729;</div>
+          <h2>No org connected</h2>
+          <p>Use the Salesforce extension to set a default org for this workspace.</p>
+        </section>
+
+        <!-- Connecting state -->
+        <section class="connecting-state" id="connecting-state" style="display: none">
+          <div class="connecting-spinner"></div>
+          <p id="connecting-label">Connecting...</p>
+        </section>
+
+        <!-- Connected state -->
+        <div id="connected-content" style="display: none">
+          <!-- Org info card -->
+          <section class="card" id="org-card">
+            <div class="card-header">
+              <h3 class="card-title">🏠 Org Info</h3>
+              <button class="btn btn-ghost" id="btn-open-browser">🌐 Open in Browser</button>
+            </div>
+            <div class="info-grid">
+              <div class="info-row">
+                <span class="info-label">Alias</span>
+                <span class="info-value" id="org-alias">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Username</span>
+                <span class="info-value" id="org-username">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Org ID</span>
+                <span class="info-value mono" id="org-id">—</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Instance URL</span>
+                <span class="info-value mono" id="org-instance">—</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Storage -->
+          <section class="card" id="storage-card" style="display: none">
+            <div class="card-header">
+              <h3 class="card-title">💾 Storage</h3>
+            </div>
+            <div class="storage-bars">
+              <div class="storage-item">
+                <div class="storage-meta">
+                  <span class="storage-label">Data Storage</span>
+                  <span class="storage-value" id="storage-data-value">—</span>
+                </div>
+                <div class="storage-bar-track">
+                  <div class="storage-bar-fill" id="storage-data-bar"></div>
+                </div>
+              </div>
+              <div class="storage-item">
+                <div class="storage-meta">
+                  <span class="storage-label">File Storage</span>
+                  <span class="storage-value" id="storage-file-value">—</span>
+                </div>
+                <div class="storage-bar-track">
+                  <div class="storage-bar-fill" id="storage-file-bar"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Quick SOQL Query -->
+          <section class="card" id="query-card">
+            <div class="card-header">
+              <h3 class="card-title">⚡ Quick Query</h3>
+            </div>
+            <div class="query-editor">
+              <textarea
+                id="soql-input"
+                class="soql-textarea"
+                spellcheck="false"
+                placeholder="SELECT Id, Name FROM Account LIMIT 10"
+                rows="4"
+              ></textarea>
+              <div class="query-toolbar">
+                <button class="btn btn-primary" id="btn-run-query">Run Query</button>
+                <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
+                <span class="query-hint" id="query-hint"></span>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div id="query-results" style="display: none">
+              <div class="results-meta" id="results-meta"></div>
+              <div class="table-wrapper">
+                <table class="results-table" id="results-table">
+                  <thead id="results-thead"></thead>
+                  <tbody id="results-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="query-error" class="error-box" style="display: none"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ TAB: Utils ═══════════════════ -->
+      <div class="tab-content" id="tab-utils" role="tabpanel">
+        <section class="card">
+          <div class="card-header">
+            <h3 class="card-title">🛠️ Utilities</h3>
+          </div>
+          <p class="card-description">
+            A collection of reusable utilities for common Salesforce operations. Click on any
+            utility below to expand it and get started.
+          </p>
+        </section>
+
+        <div class="utils-sub-tab-bar">
+          <button class="utils-sub-tab active" data-utils-tab="built-in">🔩 Built-in</button>
+          <button class="utils-sub-tab" data-utils-tab="scripts">📜 Scripts</button>
+        </div>
+
+        <!-- Sub-tab: Built-in -->
+        <div class="utils-sub-tab-panel active" id="utils-sub-tab-built-in">
+          <div class="feature-filter">
+            <input
+              type="text"
+              class="text-input feature-filter-input"
+              id="utils-builtin-search"
+              data-no-generic-filter
+              placeholder="Filter features..."
+            />
+          </div>
+          <div class="category-pills" id="utils-builtin-pills"></div>
+          <!-- features:utils -->
+        </div>
+
+        <!-- Sub-tab: Scripts -->
+        <div class="utils-sub-tab-panel" id="utils-sub-tab-scripts">
+          <!-- features:utils-scripts -->
+        </div>
+      </div>
+      <!-- ═══════════════════ TAB: Monitoring ═══════════════════ -->
+      <div class="tab-content" id="tab-monitoring" role="tabpanel">
+        <!-- features:monitoring -->
+      </div>
+    </main>
+
+    <script nonce="${nonce}" src="${chartJsUri}" defer></script>
+    <script nonce="${nonce}" src="${jsUri}"></script>
+  </body>
+</html>

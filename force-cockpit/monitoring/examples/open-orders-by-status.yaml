@@ -1,0 +1,13 @@
+name: Open Orders by Status
+description: Count of open orders grouped by status.
+soql: |-
+  SELECT Status, COUNT(Id) RecordCount
+  FROM Order
+  WHERE Status != 'Cancelled'
+  GROUP BY Status
+labelField: Status
+valueFields:
+  - field: RecordCount
+    label: Orders
+chartType: bar
+refreshInterval: 0

@@ -1,0 +1,87 @@
+<div id="yaml-scripts-panel">
+  <div class="yaml-scripts-filter">
+    <input type="text" class="text-input" id="yaml-search" placeholder="Search scripts..." />
+    <button class="btn yaml-refresh-btn" id="yaml-refresh-btn" title="Refresh scripts list">
+      &#8635; Refresh
+    </button>
+    <button class="btn btn-primary" id="yaml-new-btn"></button>
+  </div>
+  <div id="yaml-new-form" class="yaml-new-form">
+    <div class="yaml-form-row">
+      <label class="yaml-form-label" for="yaml-form-name"></label>
+      <input type="text" class="text-input" id="yaml-form-name" />
+    </div>
+    <div class="yaml-form-row">
+      <label class="yaml-form-label" for="yaml-form-description"></label>
+      <textarea
+        class="text-input yaml-form-textarea"
+        id="yaml-form-description"
+        rows="2"
+      ></textarea>
+    </div>
+    <div class="yaml-form-row yaml-form-row--inline">
+      <div class="yaml-form-col">
+        <label class="yaml-form-label" for="yaml-form-type"></label>
+        <select class="text-input" id="yaml-form-type">
+          <option value="apex"></option>
+          <option value="command"></option>
+          <option value="js"></option>
+        </select>
+      </div>
+      <div class="yaml-form-col">
+        <label class="yaml-form-label" for="yaml-form-folder"></label>
+        <div class="yaml-folder-combobox">
+          <input type="text" class="text-input" id="yaml-form-folder" autocomplete="off" />
+          <button type="button" class="yaml-folder-toggle" id="yaml-folder-toggle" tabindex="-1">
+            &#9662;
+          </button>
+          <div class="yaml-folder-dropdown" id="yaml-folder-dropdown"></div>
+        </div>
+      </div>
+      <div class="yaml-form-col">
+        <label class="yaml-form-label" for="yaml-form-source"></label>
+        <select class="text-input" id="yaml-form-source">
+          <option value="inline"></option>
+          <option value="file"></option>
+        </select>
+      </div>
+    </div>
+    <div class="yaml-form-row yaml-form-row--inline">
+      <label class="yaml-form-label" for="yaml-form-private" id="yaml-form-private-label"></label>
+      <input type="checkbox" id="yaml-form-private" />
+    </div>
+    <div class="yaml-form-row" id="yaml-form-file-row">
+      <label class="yaml-form-label" for="yaml-form-file-path"></label>
+      <div class="input-with-paste">
+        <input type="text" class="text-input" id="yaml-form-file-path" autocomplete="off" />
+        <button type="button" class="btn yaml-browse-btn" id="yaml-form-browse-btn"></button>
+      </div>
+    </div>
+    <div class="yaml-form-row">
+      <label class="yaml-form-label" id="yaml-form-inputs-label"></label>
+      <div id="yaml-form-inputs-list" class="yaml-form-inputs-list"></div>
+      <button type="button" class="btn yaml-add-input-btn" id="yaml-add-input-btn"></button>
+    </div>
+    <div class="yaml-form-row">
+      <label class="yaml-form-label" for="yaml-form-content"></label>
+      <textarea
+        class="text-input yaml-form-textarea yaml-form-content"
+        id="yaml-form-content"
+        rows="6"
+        spellcheck="false"
+      ></textarea>
+    </div>
+    <div class="error-box" id="yaml-form-error"></div>
+    <div class="feature-actions">
+      <button class="btn btn-primary" id="yaml-form-save-btn"></button>
+      <button class="btn" id="yaml-form-cancel-btn"></button>
+      <button class="btn yaml-form-delete-btn" id="yaml-form-delete-btn"></button>
+    </div>
+  </div>
+  <div class="visibility-filter" id="yaml-visibility-filter"></div>
+  <div class="category-pills" id="yaml-folder-pills"></div>
+  <div class="sub-category-pills" id="yaml-sub-pills"></div>
+  <div id="yaml-scripts-list"></div>
+  <div id="yaml-no-results" class="feature-no-results" style="display: none"></div>
+  <div id="yaml-load-error" class="error-box"></div>
+</div>

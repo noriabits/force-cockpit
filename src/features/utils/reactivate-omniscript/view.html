@@ -1,0 +1,71 @@
+<!-- Accordion: Reactivate OmniScript -->
+<section class="accordion" id="accordion-reactivate-omniscript" data-category="OmniStudio">
+  <button class="accordion-trigger" data-accordion="reactivate-omniscript" aria-expanded="false">
+    <span class="accordion-icon">&#9654;</span>
+    <span class="accordion-title">⚙️ Reactivate OmniScript</span>
+    <span class="accordion-subtitle">Query active OmniScripts and reactivate a selected one.</span>
+  </button>
+  <div class="accordion-body" id="accordion-body-reactivate-omniscript">
+    <!-- Step 1: Fetch & filter OmniScripts -->
+    <div class="card card-inner">
+      <div class="card-header">
+        <h4 class="card-title">1. Select OmniScript</h4>
+      </div>
+      <p class="card-description" id="ro-description"></p>
+      <div class="feature-actions">
+        <button class="btn btn-primary" id="btn-ro-fetch" disabled></button>
+        <span class="query-hint" id="ro-fetch-status"></span>
+      </div>
+      <div id="ro-filters" style="display: none">
+        <div class="ro-filter-row">
+          <div class="input-with-paste" style="flex: 1; min-width: 0">
+            <input
+              type="text"
+              class="text-input"
+              id="ro-filter-type"
+              placeholder="Filter by Type..."
+            />
+            <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+          </div>
+          <div class="input-with-paste" style="flex: 1; min-width: 0">
+            <input
+              type="text"
+              class="text-input"
+              id="ro-filter-subtype"
+              placeholder="Filter by SubType..."
+            />
+            <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+          </div>
+        </div>
+      </div>
+      <div id="ro-results" style="display: none">
+        <div class="table-wrapper">
+          <table class="results-table" id="ro-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>SubType</th>
+                <th>Language</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ro-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="ro-selected" class="selected-user-banner" style="display: none">
+        <span id="ro-selected-label"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-ro-clear">Change</button>
+      </div>
+      <div id="ro-fetch-error" class="error-box" style="display: none"></div>
+    </div>
+
+    <!-- Step 2: Reactivate -->
+    <div class="feature-actions">
+      <button class="btn btn-primary" id="btn-ro-reactivate" disabled></button>
+      <span class="query-hint" id="ro-status"></span>
+    </div>
+    <div id="ro-result" class="success-box" style="display: none"></div>
+    <div id="ro-error" class="error-box" style="display: none"></div>
+  </div>
+</section>

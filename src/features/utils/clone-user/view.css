@@ -1,0 +1,52 @@
+/* Clone User — feature-specific styles */
+
+.clone-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.selected-user-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 3px;
+  background-color: var(--vscode-list-hoverBackground);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* Form grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-field-full {
+  grid-column: 1 / -1;
+}
+
+.form-computed {
+  font-size: 12px;
+  padding: 6px 10px;
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+  word-break: break-all;
+}
+
+/* Select button in search results */
+.results-table .btn-select {
+  padding: 2px 8px;
+  font-size: 11px;
+}

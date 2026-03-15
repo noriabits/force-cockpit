@@ -1,0 +1,15 @@
+name: Recent Orders
+description: Last 20 orders by creation date.
+soql: |-
+  SELECT OrderNumber, Status, TotalAmount
+  FROM Order
+  ORDER BY CreatedDate DESC
+  LIMIT 20
+labelField: OrderNumber
+valueFields:
+  - field: Status
+    label: Status
+  - field: TotalAmount
+    label: Amount
+    format: currency
+chartType: table

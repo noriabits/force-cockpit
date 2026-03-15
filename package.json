@@ -1,0 +1,147 @@
+{
+  "name": "force-cockpit",
+  "displayName": "Force Cockpit",
+  "description": "Salesforce utilities cockpit for VSCode",
+  "version": "0.0.1",
+  "license": "MIT",
+  "author": {
+      "name": "Pablo Fernández Posadas",
+      "email": "pablo@noriabits.com"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "publisher": "noriabits",
+  "icon": "media/fc-logo.png",
+  "categories": [
+    "Other",
+    "Testing"
+  ],
+  "repository": "noriabits/force-cockpit",
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "forceCockpit",
+          "title": "Force Cockpit",
+          "icon": "media/logoside.png"
+        }
+      ]
+    },
+    "views": {
+      "forceCockpit": [
+        {
+          "id": "forceCockpit.panel",
+          "name": "Force Cockpit",
+          "icon": "media/logoside.png"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "forceCockpit.panel",
+        "contents": "[Open Force Cockpit](command:forceCockpit.openPanel)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "forceCockpit.openPanel",
+        "title": "Open Cockpit",
+        "category": "Force Cockpit",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "forceCockpit.openInBrowser",
+        "title": "Open in Browser",
+        "category": "Force Cockpit",
+        "icon": "$(globe)"
+      }
+    ],
+    "configuration": {
+      "title": "Force Cockpit",
+      "properties": {
+        "forceCockpit.cockpitPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the force-cockpit folder containing YAML script and monitoring definitions. Defaults to {workspace root}/force-cockpit if empty."
+        },
+        "forceCockpit.protectedSandboxes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Protected sandbox orgs that require confirmation before some actions. Specify by org name or alias."
+        },
+        "forceCockpit.panelTitle": {
+          "type": "string",
+          "default": "Force Cockpit",
+          "description": "Display title shown in the panel header and tab."
+        },
+        "forceCockpit.logoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a logo image file relative to the workspace root. Leave empty to use the default logo."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "compile": "tsc -p ./",
+    "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"src/features/**/*.{js,css,html}\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"src/features/**/*.{js,css,html}\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package",
+    "prepare": "husky",
+    "install": "code --install-extension force-cockpit-0.0.1.vsix"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "src/features/**/*.{js,css,html}": [
+      "prettier --write"
+    ],
+    "media/**/*.{js,css}": [
+      "prettier --write"
+    ],
+    "webviews/**/*.html": [
+      "prettier --write"
+    ]
+  },
+  "overrides": {
+    "eslint": "^10.0.0"
+  },
+  "dependencies": {
+    "@salesforce/core": "^8.26.3",
+    "chart.js": "^4.5.1",
+    "js-yaml": "^4.1.0",
+    "jsforce": "^3.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.96.0",
+    "@typescript-eslint/eslint-plugin": "^8.55.0",
+    "@typescript-eslint/parser": "^8.55.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
+  }
+}

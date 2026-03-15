@@ -1,0 +1,11 @@
+/* Reactivate OmniScript — feature-specific styles */
+
+.ro-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ro-filter-row .text-input {
+  flex: 1;
+}

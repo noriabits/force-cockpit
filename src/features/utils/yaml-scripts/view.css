@@ -1,0 +1,429 @@
+.yaml-scripts-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.yaml-scripts-filter .text-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.yaml-refresh-btn {
+  flex-shrink: 0;
+}
+
+.script-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.script-type-badge--apex {
+  background: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 18%, transparent);
+  color: var(--vscode-charts-blue, #3794ff);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 40%, transparent);
+}
+
+.script-type-badge--command {
+  background: color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 18%, transparent);
+  color: var(--vscode-charts-purple, #b180d7);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-purple, #b180d7) 40%, transparent);
+}
+
+.script-type-badge--js {
+  background: color-mix(in srgb, var(--vscode-charts-green, #89d185) 18%, transparent);
+  color: var(--vscode-charts-green, #89d185);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-green, #89d185) 40%, transparent);
+}
+
+.yaml-log-viewer {
+  margin-top: 10px;
+}
+
+.yaml-log-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.yaml-log-output {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre;
+  word-break: normal;
+  color: var(--vscode-editor-foreground);
+}
+
+.yaml-log-output--success {
+  border-color: var(--vscode-testing-iconPassed, #4d9e4d);
+}
+
+.yaml-log-output--error {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.yaml-open-editor-btn {
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--vscode-button-secondaryBackground);
+  color: var(--vscode-foreground);
+  border-radius: 3px;
+}
+
+.yaml-open-editor-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Header row: trigger fills remaining space, badge + execute button stay right-aligned */
+.yaml-script-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Override global width:100% on accordion-trigger when inside yaml-script-header */
+.yaml-script-header .accordion-trigger {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* Execute button in header — right-aligned with consistent spacing */
+.yaml-script-header .yaml-execute-btn {
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+/* Top padding for body since card-description (which had margin) is removed */
+#yaml-scripts-panel .accordion-body {
+  padding-top: 12px;
+}
+
+/* ── Invalid script badge ── */
+.script-invalid-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: middle;
+  flex-shrink: 0;
+  background: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 18%,
+    transparent
+  );
+  color: var(--vscode-inputValidation-errorBorder, #be1100);
+  border: 1px solid
+    color-mix(in srgb, var(--vscode-inputValidation-errorBorder, #be1100) 40%, transparent);
+}
+
+/* Invalid script accordion — slightly muted */
+.yaml-script--invalid {
+  opacity: 0.85;
+}
+
+/* ── New Script form ── */
+.yaml-new-form {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background-color: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.yaml-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.yaml-form-row--inline {
+  flex-direction: row;
+  gap: 12px;
+}
+
+.yaml-form-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.yaml-form-textarea {
+  resize: vertical;
+  min-height: 54px;
+}
+
+.yaml-form-content {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  min-height: 100px;
+}
+
+/* ── Edit button in accordion header ── */
+.yaml-edit-btn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.yaml-edit-btn:hover {
+  opacity: 1;
+}
+
+/* ── Delete button in form — destructive, pushed to far right ── */
+.yaml-form-delete-btn {
+  margin-left: auto;
+  color: var(--vscode-inputValidation-errorBorder, #be1100);
+  border-color: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 40%,
+    transparent
+  );
+}
+
+.yaml-form-delete-btn:hover {
+  background: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 15%,
+    transparent
+  );
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+/* ── Category combobox ── */
+.yaml-folder-combobox {
+  position: relative;
+  display: flex;
+}
+
+.yaml-folder-combobox .text-input {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.yaml-folder-toggle {
+  flex-shrink: 0;
+  padding: 0 6px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-left: none;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.yaml-folder-toggle:hover {
+  background: var(--vscode-inputOption-hoverBackground);
+}
+
+.yaml-folder-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  margin-top: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.yaml-folder-dropdown.open {
+  display: block;
+}
+
+.yaml-folder-option {
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+}
+
+.yaml-folder-option:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* ── Inputs section in New/Edit form ── */
+.yaml-form-inputs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.yaml-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.yaml-input-row .yaml-input-name {
+  flex: 1;
+  min-width: 80px;
+}
+
+.yaml-input-row .yaml-input-label {
+  flex: 1.5;
+  min-width: 100px;
+}
+
+.yaml-input-row .yaml-input-type-select {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.yaml-input-required-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.yaml-input-remove-btn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--vscode-inputValidation-errorBorder, #be1100);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.yaml-input-remove-btn:hover {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  background: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 10%,
+    transparent
+  );
+}
+
+.yaml-input-options-row {
+  width: 100%;
+  padding-left: 0;
+}
+
+.yaml-input-options-row .text-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.yaml-add-input-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* ── Input fields in accordion body (execution time) ── */
+.yaml-inputs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 50%, transparent);
+}
+
+.yaml-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.yaml-input-required-star {
+  color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.yaml-input-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+}
+
+.yaml-input-checkbox-label input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── File link in accordion subtitle ── */
+.yaml-file-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+}
+
+.yaml-file-link:hover {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+/* Highlight animation for newly-saved script */
+@keyframes yaml-highlight-fade {
+  0% {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.yaml-script--highlight {
+  animation: yaml-highlight-fade 1.5s ease-out forwards;
+}

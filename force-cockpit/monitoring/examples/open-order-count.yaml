@@ -1,0 +1,8 @@
+name: Open Orders
+description: Total orders with Open status.
+soql: SELECT COUNT(Id) Cnt FROM Order WHERE Status = 'Open'
+valueFields:
+  - field: Cnt
+    label: Open Orders
+chartType: metric
+refreshInterval: 60

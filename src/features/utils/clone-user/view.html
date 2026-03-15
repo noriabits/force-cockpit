@@ -1,0 +1,110 @@
+<!-- Accordion: Clone User -->
+<section class="accordion" id="accordion-clone-user" data-category="User Management">
+  <button class="accordion-trigger" data-accordion="clone-user" aria-expanded="false">
+    <span class="accordion-icon">&#9654;</span>
+    <span class="accordion-title">👤 Clone User</span>
+    <span class="accordion-subtitle"
+      >Create a new user by cloning profile, role &amp; permission sets from an existing one.</span
+    >
+  </button>
+  <div class="accordion-body" id="accordion-body-clone-user">
+    <!-- Step 1: Search source user -->
+    <div class="card card-inner">
+      <div class="card-header">
+        <h4 class="card-title">1. Source User</h4>
+      </div>
+      <p class="card-description">
+        Search for the user you want to clone from. Their profile, role, and permission sets will be
+        copied to the new user.
+      </p>
+      <div class="clone-search-row">
+        <div class="input-with-paste" style="flex: 1; min-width: 0">
+          <input
+            type="text"
+            class="text-input"
+            id="clone-user-search"
+            placeholder="Search by name or email..."
+          />
+          <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+        </div>
+        <button class="btn btn-primary" id="btn-clone-search">Search</button>
+      </div>
+      <div id="clone-search-results" style="display: none">
+        <div class="table-wrapper">
+          <table class="results-table" id="clone-search-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Profile</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="clone-search-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="clone-selected-user" class="selected-user-banner" style="display: none">
+        <span id="clone-selected-label"></span>
+        <button class="btn btn-ghost btn-sm" id="btn-clone-clear-source">Change</button>
+      </div>
+      <div id="clone-search-error" class="error-box" style="display: none"></div>
+    </div>
+
+    <!-- Step 2: New user details -->
+    <div class="card card-inner">
+      <div class="card-header">
+        <h4 class="card-title">2. New User Details</h4>
+      </div>
+      <p class="card-description">
+        Enter the details for the new user. The username will be auto-generated based on the org
+        type (sandbox/production).
+      </p>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label" for="clone-first-name">First Name</label>
+          <div class="input-with-paste">
+            <input type="text" class="text-input" id="clone-first-name" placeholder="e.g. Pablo" />
+            <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="clone-last-name">Last Name</label>
+          <div class="input-with-paste">
+            <input
+              type="text"
+              class="text-input"
+              id="clone-last-name"
+              placeholder="e.g. Fernandez Posadas"
+            />
+            <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+          </div>
+        </div>
+        <div class="form-field form-field-full">
+          <label class="form-label" for="clone-email">Email</label>
+          <div class="input-with-paste">
+            <input
+              type="email"
+              class="text-input"
+              id="clone-email"
+              placeholder="e.g. pablo.fernandez@company.com"
+            />
+            <button type="button" class="paste-btn" title="Paste from clipboard">📋</button>
+          </div>
+        </div>
+        <div class="form-field form-field-full">
+          <label class="form-label">Generated Username</label>
+          <span class="form-computed mono" id="clone-generated-username">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Execute -->
+    <div class="feature-actions">
+      <button class="btn btn-primary" id="btn-clone-execute" disabled>Clone User</button>
+      <span class="query-hint" id="clone-status"></span>
+    </div>
+    <div id="clone-result" class="success-box" style="display: none"></div>
+    <div id="clone-error" class="error-box" style="display: none"></div>
+  </div>
+</section>
