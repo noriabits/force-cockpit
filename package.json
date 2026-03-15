@@ -101,7 +101,7 @@
     "test:watch": "vitest",
     "package": "vsce package",
     "prepare": "husky",
-    "install": "code --install-extension force-cockpit-0.0.1.vsix"
+    "install:ext": "code --install-extension force-cockpit-0.0.1.vsix"
   },
   "lint-staged": {
     "src/**/*.ts": [
