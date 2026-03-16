@@ -80,20 +80,11 @@ export class CloneUserService {
     return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
 
-  private buildCloneApex(fields: {
-    sourceUserId: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    username: string;
-    alias: string;
-  }): string {
-    const esc = (v: string) => this.escapeApex(v);
-
+  private buildUserInsertBlock(
+    fields: { alias: string; username: string; firstName: string; lastName: string; email: string },
+    esc: (v: string) => string,
+  ): string {
     return `
-      Id originalUserId = '${esc(fields.sourceUserId)}';
-      User originalUser = [SELECT ProfileId, UserRoleId FROM User WHERE Id = :originalUserId LIMIT 1];
-
       User newUser = new User(
           Alias = '${esc(fields.alias)}',
           Username = '${esc(fields.username)}',
@@ -116,8 +107,11 @@ export class CloneUserService {
       dmo.EmailHeader.triggerOtherEmail = true;
       dmo.optAllOrNone = false;
       newUser.setOptions(dmo);
-      insert newUser;
+      insert newUser;`;
+  }
 
+  private buildPermSetAssignmentBlock(): string {
+    return `
       List<PermissionSetAssignment> psas = [
           SELECT PermissionSetId
           FROM PermissionSetAssignment
@@ -133,7 +127,24 @@ export class CloneUserService {
       }
       if (!newPSAs.isEmpty()) {
           insert newPSAs;
-      }
+      }`;
+  }
+
+  private buildCloneApex(fields: {
+    sourceUserId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    username: string;
+    alias: string;
+  }): string {
+    const esc = (v: string) => this.escapeApex(v);
+
+    return `
+      Id originalUserId = '${esc(fields.sourceUserId)}';
+      User originalUser = [SELECT ProfileId, UserRoleId FROM User WHERE Id = :originalUserId LIMIT 1];
+      ${this.buildUserInsertBlock(fields, esc)}
+      ${this.buildPermSetAssignmentBlock()}
 
       System.debug('NEW_USER_ID:' + newUser.Id);
       System.debug('PERM_SETS_CLONED:' + newPSAs.size());`;

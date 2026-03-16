@@ -299,24 +299,56 @@ export class YamlScriptsService {
     };
   }
 
+  private resolveUpdatePaths(
+    oldScriptId: string,
+    input: SaveScriptInput,
+    isPrivate: boolean,
+    wasPrivate: boolean,
+  ): {
+    basePath: string;
+    oldBasePath: string;
+    newSlug: string;
+    newFolder: string;
+    newId: string;
+    newDir: string;
+    newPath: string;
+    oldPath: string;
+  } {
+    const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
+    if (!basePath || !path.isAbsolute(basePath)) {
+      throw new Error('Cannot save: no workspace folder is open. Open a folder in VS Code first.');
+    }
+    const oldBasePath = wasPrivate ? this.paths.privatePath : this.paths.userPath;
+    const newSlug = this.toSlug(input.name);
+    const newFolder = (input.folder || 'utils').trim();
+    const newId = `${newFolder}/${newSlug}`;
+    const newDir = path.join(basePath, newFolder);
+    const newPath = path.join(newDir, `${newSlug}.yaml`);
+    const oldParts = oldScriptId.split('/');
+    const oldPath = path.join(
+      oldBasePath,
+      oldParts.slice(0, -1).join('/'),
+      `${oldParts[oldParts.length - 1]}.yaml`,
+    );
+    return { basePath, oldBasePath, newSlug, newFolder, newId, newDir, newPath, oldPath };
+  }
+
   updateScript(
     oldScriptId: string,
     input: SaveScriptInput,
     isPrivate = false,
     wasPrivate = false,
   ): YamlScript {
-    const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
-    if (!basePath || !path.isAbsolute(basePath)) {
-      throw new Error('Cannot save: no workspace folder is open. Open a folder in VS Code first.');
-    }
+    const { newFolder, newId, newDir, newPath, oldPath } = this.resolveUpdatePaths(
+      oldScriptId,
+      input,
+      isPrivate,
+      wasPrivate,
+    );
 
     if (input.scriptFile) {
       this.validateScriptFile(input.scriptFile);
     }
-
-    const newSlug = this.toSlug(input.name);
-    const newFolder = (input.folder || 'utils').trim();
-    const newId = `${newFolder}/${newSlug}`;
 
     // Block duplicate IDs across shared/private.
     // Skip when the "conflict" in the other path is the old file being moved there.
@@ -328,20 +360,11 @@ export class YamlScriptsService {
       }
     }
 
-    const newDir = path.join(basePath, newFolder);
-    const newPath = path.join(newDir, `${newSlug}.yaml`);
     fs.mkdirSync(newDir, { recursive: true });
-
-    const data = this.buildYamlData(input);
-    fs.writeFileSync(newPath, yaml.dump(data), 'utf8');
+    fs.writeFileSync(newPath, yaml.dump(this.buildYamlData(input)), 'utf8');
 
     // Delete old file if the id changed or privacy changed
-    const oldBasePath = wasPrivate ? this.paths.privatePath : this.paths.userPath;
     if (oldScriptId !== newId || isPrivate !== wasPrivate) {
-      const parts = oldScriptId.split('/');
-      const oldFolder = parts.slice(0, -1).join('/');
-      const oldBase = parts[parts.length - 1];
-      const oldPath = path.join(oldBasePath, oldFolder, `${oldBase}.yaml`);
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
@@ -510,6 +533,51 @@ export class YamlScriptsService {
     return scripts;
   }
 
+  private processYamlFile(
+    filePath: string,
+    id: string,
+    folder: string,
+    source: 'builtin' | 'user' | 'private',
+  ): YamlScript | null {
+    const basename = path.basename(filePath, path.extname(filePath));
+
+    const content = this.readRawYamlFile(filePath);
+    if (content === null) return null;
+
+    const parseResult = this.parseYamlContent(content, id, folder, source, basename);
+    if ('invalid' in parseResult) return parseResult;
+
+    const parsedInputs = this.parseInputs(parseResult.inputs);
+
+    const validationError = this.validateYamlDoc(parseResult, id, folder, source, parsedInputs);
+    if (validationError) return validationError;
+
+    const { type, scriptFile } = this.detectScriptKind(parseResult);
+
+    const resolved = this.resolveScriptContent(
+      parseResult,
+      id,
+      folder,
+      source,
+      parsedInputs,
+      type,
+      scriptFile,
+    );
+    if ('invalid' in resolved) return resolved.invalid;
+
+    return {
+      id,
+      folder,
+      name: parseResult.name!,
+      description: parseResult.description ?? '',
+      type,
+      script: resolved.content,
+      ...(scriptFile ? { scriptFile } : {}),
+      source,
+      ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
+    };
+  }
+
   private loadYamlFiles(
     dirPath: string,
     folder: string,
@@ -525,54 +593,9 @@ export class YamlScriptsService {
 
     for (const file of files) {
       const filePath = path.join(dirPath, file);
-      const basename = path.basename(file, path.extname(file));
-      const id = `${folder}/${basename}`;
-
-      const content = this.readRawYamlFile(filePath);
-      if (content === null) continue;
-
-      const parseResult = this.parseYamlContent(content, id, folder, source, basename);
-      if ('invalid' in parseResult) {
-        scripts.push(parseResult);
-        continue;
-      }
-      const parsed = parseResult;
-
-      const parsedInputs = this.parseInputs(parsed.inputs);
-
-      const validationError = this.validateYamlDoc(parsed, id, folder, source, parsedInputs);
-      if (validationError) {
-        scripts.push(validationError);
-        continue;
-      }
-
-      const { type, scriptFile } = this.detectScriptKind(parsed);
-
-      const resolved = this.resolveScriptContent(
-        parsed,
-        id,
-        folder,
-        source,
-        parsedInputs,
-        type,
-        scriptFile,
-      );
-      if ('invalid' in resolved) {
-        scripts.push(resolved.invalid);
-        continue;
-      }
-
-      scripts.push({
-        id,
-        folder,
-        name: parsed.name!,
-        description: parsed.description ?? '',
-        type,
-        script: resolved.content,
-        ...(scriptFile ? { scriptFile } : {}),
-        source,
-        ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-      });
+      const id = `${folder}/${path.basename(file, path.extname(file))}`;
+      const result = this.processYamlFile(filePath, id, folder, source);
+      if (result !== null) scripts.push(result);
     }
   }
 

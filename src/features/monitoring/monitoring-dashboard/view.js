@@ -775,7 +775,7 @@
     chartTypeSelect.addEventListener('change', updateFormVisibility);
 
     // ── Helpers used by event handlers ──
-    function readFormConfig() {
+    function readScalarFormFields() {
       const nameVal = /** @type {HTMLInputElement} */ (
         form.querySelector('#monitoring-edit-name')
       ).value.trim();
@@ -800,7 +800,10 @@
       const stackedVal =
         /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-stacked'))?.checked ||
         false;
+      return { nameVal, folderVal, descVal, soqlVal, labelFieldVal, intervalVal, stackedVal };
+    }
 
+    function readValueFields() {
       const vfRows = vfContainer.querySelectorAll('.monitoring-value-field-row');
       const valueFields = [];
       for (const row of vfRows) {
@@ -828,7 +831,13 @@
           valueFields.push(vf);
         }
       }
+      return valueFields;
+    }
 
+    function readFormConfig() {
+      const { nameVal, folderVal, descVal, soqlVal, labelFieldVal, intervalVal, stackedVal } =
+        readScalarFormFields();
+      const valueFields = readValueFields();
       return {
         id: configId || '',
         folder: folderVal,
@@ -1091,49 +1100,54 @@
   }
 
   /** @param {any} data */
+  function handlePreviewResult(data) {
+    const editTypeSelect = /** @type {HTMLSelectElement | null} */ (
+      grid.querySelector('.monitoring-edit-form .monitoring-chart-type-select')
+    );
+    const previewChartType = editTypeSelect ? editTypeSelect.value : 'bar';
+
+    const previewCanvasEl = /** @type {HTMLElement | null} */ (
+      grid.querySelector('.monitoring-preview-canvas')
+    );
+    const previewTableEl = /** @type {HTMLElement | null} */ (
+      grid.querySelector('.monitoring-preview-table')
+    );
+    const previewMetricEl = /** @type {HTMLElement | null} */ (
+      grid.querySelector('.monitoring-preview-metric')
+    );
+
+    if (previewChartType === 'metric') {
+      if (previewMetricEl) {
+        previewMetricEl.style.display = '';
+        renderMetricInEl(previewMetricEl, data, null);
+      }
+      if (previewCanvasEl) previewCanvasEl.style.display = 'none';
+      if (previewTableEl) previewTableEl.style.display = 'none';
+      const editCard = findEditCard();
+      if (editCard)
+        setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
+      return;
+    }
+
+    if (previewCanvasEl) previewCanvasEl.style.display = '';
+    if (previewTableEl) previewTableEl.style.display = 'none';
+    if (previewMetricEl) previewMetricEl.style.display = 'none';
+
+    const previewCanvas = document.getElementById(
+      'chart-preview-' + data.configId.replace('__preview__', '').replace(/\//g, '-'),
+    );
+    renderChart(data.configId, data, previewCanvas, previewChartType, false, []);
+    const editCard = findEditCard();
+    if (editCard)
+      setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
+  }
+
+  /** @param {any} data */
   function onQueryResult(data) {
     pendingQueries.delete(data.configId);
 
     if (data.configId.startsWith('__preview__')) {
-      const editTypeSelect = /** @type {HTMLSelectElement | null} */ (
-        grid.querySelector('.monitoring-edit-form .monitoring-chart-type-select')
-      );
-      const previewChartType = editTypeSelect ? editTypeSelect.value : 'bar';
-
-      const previewCanvasEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-canvas')
-      );
-      const previewTableEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-table')
-      );
-      const previewMetricEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-metric')
-      );
-
-      if (previewChartType === 'metric') {
-        if (previewMetricEl) {
-          previewMetricEl.style.display = '';
-          renderMetricInEl(previewMetricEl, data, null);
-        }
-        if (previewCanvasEl) previewCanvasEl.style.display = 'none';
-        if (previewTableEl) previewTableEl.style.display = 'none';
-        const editCard = findEditCard();
-        if (editCard)
-          setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
-        return;
-      }
-
-      if (previewCanvasEl) previewCanvasEl.style.display = '';
-      if (previewTableEl) previewTableEl.style.display = 'none';
-      if (previewMetricEl) previewMetricEl.style.display = 'none';
-
-      const previewCanvas = document.getElementById(
-        'chart-preview-' + data.configId.replace('__preview__', '').replace(/\//g, '-'),
-      );
-      renderChart(data.configId, data, previewCanvas, previewChartType, false, []);
-      const editCard = findEditCard();
-      if (editCard)
-        setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
+      handlePreviewResult(data);
       return;
     }
 
@@ -1377,6 +1391,66 @@
 
   // ── Chart rendering ────────────────────────────────────────────────────────
   /**
+   * @param {any[]} labels
+   * @param {any[]} datasets
+   * @returns {any[]}
+   */
+  function buildChartDatasets(labels, datasets) {
+    const perLabelColors = labels.map(
+      (/** @type {any} */ _l, /** @type {number} */ idx) => CHART_COLORS[idx % CHART_COLORS.length],
+    );
+    return datasets.map((/** @type {any} */ ds) => ({
+      label: ds.label,
+      data: ds.data,
+      backgroundColor: perLabelColors,
+      borderColor: perLabelColors,
+      pointBackgroundColor: perLabelColors,
+      pointBorderColor: perLabelColors,
+      borderWidth: 1,
+    }));
+  }
+
+  /**
+   * @param {boolean} stacked
+   * @param {any[]} valueFields
+   * @param {boolean} isMultiColor
+   * @returns {any}
+   */
+  function buildChartScales(stacked, valueFields, isMultiColor) {
+    if (isMultiColor) return {};
+    return {
+      x: {
+        stacked: stacked || false,
+        ticks: { color: '#aaaaaa', maxRotation: 45 },
+        grid: { color: '#333333' },
+      },
+      y: {
+        stacked: stacked || false,
+        ticks: {
+          color: '#aaaaaa',
+          callback: (/** @type {any} */ value) => formatValue(value, valueFields?.[0]?.format),
+        },
+        grid: { color: '#333333' },
+      },
+    };
+  }
+
+  /**
+   * @param {any[]} valueFields
+   * @returns {any}
+   */
+  function buildChartTooltip(valueFields) {
+    return {
+      label: (/** @type {any} */ ctx) => {
+        const vf = valueFields?.[ctx.datasetIndex];
+        const raw = ctx.parsed?.y ?? ctx.parsed;
+        const formatted = formatValue(raw, vf?.format);
+        return ctx.dataset.label ? ctx.dataset.label + ': ' + formatted : formatted;
+      },
+    };
+  }
+
+  /**
    * @param {string} configId
    * @param {any} data
    * @param {HTMLElement | null} canvas
@@ -1387,7 +1461,6 @@
   function renderChart(configId, data, canvas, chartType, stacked, valueFields) {
     if (!canvas || !win.Chart) return;
 
-    // Destroy existing chart
     const existing = chartInstances.get(configId);
     if (existing) {
       existing.destroy();
@@ -1401,22 +1474,7 @@
 
     const type = chartType || 'bar';
     const isMultiColor = type === 'pie' || type === 'doughnut';
-
-    const perLabelColors = data.labels.map(
-      (/** @type {any} */ _l, /** @type {number} */ idx) => CHART_COLORS[idx % CHART_COLORS.length],
-    );
-
-    const datasets = data.datasets.map((/** @type {any} */ ds) => {
-      return {
-        label: ds.label,
-        data: ds.data,
-        backgroundColor: perLabelColors,
-        borderColor: perLabelColors,
-        pointBackgroundColor: perLabelColors,
-        pointBorderColor: perLabelColors,
-        borderWidth: 1,
-      };
-    });
+    const datasets = buildChartDatasets(data.labels, data.datasets);
 
     const chart = new win.Chart(canvas, {
       type,
@@ -1429,38 +1487,9 @@
             display: data.datasets.length > 1 || isMultiColor,
             labels: { color: '#cccccc' },
           },
-          tooltip: {
-            callbacks: {
-              label: (/** @type {any} */ ctx) => {
-                const vf = valueFields?.[ctx.datasetIndex];
-                const fmt = vf?.format;
-                const raw = ctx.parsed?.y ?? ctx.parsed;
-                const formatted = formatValue(raw, fmt);
-                return ctx.dataset.label ? ctx.dataset.label + ': ' + formatted : formatted;
-              },
-            },
-          },
+          tooltip: { callbacks: buildChartTooltip(valueFields) },
         },
-        scales: isMultiColor
-          ? {}
-          : {
-              x: {
-                stacked: stacked || false,
-                ticks: { color: '#aaaaaa', maxRotation: 45 },
-                grid: { color: '#333333' },
-              },
-              y: {
-                stacked: stacked || false,
-                ticks: {
-                  color: '#aaaaaa',
-                  callback: (/** @type {any} */ value) => {
-                    const firstVf = valueFields?.[0];
-                    return formatValue(value, firstVf?.format);
-                  },
-                },
-                grid: { color: '#333333' },
-              },
-            },
+        scales: buildChartScales(stacked, valueFields, isMultiColor),
       },
     });
 
