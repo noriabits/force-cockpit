@@ -67,11 +67,13 @@ export function activate(context: vscode.ExtensionContext): void {
   let cockpitConfig = loadConfig(context.extensionPath, userBasePath);
   connectionManager.setApiVersion(cockpitConfig.apiVersion);
 
-  // Auto-create user folders on first run
-  fs.mkdirSync(path.join(userBasePath, 'scripts'), { recursive: true });
-  fs.mkdirSync(path.join(userBasePath, 'monitoring'), { recursive: true });
-  fs.mkdirSync(path.join(userBasePath, 'private', 'scripts'), { recursive: true });
-  fs.mkdirSync(path.join(userBasePath, 'private', 'monitoring'), { recursive: true });
+  // Auto-create user folders on first run (only when we have an absolute path)
+  if (path.isAbsolute(userBasePath)) {
+    fs.mkdirSync(path.join(userBasePath, 'scripts'), { recursive: true });
+    fs.mkdirSync(path.join(userBasePath, 'monitoring'), { recursive: true });
+    fs.mkdirSync(path.join(userBasePath, 'private', 'scripts'), { recursive: true });
+    fs.mkdirSync(path.join(userBasePath, 'private', 'monitoring'), { recursive: true });
+  }
 
   // Ensure private folder is gitignored so users don't commit private scripts by mistake
   ensurePrivateGitignored(workspaceRoot);
@@ -156,6 +158,16 @@ export function activate(context: vscode.ExtensionContext): void {
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let connectVersion = 0;
 
+    // Single connection attempt — re-reads credentials fresh each time.
+    // Returns true on success, throws on failure (version-stale returns false).
+    async function attemptConnect(target: string, myVersion: number): Promise<boolean> {
+      if (myVersion !== connectVersion) return false;
+      const details = await getOrgDetails(target);
+      if (myVersion !== connectVersion) return false;
+      await connectionManager.connect(details);
+      return true;
+    }
+
     async function connectFromConfig(): Promise<void> {
       const myVersion = ++connectVersion;
       try {
@@ -190,11 +202,8 @@ export function activate(context: vscode.ExtensionContext): void {
         const retryDelaysMs = [2000, 4000, 8000];
         let lastErr: unknown;
         for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
-          if (myVersion !== connectVersion) return;
           try {
-            const details = await getOrgDetails(target); // fresh credentials each attempt
-            if (myVersion !== connectVersion) return;
-            await connectionManager.connect(details);
+            if (!(await attemptConnect(target, myVersion))) return; // stale — exit silently
             return; // success — connectionChanged event updates the panel
           } catch (err) {
             if (myVersion !== connectVersion) return;

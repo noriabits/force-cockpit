@@ -947,6 +947,47 @@
    */
 
   /**
+   * @param {HTMLPreElement} logOutput
+   * @returns {HTMLLabelElement}
+   */
+  function buildApexFilterCheckbox(logOutput) {
+    const filterLabel = /** @type {HTMLLabelElement} */ (document.createElement('label'));
+    filterLabel.className = 'yaml-log-filter-label';
+    const filterCheckbox = document.createElement('input');
+    filterCheckbox.type = 'checkbox';
+    filterCheckbox.className = 'yaml-log-filter-checkbox';
+    filterLabel.appendChild(filterCheckbox);
+    filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
+    filterCheckbox.addEventListener('change', () => {
+      const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
+      const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
+      logOutput.textContent = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
+    });
+    return filterLabel;
+  }
+
+  /**
+   * @param {HTMLElement} section
+   * @param {HTMLPreElement} logOutput
+   * @returns {HTMLButtonElement}
+   */
+  function buildOpenInEditorButton(section, logOutput) {
+    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    btn.className = 'yaml-open-editor-btn';
+    btn.textContent = 'Open in editor';
+    btn.style.display = 'none';
+    btn.addEventListener('click', () => {
+      const filterCheckbox = /** @type {HTMLInputElement | null} */ (
+        section.querySelector('.yaml-log-filter-checkbox')
+      );
+      const raw = logOutput.getAttribute('data-raw-log') || '';
+      const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
+      win.__vscode.postMessage({ type: 'openScriptResult', content });
+    });
+    return btn;
+  }
+
+  /**
    * @param {any} script
    * @param {HTMLElement} section
    * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
@@ -969,35 +1010,12 @@
     logOutput.className = 'yaml-log-output';
 
     if (isApex) {
-      const filterLabel = document.createElement('label');
-      filterLabel.className = 'yaml-log-filter-label';
-      const filterCheckbox = document.createElement('input');
-      filterCheckbox.type = 'checkbox';
-      filterCheckbox.className = 'yaml-log-filter-checkbox';
-      filterLabel.appendChild(filterCheckbox);
-      filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
-      logViewer.appendChild(filterLabel);
-      filterCheckbox.addEventListener('change', () => {
-        const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
-        const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
-        logOutput.textContent = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
-      });
+      logViewer.appendChild(buildApexFilterCheckbox(logOutput));
     }
 
     logViewer.appendChild(logOutput);
 
-    const openInEditorBtn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    openInEditorBtn.className = 'yaml-open-editor-btn';
-    openInEditorBtn.textContent = 'Open in editor';
-    openInEditorBtn.style.display = 'none';
-    openInEditorBtn.addEventListener('click', () => {
-      const filterCheckbox = /** @type {HTMLInputElement | null} */ (
-        section.querySelector('.yaml-log-filter-checkbox')
-      );
-      const raw = logOutput.getAttribute('data-raw-log') || '';
-      const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
-      win.__vscode.postMessage({ type: 'openScriptResult', content });
-    });
+    const openInEditorBtn = buildOpenInEditorButton(section, logOutput);
     logViewer.appendChild(openInEditorBtn);
 
     fragment.appendChild(statusHint);

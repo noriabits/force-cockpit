@@ -387,6 +387,40 @@
 
   // ── Build view-mode card ───────────────────────────────────────────────────
   /** @param {any} cfg */
+  function buildCardContentArea(cfg) {
+    if (cfg.chartType === 'metric') {
+      const metricEl = document.createElement('div');
+      metricEl.className = 'monitoring-metric-display';
+      return metricEl;
+    } else if (cfg.chartType === 'table') {
+      const tableWrapper = document.createElement('div');
+      tableWrapper.className = 'monitoring-table-wrapper';
+      return tableWrapper;
+    } else {
+      // Canvas for chart types (bar, line, pie, doughnut)
+      const canvasWrapper = document.createElement('div');
+      canvasWrapper.className = 'monitoring-canvas-wrapper';
+      const canvas = document.createElement('canvas');
+      canvas.id = 'chart-' + cfg.id.replace(/\//g, '-');
+      canvasWrapper.appendChild(canvas);
+      return canvasWrapper;
+    }
+  }
+
+  function buildCardStatusArea() {
+    const fragment = document.createDocumentFragment();
+    const status = document.createElement('span');
+    status.className = 'monitoring-status';
+    fragment.appendChild(status);
+    // Error box (must be empty in HTML per convention)
+    const errorBox = document.createElement('div');
+    errorBox.className = 'error-box';
+    errorBox.style.display = 'none';
+    fragment.appendChild(errorBox);
+    return fragment;
+  }
+
+  /** @param {any} cfg */
   function buildViewCard(cfg) {
     const card = document.createElement('div');
     card.className = 'card monitoring-card';
@@ -395,10 +429,8 @@
     card.setAttribute('data-source', cfg.source || '');
     card.setAttribute('data-search-text', cfg.name + ' ' + cfg.description + ' ' + cfg.folder);
 
-    // Header
     card.appendChild(buildCardHeader(cfg));
 
-    // Description
     if (cfg.description) {
       const desc = document.createElement('p');
       desc.className = 'card-description';
@@ -407,37 +439,9 @@
       card.appendChild(desc);
     }
 
-    // Content area — dispatched by chart type
-    if (cfg.chartType === 'metric') {
-      const metricEl = document.createElement('div');
-      metricEl.className = 'monitoring-metric-display';
-      card.appendChild(metricEl);
-    } else if (cfg.chartType === 'table') {
-      const tableWrapper = document.createElement('div');
-      tableWrapper.className = 'monitoring-table-wrapper';
-      card.appendChild(tableWrapper);
-    } else {
-      // Canvas for chart types (bar, line, pie, doughnut)
-      const canvasWrapper = document.createElement('div');
-      canvasWrapper.className = 'monitoring-canvas-wrapper';
-      const canvas = document.createElement('canvas');
-      canvas.id = 'chart-' + cfg.id.replace(/\//g, '-');
-      canvasWrapper.appendChild(canvas);
-      card.appendChild(canvasWrapper);
-    }
+    card.appendChild(buildCardContentArea(cfg));
+    card.appendChild(buildCardStatusArea());
 
-    // Status
-    const status = document.createElement('span');
-    status.className = 'monitoring-status';
-    card.appendChild(status);
-
-    // Error box (must be empty in HTML per convention)
-    const errorBox = document.createElement('div');
-    errorBox.className = 'error-box';
-    errorBox.style.display = 'none';
-    card.appendChild(errorBox);
-
-    // Setup auto-refresh
     if (cfg.refreshInterval > 0) {
       setupAutoRefresh(cfg);
     }
@@ -994,6 +998,48 @@
     return input;
   }
 
+  /** @param {string} currentFormat @returns {HTMLSelectElement} */
+  function buildFormatSelect(currentFormat) {
+    const formatSelect = document.createElement('select');
+    formatSelect.className = 'monitoring-vf-format-select';
+    formatSelect.title = L.labelValueFieldFormat;
+    for (const [val, lbl] of Object.entries(L.formatOptions)) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = /** @type {string} */ (lbl);
+      if (val === (currentFormat || '')) opt.selected = true;
+      formatSelect.appendChild(opt);
+    }
+    return formatSelect;
+  }
+
+  /**
+   * @param {number | null} threshold
+   * @param {string} thresholdCondition
+   * @returns {{ thresholdInput: HTMLInputElement, conditionSelect: HTMLSelectElement }}
+   */
+  function buildThresholdGroup(threshold, thresholdCondition) {
+    const thresholdInput = /** @type {HTMLInputElement} */ (
+      makeInput('number', threshold != null ? String(threshold) : '', L.placeholderThreshold, '')
+    );
+    thresholdInput.className = 'text-input monitoring-vf-threshold-input';
+    thresholdInput.title = L.placeholderThreshold;
+    thresholdInput.min = '0';
+
+    const conditionSelect = document.createElement('select');
+    conditionSelect.className = 'monitoring-vf-condition-select';
+    conditionSelect.title = L.labelThresholdCondition;
+    for (const [val, lbl] of Object.entries(L.conditionOptions)) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = /** @type {string} */ (lbl);
+      if (val === (thresholdCondition || 'above')) opt.selected = true;
+      conditionSelect.appendChild(opt);
+    }
+
+    return { thresholdInput, conditionSelect };
+  }
+
   /**
    * @param {string} field
    * @param {string} label
@@ -1012,37 +1058,7 @@
     const labelInput = makeInput('text', label, L.placeholderValueFieldLabel, '');
     labelInput.title = L.labelValueFieldLabel;
 
-    const formatSelect = document.createElement('select');
-    formatSelect.className = 'monitoring-vf-format-select';
-    formatSelect.title = L.labelValueFieldFormat;
-    for (const [val, lbl] of Object.entries(L.formatOptions)) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = /** @type {string} */ (lbl);
-      if (val === (format || '')) opt.selected = true;
-      formatSelect.appendChild(opt);
-    }
-
-    const thresholdInput = makeInput(
-      'number',
-      threshold != null ? String(threshold) : '',
-      L.placeholderThreshold,
-      '',
-    );
-    thresholdInput.className = 'text-input monitoring-vf-threshold-input';
-    thresholdInput.title = L.placeholderThreshold;
-    thresholdInput.min = '0';
-
-    const conditionSelect = document.createElement('select');
-    conditionSelect.className = 'monitoring-vf-condition-select';
-    conditionSelect.title = L.labelThresholdCondition;
-    for (const [val, lbl] of Object.entries(L.conditionOptions)) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = /** @type {string} */ (lbl);
-      if (val === (thresholdCondition || 'above')) opt.selected = true;
-      conditionSelect.appendChild(opt);
-    }
+    const { thresholdInput, conditionSelect } = buildThresholdGroup(threshold, thresholdCondition);
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'monitoring-remove-vf-btn';
@@ -1056,7 +1072,7 @@
 
     row.appendChild(fieldInput);
     row.appendChild(labelInput);
-    row.appendChild(formatSelect);
+    row.appendChild(buildFormatSelect(format));
     row.appendChild(thresholdInput);
     row.appendChild(conditionSelect);
     row.appendChild(removeBtn);

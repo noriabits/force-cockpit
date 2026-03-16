@@ -286,27 +286,17 @@ export class MainPanel {
     setTimeout(() => void this._sendOrgInfo(), 100);
   }
 
-  private _getHtml(): string {
-    const webview = this._panel.webview;
-    const nonce = getNonce();
-
-    const htmlPath = path.join(this.context.extensionPath, 'webviews', 'main.html');
-    const cssUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.css')),
-    );
-    const jsUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.js')),
-    );
-    const chartJsUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'dist', 'vendor', 'chart.umd.js')),
-    );
+  private _resolveLogoUri(webview: vscode.Webview): vscode.Uri {
     const resolvedLogoPath = this.config.logoPath
       ? path.join(this.workspaceRoot, this.config.logoPath)
       : path.join(this.context.extensionPath, 'media', 'fc-logo.png');
-    const logoUri = webview.asWebviewUri(vscode.Uri.file(resolvedLogoPath));
-    const panelTitle = this.config.panelTitle;
+    return webview.asWebviewUri(vscode.Uri.file(resolvedLogoPath));
+  }
 
-    // Collect feature HTML fragments and asset tags grouped by tab
+  private _collectFeatureAssets(
+    nonce: string,
+  ): { tabFragments: Record<string, string>; linkTags: string[]; scriptTags: string[] } {
+    const webview = this._panel.webview;
     const tabFragments: Record<string, string> = {};
     const linkTags: string[] = [];
     const scriptTags: string[] = [];
@@ -332,6 +322,28 @@ export class MainPanel {
       const featureJsUri = webview.asWebviewUri(vscode.Uri.file(absJs));
       scriptTags.push(`<script nonce="${nonce}" src="${featureJsUri}" defer></script>`);
     }
+
+    return { tabFragments, linkTags, scriptTags };
+  }
+
+  private _getHtml(): string {
+    const webview = this._panel.webview;
+    const nonce = getNonce();
+
+    const htmlPath = path.join(this.context.extensionPath, 'webviews', 'main.html');
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.css')),
+    );
+    const jsUri = webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.js')),
+    );
+    const chartJsUri = webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.context.extensionPath, 'dist', 'vendor', 'chart.umd.js')),
+    );
+    const logoUri = this._resolveLogoUri(webview);
+    const panelTitle = this.config.panelTitle;
+
+    const { tabFragments, linkTags, scriptTags } = this._collectFeatureAssets(nonce);
 
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html
