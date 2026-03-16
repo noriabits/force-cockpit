@@ -6,6 +6,18 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import { assertApexSuccess } from '../../apexUtils';
 import { runTerminalCommand } from '../../../utils/terminalCommand';
 
+type ParsedYamlDoc = {
+  name?: string;
+  description?: string;
+  apex?: string;
+  command?: string;
+  js?: string;
+  'apex-file'?: string;
+  'command-file'?: string;
+  'js-file'?: string;
+  inputs?: unknown[];
+};
+
 export interface ScriptInput {
   name: string; // variable identifier used in ${name} placeholders
   label?: string; // display label (defaults to name)
@@ -513,211 +525,216 @@ export class YamlScriptsService {
       const basename = path.basename(file, path.extname(file));
       const id = `${folder}/${basename}`;
 
-      let content: string;
-      try {
-        content = fs.readFileSync(filePath, 'utf8');
-      } catch {
-        continue; // Unreadable file — skip silently
-      }
+      const content = this.readRawYamlFile(filePath);
+      if (content === null) continue;
 
-      let parsed: {
-        name?: string;
-        description?: string;
-        apex?: string;
-        command?: string;
-        js?: string;
-        'apex-file'?: string;
-        'command-file'?: string;
-        'js-file'?: string;
-        inputs?: unknown[];
-      };
-      try {
-        parsed = yaml.load(content) as typeof parsed;
-      } catch (err) {
-        scripts.push({
-          id,
-          folder,
-          name: basename,
-          description: '',
-          type: 'apex',
-          script: '',
-          source,
-          invalid: true,
-          error: `Invalid YAML: ${(err as Error).message}`,
-        });
+      const parseResult = this.parseYamlContent(content, id, folder, source, basename);
+      if ('invalid' in parseResult) {
+        scripts.push(parseResult);
         continue;
       }
-
-      if (!parsed || typeof parsed !== 'object') {
-        scripts.push({
-          id,
-          folder,
-          name: basename,
-          description: '',
-          type: 'apex',
-          script: '',
-          source,
-          invalid: true,
-          error: 'File is empty or not a YAML object',
-        });
-        continue;
-      }
+      const parsed = parseResult;
 
       const parsedInputs = this.parseInputs(parsed.inputs);
 
-      if (!parsed.name) {
-        scripts.push({
-          id,
-          folder,
-          name: basename,
-          description: '',
-          type: 'apex',
-          script: '',
-          source,
-          invalid: true,
-          error: "Missing required field: 'name'",
-          ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-        });
+      const validationError = this.validateYamlDoc(parsed, id, folder, source, parsedInputs);
+      if (validationError) {
+        scripts.push(validationError);
         continue;
       }
 
-      const scriptFields = [
-        parsed.apex,
-        parsed.command,
-        parsed.js,
-        parsed['apex-file'],
-        parsed['command-file'],
-        parsed['js-file'],
-      ].filter(Boolean);
-      if (scriptFields.length > 1) {
-        scripts.push({
-          id,
-          folder,
-          name: parsed.name,
-          description: parsed.description ?? '',
-          type: 'apex',
-          script: '',
-          source,
-          invalid: true,
-          error:
-            "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file')",
-          ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-        });
+      const { type, scriptFile } = this.detectScriptKind(parsed);
+
+      const resolved = this.resolveScriptContent(
+        parsed,
+        id,
+        folder,
+        source,
+        parsedInputs,
+        type,
+        scriptFile,
+      );
+      if ('invalid' in resolved) {
+        scripts.push(resolved.invalid);
         continue;
-      }
-
-      if (scriptFields.length === 0) {
-        scripts.push({
-          id,
-          folder,
-          name: parsed.name,
-          description: parsed.description ?? '',
-          type: 'apex',
-          script: '',
-          source,
-          invalid: true,
-          error:
-            "Missing required field: 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file'",
-          ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-        });
-        continue;
-      }
-
-      const isFileRef = !parsed.apex && !parsed.js && !parsed.command;
-      const type =
-        parsed.apex || parsed['apex-file']
-          ? 'apex'
-          : parsed.js || parsed['js-file']
-            ? 'js'
-            : 'command';
-      const scriptFile = isFileRef
-        ? (parsed['apex-file'] ?? parsed['js-file'] ?? parsed['command-file'])
-        : undefined;
-
-      let scriptContent: string;
-      if (isFileRef && scriptFile) {
-        if (!this.paths.workspaceRoot) {
-          scripts.push({
-            id,
-            folder,
-            name: parsed.name,
-            description: parsed.description ?? '',
-            type,
-            script: '',
-            source,
-            invalid: true,
-            error: 'Cannot resolve file path: no workspace folder is open.',
-            ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-          });
-          continue;
-        }
-        const absPath = path.resolve(this.paths.workspaceRoot, scriptFile);
-        const rootResolved = path.resolve(this.paths.workspaceRoot);
-        if (!absPath.startsWith(rootResolved + path.sep) && absPath !== rootResolved) {
-          scripts.push({
-            id,
-            folder,
-            name: parsed.name,
-            description: parsed.description ?? '',
-            type,
-            script: '',
-            scriptFile,
-            source,
-            invalid: true,
-            error: 'Script file must be inside the workspace folder.',
-            ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-          });
-          continue;
-        }
-        if (!fs.existsSync(absPath)) {
-          scripts.push({
-            id,
-            folder,
-            name: parsed.name,
-            description: parsed.description ?? '',
-            type,
-            script: '',
-            scriptFile,
-            source,
-            invalid: true,
-            error: `Script file not found: ${scriptFile}`,
-            ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-          });
-          continue;
-        }
-        try {
-          scriptContent = fs.readFileSync(absPath, 'utf8');
-        } catch (err) {
-          scripts.push({
-            id,
-            folder,
-            name: parsed.name,
-            description: parsed.description ?? '',
-            type,
-            script: '',
-            scriptFile,
-            source,
-            invalid: true,
-            error: `Failed to read script file: ${(err as Error).message}`,
-            ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-          });
-          continue;
-        }
-      } else {
-        scriptContent = (parsed.apex ?? parsed.js ?? parsed.command)!;
       }
 
       scripts.push({
         id,
         folder,
-        name: parsed.name,
+        name: parsed.name!,
         description: parsed.description ?? '',
         type,
-        script: scriptContent,
+        script: resolved.content,
         ...(scriptFile ? { scriptFile } : {}),
         source,
         ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
       });
     }
+  }
+
+  private readRawYamlFile(filePath: string): string | null {
+    try {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  private parseYamlContent(
+    content: string,
+    id: string,
+    folder: string,
+    source: 'builtin' | 'user' | 'private',
+    basename: string,
+  ): ParsedYamlDoc | YamlScript {
+    let parsed: ParsedYamlDoc;
+    try {
+      parsed = yaml.load(content) as ParsedYamlDoc;
+    } catch (err) {
+      return this.makeInvalidScript(
+        { id, folder, name: basename, description: '', source },
+        `Invalid YAML: ${(err as Error).message}`,
+      );
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return this.makeInvalidScript(
+        { id, folder, name: basename, description: '', source },
+        'File is empty or not a YAML object',
+      );
+    }
+
+    return parsed;
+  }
+
+  private validateYamlDoc(
+    parsed: ParsedYamlDoc,
+    id: string,
+    folder: string,
+    source: 'builtin' | 'user' | 'private',
+    parsedInputs: ScriptInput[],
+  ): YamlScript | null {
+    const base = {
+      id,
+      folder,
+      source,
+      description: parsed.description ?? '',
+      inputs: parsedInputs,
+    };
+
+    if (!parsed.name) {
+      return this.makeInvalidScript(
+        { ...base, name: id.split('/').pop() ?? id },
+        "Missing required field: 'name'",
+      );
+    }
+
+    const scriptFields = [
+      parsed.apex,
+      parsed.command,
+      parsed.js,
+      parsed['apex-file'],
+      parsed['command-file'],
+      parsed['js-file'],
+    ].filter(Boolean);
+
+    if (scriptFields.length > 1) {
+      return this.makeInvalidScript(
+        { ...base, name: parsed.name },
+        "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file')",
+      );
+    }
+
+    if (scriptFields.length === 0) {
+      return this.makeInvalidScript(
+        { ...base, name: parsed.name },
+        "Missing required field: 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file'",
+      );
+    }
+
+    return null;
+  }
+
+  private detectScriptKind(parsed: ParsedYamlDoc): {
+    type: 'apex' | 'command' | 'js';
+    isFileRef: boolean;
+    scriptFile: string | undefined;
+  } {
+    const isFileRef = !parsed.apex && !parsed.js && !parsed.command;
+    const type =
+      parsed.apex || parsed['apex-file']
+        ? 'apex'
+        : parsed.js || parsed['js-file']
+          ? 'js'
+          : 'command';
+    const scriptFile = isFileRef
+      ? (parsed['apex-file'] ?? parsed['js-file'] ?? parsed['command-file'])
+      : undefined;
+    return { type, isFileRef, scriptFile };
+  }
+
+  private resolveScriptContent(
+    parsed: ParsedYamlDoc,
+    id: string,
+    folder: string,
+    source: 'builtin' | 'user' | 'private',
+    parsedInputs: ScriptInput[],
+    type: 'apex' | 'command' | 'js',
+    scriptFile: string | undefined,
+  ): { content: string } | { invalid: YamlScript } {
+    if (!scriptFile) {
+      return { content: (parsed.apex ?? parsed.js ?? parsed.command)! };
+    }
+
+    const base = { id, folder, name: parsed.name!, description: parsed.description ?? '', source, type, inputs: parsedInputs };
+
+    if (!this.paths.workspaceRoot) {
+      return { invalid: this.makeInvalidScript(base, 'Cannot resolve file path: no workspace folder is open.') };
+    }
+
+    const absPath = path.resolve(this.paths.workspaceRoot, scriptFile);
+    const rootResolved = path.resolve(this.paths.workspaceRoot);
+    if (!absPath.startsWith(rootResolved + path.sep) && absPath !== rootResolved) {
+      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, 'Script file must be inside the workspace folder.') };
+    }
+
+    if (!fs.existsSync(absPath)) {
+      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, `Script file not found: ${scriptFile}`) };
+    }
+
+    try {
+      return { content: fs.readFileSync(absPath, 'utf8') };
+    } catch (err) {
+      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, `Failed to read script file: ${(err as Error).message}`) };
+    }
+  }
+
+  private makeInvalidScript(
+    base: {
+      id: string;
+      folder: string;
+      name: string;
+      description: string;
+      source: 'builtin' | 'user' | 'private';
+      type?: 'apex' | 'command' | 'js';
+      inputs?: ScriptInput[];
+      scriptFile?: string;
+    },
+    error: string,
+  ): YamlScript {
+    return {
+      id: base.id,
+      folder: base.folder,
+      name: base.name,
+      description: base.description,
+      type: base.type ?? 'apex',
+      script: '',
+      source: base.source,
+      invalid: true,
+      error,
+      ...(base.inputs?.length ? { inputs: base.inputs } : {}),
+      ...(base.scriptFile ? { scriptFile: base.scriptFile } : {}),
+    };
   }
 }

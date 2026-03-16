@@ -460,4 +460,200 @@ describe('YamlScriptsService', () => {
       expect(fs.existsSync(path.join(privateDir, 'cat', 'my-script.yaml'))).toBe(true);
     });
   });
+
+  // ─── New helper unit tests ──────────────────────────────────────────────────
+
+  describe('makeInvalidScript (private)', () => {
+    const svc = makeService();
+
+    it('sets invalid:true and the given error', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user' },
+        'bad stuff',
+      );
+      expect(result.invalid).toBe(true);
+      expect(result.error).toBe('bad stuff');
+    });
+
+    it('defaults type to apex when not supplied', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user' },
+        'err',
+      );
+      expect(result.type).toBe('apex');
+    });
+
+    it('uses the supplied type when provided', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', type: 'js' },
+        'err',
+      );
+      expect(result.type).toBe('js');
+    });
+
+    it('omits inputs when the array is empty', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', inputs: [] },
+        'err',
+      );
+      expect(result.inputs).toBeUndefined();
+    });
+
+    it('includes inputs when the array is non-empty', () => {
+      const inputs = [{ name: 'x' }];
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', inputs },
+        'err',
+      );
+      expect(result.inputs).toEqual(inputs);
+    });
+
+    it('omits scriptFile when falsy', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', scriptFile: undefined },
+        'err',
+      );
+      expect(result.scriptFile).toBeUndefined();
+    });
+
+    it('includes scriptFile when provided', () => {
+      const result = (svc as any).makeInvalidScript(
+        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', scriptFile: 'my.cls' },
+        'err',
+      );
+      expect(result.scriptFile).toBe('my.cls');
+    });
+  });
+
+  describe('detectScriptKind (private)', () => {
+    const svc = makeService();
+
+    it('inline apex → type apex, isFileRef false', () => {
+      const result = (svc as any).detectScriptKind({ apex: 'System.debug();' });
+      expect(result).toEqual({ type: 'apex', isFileRef: false, scriptFile: undefined });
+    });
+
+    it('inline js → type js, isFileRef false', () => {
+      const result = (svc as any).detectScriptKind({ js: 'log(1);' });
+      expect(result).toEqual({ type: 'js', isFileRef: false, scriptFile: undefined });
+    });
+
+    it('inline command → type command, isFileRef false', () => {
+      const result = (svc as any).detectScriptKind({ command: 'npm test' });
+      expect(result).toEqual({ type: 'command', isFileRef: false, scriptFile: undefined });
+    });
+
+    it('apex-file → type apex, isFileRef true, scriptFile set', () => {
+      const result = (svc as any).detectScriptKind({ 'apex-file': 'my.cls' });
+      expect(result).toEqual({ type: 'apex', isFileRef: true, scriptFile: 'my.cls' });
+    });
+
+    it('js-file → type js, isFileRef true, scriptFile set', () => {
+      const result = (svc as any).detectScriptKind({ 'js-file': 'my.js' });
+      expect(result).toEqual({ type: 'js', isFileRef: true, scriptFile: 'my.js' });
+    });
+
+    it('command-file → type command, isFileRef true, scriptFile set', () => {
+      const result = (svc as any).detectScriptKind({ 'command-file': 'run.sh' });
+      expect(result).toEqual({ type: 'command', isFileRef: true, scriptFile: 'run.sh' });
+    });
+  });
+
+  describe('validateYamlDoc (private)', () => {
+    const svc = makeService();
+    const base = { id: 'cat/s', folder: 'cat', source: 'user' as const };
+
+    it('returns null for a valid doc', () => {
+      const result = (svc as any).validateYamlDoc(
+        { name: 'S', apex: 'x' },
+        base.id, base.folder, base.source, [],
+      );
+      expect(result).toBeNull();
+    });
+
+    it('returns invalid script when name is missing', () => {
+      const result = (svc as any).validateYamlDoc(
+        { apex: 'x' },
+        base.id, base.folder, base.source, [],
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'name'");
+    });
+
+    it('returns invalid script when multiple script fields are set', () => {
+      const result = (svc as any).validateYamlDoc(
+        { name: 'S', apex: 'x', command: 'y' },
+        base.id, base.folder, base.source, [],
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('Ambiguous');
+    });
+
+    it('returns invalid script when no script field is present', () => {
+      const result = (svc as any).validateYamlDoc(
+        { name: 'S' },
+        base.id, base.folder, base.source, [],
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('apex');
+    });
+  });
+
+  describe('resolveScriptContent (private)', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'force-resolve-test-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    const base = { id: 'cat/s', folder: 'cat', source: 'user' as const };
+
+    it('returns content directly for an inline script', () => {
+      const svc = makeService();
+      const result = (svc as any).resolveScriptContent(
+        { apex: 'System.debug();' }, base.id, base.folder, base.source, [], 'apex', undefined,
+      );
+      expect(result).toEqual({ content: 'System.debug();' });
+    });
+
+    it('returns invalid when workspaceRoot is empty and scriptFile is set', () => {
+      const svc = makeService({ workspaceRoot: '' });
+      const result = (svc as any).resolveScriptContent(
+        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'my.cls',
+      );
+      expect(result.invalid?.invalid).toBe(true);
+      expect(result.invalid?.error).toContain('no workspace folder');
+    });
+
+    it('returns invalid when scriptFile is outside the workspace', () => {
+      const svc = makeService({ workspaceRoot: tmpDir });
+      const result = (svc as any).resolveScriptContent(
+        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', '../outside.cls',
+      );
+      expect(result.invalid?.invalid).toBe(true);
+      expect(result.invalid?.error).toContain('inside the workspace');
+    });
+
+    it('returns invalid when scriptFile does not exist', () => {
+      const svc = makeService({ workspaceRoot: tmpDir });
+      const result = (svc as any).resolveScriptContent(
+        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'missing.cls',
+      );
+      expect(result.invalid?.invalid).toBe(true);
+      expect(result.invalid?.error).toContain('not found');
+    });
+
+    it('returns content when scriptFile exists inside workspace', () => {
+      fs.writeFileSync(path.join(tmpDir, 'my.cls'), 'System.debug();', 'utf8');
+      const svc = makeService({ workspaceRoot: tmpDir });
+      const result = (svc as any).resolveScriptContent(
+        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'my.cls',
+      );
+      expect(result).toEqual({ content: 'System.debug();' });
+    });
+  });
 });
