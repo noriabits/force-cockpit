@@ -66,24 +66,6 @@
           "type": "string",
           "default": "",
           "description": "Absolute path to the force-cockpit folder containing YAML script and monitoring definitions. Defaults to {workspace root}/force-cockpit if empty."
-        },
-        "forceCockpit.protectedSandboxes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Protected sandbox orgs that require confirmation before some actions. Specify by org name or alias."
-        },
-        "forceCockpit.panelTitle": {
-          "type": "string",
-          "default": "Force Cockpit",
-          "description": "Display title shown in the panel header and tab."
-        },
-        "forceCockpit.logoPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to a logo image file relative to the workspace root. Leave empty to use the default logo."
         }
       }
     }

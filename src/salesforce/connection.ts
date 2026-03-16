@@ -49,7 +49,12 @@ export class ConnectionManager extends EventEmitter {
   private _currentOrg: OrgDetails | null = null;
   private _connectingTarget: string | null = null;
   private _connectVersion = 0;
+  private _apiVersion = '65.0';
   private _orgDetailsCache = new Map<string, OrganizationDetails>();
+
+  setApiVersion(version: string): void {
+    this._apiVersion = version;
+  }
 
   get isConnected(): boolean {
     return this._connection !== null;
@@ -84,7 +89,7 @@ export class ConnectionManager extends EventEmitter {
       const conn = new jsforce.Connection({
         instanceUrl: org.instanceUrl,
         accessToken: org.accessToken,
-        version: '65.0',
+        version: this._apiVersion,
       });
 
       // Verify connection works
@@ -337,7 +342,7 @@ export class ConnectionManager extends EventEmitter {
     if (!this._connection) {
       throw new Error(NOT_CONNECTED);
     }
-    const result = await this._connection.request('/services/data/v65.0/limits');
+    const result = await this._connection.request(`/services/data/v${this._apiVersion}/limits`);
     const limits = result as Record<string, { Max: number; Remaining: number }>;
     return {
       DataStorageMB: limits.DataStorageMB,

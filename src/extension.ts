@@ -9,6 +9,7 @@ import { featureRegistry } from './features/registry';
 import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/monitoring-dashboard/index';
 import { Logger } from '@salesforce/core';
+import { loadConfig } from './utils/config';
 
 function ensurePrivateGitignored(workspaceRoot: string): void {
   if (!workspaceRoot) return;
@@ -63,6 +64,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.getConfiguration('forceCockpit').get<string>('cockpitPath') ||
     path.join(workspaceRoot, 'force-cockpit');
 
+  const cockpitConfig = loadConfig(context.extensionPath, userBasePath);
+  connectionManager.setApiVersion(cockpitConfig.apiVersion);
+
   // Auto-create user folders on first run
   fs.mkdirSync(path.join(userBasePath, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(userBasePath, 'monitoring'), { recursive: true });
@@ -109,14 +113,14 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: emptyProvider,
   });
   sidebarView.onDidChangeVisibility(({ visible }) => {
-    if (visible) MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot);
+    if (visible) MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig);
   });
   context.subscriptions.push(sidebarView);
 
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot);
+      MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig);
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {

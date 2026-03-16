@@ -6,6 +6,7 @@ import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/co
 import { QueryService } from '../services/QueryService';
 import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
+import type { CockpitConfig } from '../utils/config';
 
 function getNonce(): string {
   return crypto.randomBytes(16).toString('hex');
@@ -44,6 +45,7 @@ export class MainPanel {
     connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
     workspaceRoot: string = '',
+    config: CockpitConfig,
   ): MainPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -77,6 +79,7 @@ export class MainPanel {
       connectionManager,
       featureFactories,
       workspaceRoot,
+      config,
     );
     return MainPanel.currentPanel;
   }
@@ -87,6 +90,7 @@ export class MainPanel {
     private readonly connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
     private readonly workspaceRoot: string = '',
+    private readonly config: CockpitConfig,
   ) {
     this._panel = panel;
     this.queryService = new QueryService(connectionManager);
@@ -238,10 +242,7 @@ export class MainPanel {
     if (org) {
       const isProduction = await this.connectionManager.isProductionOrg();
       const sandboxName = isProduction ? null : this.connectionManager.getSandboxName();
-      const protectedSandboxes = vscode.workspace
-        .getConfiguration('forceCockpit')
-        .get<string[]>('protectedSandboxes', [])
-        .map((s) => s.toLowerCase());
+      const protectedSandboxes = this.config.protectedSandboxes.map((s) => s.toLowerCase());
       const isProtectedOrg =
         !isProduction && protectedSandboxes.includes((sandboxName ?? '').toLowerCase());
       this._panel.webview.postMessage({
@@ -264,10 +265,7 @@ export class MainPanel {
   }
 
   private _update(): void {
-    const panelTitle = vscode.workspace
-      .getConfiguration('forceCockpit')
-      .get<string>('panelTitle', 'Force Cockpit');
-    this._panel.title = panelTitle;
+    this._panel.title = this.config.panelTitle;
     this._panel.webview.html = this._getHtml();
     // Give the webview a tick to initialize its message listener before sending org state
     setTimeout(() => void this._sendOrgInfo(), 100);
@@ -287,16 +285,11 @@ export class MainPanel {
     const chartJsUri = webview.asWebviewUri(
       vscode.Uri.file(path.join(this.context.extensionPath, 'dist', 'vendor', 'chart.umd.js')),
     );
-    const customLogoPath = vscode.workspace
-      .getConfiguration('forceCockpit')
-      .get<string>('logoPath', '');
-    const resolvedLogoPath = customLogoPath
-      ? path.join(this.workspaceRoot, customLogoPath)
+    const resolvedLogoPath = this.config.logoPath
+      ? path.join(this.workspaceRoot, this.config.logoPath)
       : path.join(this.context.extensionPath, 'media', 'fc-logo.png');
     const logoUri = webview.asWebviewUri(vscode.Uri.file(resolvedLogoPath));
-    const panelTitle = vscode.workspace
-      .getConfiguration('forceCockpit')
-      .get<string>('panelTitle', 'Force Cockpit');
+    const panelTitle = this.config.panelTitle;
 
     // Collect feature HTML fragments and asset tags grouped by tab
     const tabFragments: Record<string, string> = {};
