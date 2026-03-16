@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertApexSuccess, extractUserDebugLine } from './apexUtils';
+import { assertApexSuccess, extractUserDebugLine, filterUserDebugLines } from './apexUtils';
 
 describe('assertApexSuccess', () => {
   it('does not throw when compiled and success are both true', () => {
@@ -123,5 +123,68 @@ describe('extractUserDebugLine', () => {
   it('returns the single-line result when there are no continuation lines', () => {
     const log = [debugLine('Response Code: ', '404'), logEntry('next')].join('\n');
     expect(extractUserDebugLine(log, 'Response Code: ')).toBe('404');
+  });
+});
+
+describe('filterUserDebugLines', () => {
+  it('extracts single-line USER_DEBUG content', () => {
+    const log = debugLine('', 'hello world');
+    expect(filterUserDebugLines(log)).toBe('hello world');
+  });
+
+  it('preserves multiline continuation lines from System.debug()', () => {
+    const log = [
+      debugLine('', 'Body: {'),
+      '  "key" : "value"',
+      '}',
+      debugLine('', 'after multiline'),
+    ].join('\n');
+    expect(filterUserDebugLines(log)).toBe('Body: {\n  "key" : "value"\n}\nafter multiline');
+  });
+
+  it('stops collecting continuation lines at the next non-USER_DEBUG log entry', () => {
+    const log = [
+      debugLine('', 'Body: {'),
+      '  "key" : "value"',
+      '}',
+      logEntry('SomeMethod'),
+      'should not appear',
+    ].join('\n');
+    expect(filterUserDebugLines(log)).toBe('Body: {\n  "key" : "value"\n}');
+  });
+
+  it('excludes non-USER_DEBUG log entries', () => {
+    const log = [
+      '10:00:00.1 (1000000)|CODE_UNIT_STARTED|[EXTERNAL]|execute_anonymous_apex',
+      debugLine('', 'Response Code: 200'),
+      '10:00:01.0 (2000000)|CODE_UNIT_FINISHED|execute_anonymous_apex',
+    ].join('\n');
+    expect(filterUserDebugLines(log)).toBe('Response Code: 200');
+  });
+
+  it('returns empty string for empty log', () => {
+    expect(filterUserDebugLines('')).toBe('');
+  });
+
+  it('returns empty string for log with no USER_DEBUG lines', () => {
+    const log = [
+      '10:00:00.1 (1000000)|CODE_UNIT_STARTED|[EXTERNAL]|execute_anonymous_apex',
+      '10:00:01.0 (2000000)|CODE_UNIT_FINISHED|execute_anonymous_apex',
+    ].join('\n');
+    expect(filterUserDebugLines(log)).toBe('');
+  });
+
+  it('handles multiple multiline USER_DEBUG blocks', () => {
+    const log = [
+      debugLine('', 'First: {'),
+      '  "a": 1',
+      '}',
+      debugLine('', 'Second: {'),
+      '  "b": 2',
+      '}',
+    ].join('\n');
+    expect(filterUserDebugLines(log)).toBe(
+      'First: {\n  "a": 1\n}\nSecond: {\n  "b": 2\n}',
+    );
   });
 });

@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../salesforce/connection';
-import { assertApexSuccess } from '../../apexUtils';
+import { assertApexSuccess, filterUserDebugLines } from '../../apexUtils';
 import { runTerminalCommand } from '../../../utils/terminalCommand';
 
 type ParsedYamlDoc = {
@@ -46,6 +46,7 @@ export interface ExecuteScriptResult {
   success: boolean;
   message: string;
   debugLog: string;
+  filteredDebugLog?: string;
   cancelled?: boolean;
 }
 
@@ -131,11 +132,13 @@ export class YamlScriptsService {
         logLevels: { Apex_code: 'DEBUG' },
       });
       assertApexSuccess(result);
+      const debugLog = result.debugLog ?? '';
       return {
         scriptId,
         success: true,
         message: `Script "${script.name}" executed successfully.`,
-        debugLog: result.debugLog ?? '',
+        debugLog,
+        filteredDebugLog: filterUserDebugLines(debugLog),
       };
     } catch (err) {
       return {

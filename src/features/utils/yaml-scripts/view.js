@@ -404,7 +404,7 @@
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; invalid?: true; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
@@ -696,7 +696,7 @@
   // ── Build accordion per script ────────────────────────────────────────────
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    * @returns {HTMLElement}
    */
   function buildAccordion(script) {
@@ -981,7 +981,8 @@
 
       filterCheckbox.addEventListener('change', () => {
         const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
-        logOutput.textContent = filterCheckbox.checked ? filterUserDebugLines(rawLog) : rawLog;
+        const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
+        logOutput.textContent = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
       });
     }
 
@@ -1060,21 +1061,6 @@
     return section;
   }
 
-  /**
-   * @param {string} log
-   * @returns {string}
-   */
-  function filterUserDebugLines(log) {
-    return log
-      .split('\n')
-      .filter((line) => line.includes('|USER_DEBUG|'))
-      .map((line) => {
-        const debugIdx = line.indexOf('|DEBUG|');
-        return debugIdx !== -1 ? line.slice(debugIdx + 7) : line;
-      })
-      .join('\n');
-  }
-
   /** @param {string} str @returns {string} */
   function escapeHtml(str) {
     return win.__escapeHtml(str);
@@ -1083,7 +1069,7 @@
   // ── Render scripts list ───────────────────────────────────────────────────
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
     currentScripts = scripts;
@@ -1157,7 +1143,7 @@
   // ── Handle result for a specific script ───────────────────────────────────
 
   /**
-   * @param {{ scriptId: string; success: boolean; message: string; debugLog: string; opId?: string; cancelled?: boolean }} data
+   * @param {{ scriptId: string; success: boolean; message: string; debugLog: string; filteredDebugLog?: string; opId?: string; cancelled?: boolean }} data
    */
   function handleExecuteResult(data) {
     const accordion = /** @type {HTMLElement | null} */ (
@@ -1196,8 +1182,11 @@
     );
     if (data.debugLog) {
       logOutput.setAttribute('data-raw-log', data.debugLog);
-      logOutput.textContent = filterCheckbox?.checked
-        ? filterUserDebugLines(data.debugLog)
+      if (data.filteredDebugLog) {
+        logOutput.setAttribute('data-filtered-log', data.filteredDebugLog);
+      }
+      logOutput.textContent = filterCheckbox?.checked && data.filteredDebugLog
+        ? data.filteredDebugLog
         : data.debugLog;
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
