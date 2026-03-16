@@ -64,7 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.getConfiguration('forceCockpit').get<string>('cockpitPath') ||
     path.join(workspaceRoot, 'force-cockpit');
 
-  const cockpitConfig = loadConfig(context.extensionPath, userBasePath);
+  let cockpitConfig = loadConfig(context.extensionPath, userBasePath);
   connectionManager.setApiVersion(cockpitConfig.apiVersion);
 
   // Auto-create user folders on first run
@@ -75,6 +75,22 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Ensure private folder is gitignored so users don't commit private scripts by mistake
   ensurePrivateGitignored(workspaceRoot);
+
+  // Watch config.yaml for live changes
+  function reloadConfig(): void {
+    cockpitConfig = loadConfig(context.extensionPath, userBasePath);
+    connectionManager.setApiVersion(cockpitConfig.apiVersion);
+    MainPanel.currentPanel?.updateConfig(cockpitConfig);
+  }
+  if (workspaceRoot) {
+    const configWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(userBasePath, 'config.yaml'),
+    );
+    configWatcher.onDidChange(reloadConfig);
+    configWatcher.onDidCreate(reloadConfig);
+    configWatcher.onDidDelete(reloadConfig);
+    context.subscriptions.push(configWatcher);
+  }
 
   const allFeatures = [
     ...featureRegistry,

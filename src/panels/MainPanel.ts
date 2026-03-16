@@ -40,6 +40,12 @@ export class MainPanel {
     this._panel.webview.postMessage({ type: 'orgConnecting', orgName });
   }
 
+  updateConfig(config: CockpitConfig): void {
+    this.config = config;
+    this._panel.title = config.panelTitle;
+    void this._sendOrgInfo();
+  }
+
   static createOrShow(
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
@@ -90,7 +96,7 @@ export class MainPanel {
     private readonly connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
     private readonly workspaceRoot: string = '',
-    private readonly config: CockpitConfig,
+    private config: CockpitConfig,
   ) {
     this._panel = panel;
     this.queryService = new QueryService(connectionManager);

@@ -72,7 +72,7 @@ Charts are loaded from three sources (merged at runtime, later wins):
 | **User-defined** | `{workspace}/force-cockpit/monitoring/{category}/*.yaml` | Your own charts, committed to git |
 | **Private** | `{workspace}/force-cockpit/private/monitoring/{category}/*.yaml` | Personal charts, **not** committed to git |
 
-The user-defined path can be customised via the VSCode setting `forceCockpit.cockpitPath`.
+The user-defined path can be customised via the VSCode setting `forceCockpit.cockpitPath` (see [Configuration](#configuration)).
 
 ### Private charts
 
@@ -352,6 +352,49 @@ js: |
 
   log(`\nDone. Total updated: ${updated}`);
 ```
+
+---
+
+## Configuration
+
+Most extension settings are managed via a `config.yaml` file — making them easy to share across a team by committing the file to git.
+
+The extension loads configuration in this order (later layers override earlier ones):
+1. **Hardcoded defaults** — built into the extension
+2. **Bundled `config.yaml`** — shipped with the extension at its root
+3. **User `config.yaml`** — at `force-cockpit/config.yaml` in your workspace (or the custom `cockpitPath`)
+
+Only keys present in a layer override the previous layer — omitted keys keep their default values.
+
+### Available settings
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `apiVersion` | string | `"65.0"` | Salesforce API version for all API calls |
+| `protectedSandboxes` | string[] | `[]` | Sandbox org names that require confirmation before destructive actions |
+| `panelTitle` | string | `"Force Cockpit"` | Display title shown in the panel header and tab |
+| `logoPath` | string | `""` | Path to a logo image relative to the workspace root (empty = default logo) |
+
+### Example `force-cockpit/config.yaml`
+
+```yaml
+apiVersion: "65.0"
+protectedSandboxes:
+  - staging
+  - uat
+panelTitle: "My Team Cockpit"
+logoPath: "assets/logo.png"
+```
+
+### VSCode setting
+
+One setting remains in VSCode's `settings.json` because it determines where the config file lives:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `forceCockpit.cockpitPath` | `""` | Absolute path to the `force-cockpit` folder. Defaults to `{workspace root}/force-cockpit` if empty. |
+
+> **Note:** Changes to `config.yaml` are picked up automatically — no window reload needed.
 
 ---
 
