@@ -693,265 +693,238 @@
     applyFilters();
   }
 
-  // ── Build accordion per script ────────────────────────────────────────────
+  // ── Accordion helpers ────────────────────────────────────────────────────
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {any} script
+   * @param {string} [extraClasses]
    * @returns {HTMLElement}
    */
-  function buildAccordion(script) {
-    // ── Invalid script: degraded accordion ────────────────────────────────
-    if (script.invalid) {
-      const section = document.createElement('section');
-      section.className = 'accordion open yaml-script--invalid';
-      section.setAttribute('data-script-id', script.id);
-      section.setAttribute('data-folder', script.folder);
-      section.setAttribute('data-source', script.source ?? 'user');
-      section.setAttribute(
-        'data-search-text',
-        `${script.name} ${script.description}`.toLowerCase(),
-      );
-
-      const header = document.createElement('div');
-      header.className = 'yaml-script-header';
-
-      const trigger = document.createElement('button');
-      trigger.className = 'accordion-trigger';
-      trigger.innerHTML = `
-        <span class="accordion-icon">&#9656;</span>
-        <span class="accordion-title">${escapeHtml(script.name)}</span>
-      `;
-      trigger.addEventListener('click', () => section.classList.toggle('open'));
-
-      const invalidBadge = document.createElement('span');
-      invalidBadge.className = 'script-invalid-badge';
-      invalidBadge.textContent = L.badgeInvalid;
-
-      const executeBtn = document.createElement('button');
-      executeBtn.className = 'btn yaml-execute-btn';
-      executeBtn.textContent = L.btnExecute;
-      executeBtn.disabled = true;
-      executeBtn.title = L.tooltipInvalidScript;
-
-      header.appendChild(trigger);
-      header.appendChild(invalidBadge);
-      if (script.source === 'private') {
-        const privateBadge = document.createElement('span');
-        privateBadge.className = 'private-badge';
-        privateBadge.textContent = L.badgePrivate;
-        privateBadge.title = L.labelPrivate;
-        header.appendChild(privateBadge);
-      }
-      const editBtnInvalid = document.createElement('button');
-      editBtnInvalid.className = 'btn yaml-edit-btn';
-      editBtnInvalid.textContent = L.btnEdit;
-      editBtnInvalid.title = L.tooltipEditScript;
-      editBtnInvalid.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showEditForm(script);
-      });
-      header.appendChild(editBtnInvalid);
-      header.appendChild(executeBtn);
-
-      const body = document.createElement('div');
-      body.className = 'accordion-body';
-
-      const errorBox = document.createElement('div');
-      errorBox.className = 'error-box';
-      errorBox.textContent = script.error ?? L.badgeInvalid;
-      body.appendChild(errorBox);
-
-      section.appendChild(header);
-      section.appendChild(body);
-      return section;
-    }
-
-    // ── Valid script ───────────────────────────────────────────────────────
-    const isCommand = script.type === 'command';
-    const isJs = script.type === 'js';
-    const needsOrg = !isCommand && !isJs; // only Apex requires org connection
-
+  function createAccordionSection(script, extraClasses) {
     const section = document.createElement('section');
-    section.className = 'accordion';
+    section.className = extraClasses ? `accordion ${extraClasses}` : 'accordion';
     section.setAttribute('data-script-id', script.id);
-    section.setAttribute('data-script-type', script.type);
+    if (script.type) section.setAttribute('data-script-type', script.type);
     section.setAttribute('data-folder', script.folder);
     section.setAttribute('data-source', script.source ?? 'user');
     section.setAttribute('data-search-text', `${script.name} ${script.description}`.toLowerCase());
+    return section;
+  }
 
-    // ── Header row: trigger (flex:1) + execute button (always visible) ────────
-    const header = document.createElement('div');
-    header.className = 'yaml-script-header';
-
-    const trigger = document.createElement('button');
+  /**
+   * @param {any} script
+   * @param {HTMLElement} section
+   * @returns {HTMLButtonElement}
+   */
+  function createTriggerButton(script, section) {
+    const trigger = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     trigger.className = 'accordion-trigger';
     trigger.innerHTML = `
       <span class="accordion-icon">&#9656;</span>
       <span class="accordion-title">${escapeHtml(script.name)}</span>
     `;
-    const subtitleSpan = document.createElement('span');
-    subtitleSpan.className = 'accordion-subtitle';
-    if (script.description) {
-      subtitleSpan.appendChild(document.createTextNode(script.description));
+    if (script.description || script.scriptFile) {
+      const subtitleSpan = document.createElement('span');
+      subtitleSpan.className = 'accordion-subtitle';
+      if (script.description) {
+        subtitleSpan.appendChild(document.createTextNode(script.description));
+      }
+      if (script.scriptFile) {
+        if (script.description) subtitleSpan.appendChild(document.createTextNode('  '));
+        const fileLink = document.createElement('button');
+        fileLink.type = 'button';
+        fileLink.className = 'yaml-file-link';
+        fileLink.textContent = `📄 ${script.scriptFile}`;
+        fileLink.title = 'Open file in editor';
+        fileLink.addEventListener('click', (e) => {
+          e.stopPropagation();
+          win.__vscode.postMessage({ type: 'openScriptFile', filePath: script.scriptFile });
+        });
+        subtitleSpan.appendChild(fileLink);
+      }
+      trigger.appendChild(subtitleSpan);
     }
-    if (script.scriptFile) {
-      if (script.description) subtitleSpan.appendChild(document.createTextNode('  '));
-      const fileLink = document.createElement('button');
-      fileLink.type = 'button';
-      fileLink.className = 'yaml-file-link';
-      fileLink.textContent = `📄 ${script.scriptFile}`;
-      fileLink.title = 'Open file in editor';
-      fileLink.addEventListener('click', (e) => {
-        e.stopPropagation();
-        win.__vscode.postMessage({ type: 'openScriptFile', filePath: script.scriptFile });
-      });
-      subtitleSpan.appendChild(fileLink);
-    }
-    trigger.appendChild(subtitleSpan);
     trigger.addEventListener('click', () => section.classList.toggle('open'));
+    return trigger;
+  }
 
-    const typeBadge = document.createElement('span');
-    const badgeClass = isJs
-      ? 'script-type-badge--js'
-      : isCommand
-        ? 'script-type-badge--command'
-        : 'script-type-badge--apex';
-    const badgeText = isJs ? L.badgeJs : isCommand ? L.badgeCommand : L.badgeApex;
-    typeBadge.className = `script-type-badge ${badgeClass}`;
-    typeBadge.textContent = badgeText;
+  /** @returns {HTMLElement} */
+  function createPrivateBadge() {
+    const badge = document.createElement('span');
+    badge.className = 'private-badge';
+    badge.textContent = L.badgePrivate;
+    badge.title = L.labelPrivate;
+    return badge;
+  }
 
-    const executeBtn = document.createElement('button');
-    executeBtn.className = 'btn btn-primary yaml-execute-btn';
-    executeBtn.textContent = L.btnExecute;
-    // Only Apex scripts require org connection
-    executeBtn.disabled = needsOrg ? !connected : false;
-
-    const editBtn = document.createElement('button');
-    editBtn.className = 'btn yaml-edit-btn';
-    editBtn.textContent = L.btnEdit;
-    editBtn.title = L.tooltipEditScript;
-    editBtn.addEventListener('click', (e) => {
+  /**
+   * @param {any} script
+   * @returns {HTMLButtonElement}
+   */
+  function createEditButton(script) {
+    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    btn.className = 'btn yaml-edit-btn';
+    btn.textContent = L.btnEdit;
+    btn.title = L.tooltipEditScript;
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
       showEditForm(script);
     });
-    header.appendChild(trigger);
-    header.appendChild(typeBadge);
-    if (script.source === 'private') {
-      const privateBadge = document.createElement('span');
-      privateBadge.className = 'private-badge';
-      privateBadge.textContent = L.badgePrivate;
-      privateBadge.title = L.labelPrivate;
-      header.appendChild(privateBadge);
-    }
-    if (script.source !== 'builtin') {
-      header.appendChild(editBtn);
-    }
+    return btn;
+  }
+
+  /**
+   * @param {any} script
+   * @returns {HTMLElement}
+   */
+  function createTypeBadge(script) {
+    const isJs = script.type === 'js';
+    const isCmd = script.type === 'command';
+    const span = document.createElement('span');
+    span.className =
+      'script-type-badge ' +
+      (isJs ? 'script-type-badge--js' : isCmd ? 'script-type-badge--command' : 'script-type-badge--apex');
+    span.textContent = isJs ? L.badgeJs : isCmd ? L.badgeCommand : L.badgeApex;
+    return span;
+  }
+
+  /**
+   * @param {any} script
+   * @returns {HTMLElement}
+   */
+  function buildInvalidAccordion(script) {
+    const section = createAccordionSection(script, 'open yaml-script--invalid');
+    const header = document.createElement('div');
+    header.className = 'yaml-script-header';
+
+    header.appendChild(createTriggerButton(script, section));
+
+    const invalidBadge = document.createElement('span');
+    invalidBadge.className = 'script-invalid-badge';
+    invalidBadge.textContent = L.badgeInvalid;
+    header.appendChild(invalidBadge);
+
+    if (script.source === 'private') header.appendChild(createPrivateBadge());
+    header.appendChild(createEditButton(script));
+
+    const executeBtn = document.createElement('button');
+    executeBtn.className = 'btn yaml-execute-btn';
+    executeBtn.textContent = L.btnExecute;
+    executeBtn.disabled = true;
+    executeBtn.title = L.tooltipInvalidScript;
     header.appendChild(executeBtn);
 
-    // ── Body: inputs + status + error + log ──────────────────────────────────
     const body = document.createElement('div');
     body.className = 'accordion-body';
+    const errorBox = document.createElement('div');
+    errorBox.className = 'error-box';
+    errorBox.textContent = script.error ?? L.badgeInvalid;
+    body.appendChild(errorBox);
 
-    // ── Dynamic input fields (when script has inputs) ──
+    section.appendChild(header);
+    section.appendChild(body);
+    return section;
+  }
+
+  /**
+   * @param {any} script
+   * @param {() => void} updateExecuteState
+   * @returns {{ element: HTMLElement | null, inputFields: Map<string, HTMLInputElement | HTMLSelectElement> }}
+   */
+  function buildInputFields(script, updateExecuteState) {
     /** @type {Map<string, HTMLInputElement | HTMLSelectElement>} */
     const inputFields = new Map();
-    const hasInputs = script.inputs && script.inputs.length > 0;
+    if (!script.inputs || script.inputs.length === 0) {
+      return { element: null, inputFields };
+    }
 
-    if (hasInputs) {
-      const inputsForm = document.createElement('div');
-      inputsForm.className = 'yaml-inputs-form';
+    const inputsForm = document.createElement('div');
+    inputsForm.className = 'yaml-inputs-form';
 
-      for (const inp of script.inputs || []) {
-        const fieldDiv = document.createElement('div');
-        fieldDiv.className = 'yaml-input-field';
+    for (const inp of script.inputs) {
+      const fieldDiv = document.createElement('div');
+      fieldDiv.className = 'yaml-input-field';
 
-        if (inp.type === 'checkbox') {
-          // Checkbox: label wraps the input — no separate label element above
-          const checkboxLabel = document.createElement('label');
-          checkboxLabel.className = 'yaml-input-checkbox-label';
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.checked = inp.default === true;
-          cb.addEventListener('change', updateExecuteState);
-          inputFields.set(inp.name, cb);
-          const span = document.createElement('span');
-          span.textContent = inp.label || inp.name;
-          checkboxLabel.appendChild(cb);
-          checkboxLabel.appendChild(span);
-          fieldDiv.appendChild(checkboxLabel);
-        } else {
-          const label = document.createElement('label');
-          label.className = 'form-label';
-          label.textContent = inp.label || inp.name;
-          if (inp.required) {
-            const reqStar = document.createElement('span');
-            reqStar.className = 'yaml-input-required-star';
-            reqStar.textContent = ' *';
-            label.appendChild(reqStar);
-          }
-          fieldDiv.appendChild(label);
-
-          if (inp.type === 'picklist' && inp.options && inp.options.length > 0) {
-            const select = document.createElement('select');
-            select.className = 'text-input';
-            for (const opt of inp.options) {
-              const option = document.createElement('option');
-              option.value = opt;
-              option.textContent = opt;
-              select.appendChild(option);
-            }
-            select.addEventListener('change', updateExecuteState);
-            inputFields.set(inp.name, select);
-            fieldDiv.appendChild(select);
-          } else {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'text-input';
-            input.placeholder = inp.label || inp.name;
-            input.addEventListener('input', updateExecuteState);
-            inputFields.set(inp.name, input);
-            const pasteWrapper = document.createElement('div');
-            pasteWrapper.className = 'input-with-paste';
-            const pasteBtn = document.createElement('button');
-            pasteBtn.type = 'button';
-            pasteBtn.className = 'paste-btn';
-            pasteBtn.title = 'Paste from clipboard';
-            pasteBtn.textContent = '📋';
-            pasteWrapper.appendChild(input);
-            pasteWrapper.appendChild(pasteBtn);
-            fieldDiv.appendChild(pasteWrapper);
-          }
+      if (inp.type === 'checkbox') {
+        const checkboxLabel = document.createElement('label');
+        checkboxLabel.className = 'yaml-input-checkbox-label';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = inp.default === true;
+        cb.addEventListener('change', updateExecuteState);
+        inputFields.set(inp.name, cb);
+        const span = document.createElement('span');
+        span.textContent = inp.label || inp.name;
+        checkboxLabel.appendChild(cb);
+        checkboxLabel.appendChild(span);
+        fieldDiv.appendChild(checkboxLabel);
+      } else {
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.textContent = inp.label || inp.name;
+        if (inp.required) {
+          const reqStar = document.createElement('span');
+          reqStar.className = 'yaml-input-required-star';
+          reqStar.textContent = ' *';
+          label.appendChild(reqStar);
         }
+        fieldDiv.appendChild(label);
 
-        inputsForm.appendChild(fieldDiv);
+        if (inp.type === 'picklist' && inp.options && inp.options.length > 0) {
+          const select = document.createElement('select');
+          select.className = 'text-input';
+          for (const opt of inp.options) {
+            const option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            select.appendChild(option);
+          }
+          select.addEventListener('change', updateExecuteState);
+          inputFields.set(inp.name, select);
+          fieldDiv.appendChild(select);
+        } else {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'text-input';
+          input.placeholder = inp.label || inp.name;
+          input.addEventListener('input', updateExecuteState);
+          inputFields.set(inp.name, input);
+          const pasteWrapper = document.createElement('div');
+          pasteWrapper.className = 'input-with-paste';
+          const pasteBtn = document.createElement('button');
+          pasteBtn.type = 'button';
+          pasteBtn.className = 'paste-btn';
+          pasteBtn.title = 'Paste from clipboard';
+          pasteBtn.textContent = '📋';
+          pasteWrapper.appendChild(input);
+          pasteWrapper.appendChild(pasteBtn);
+          fieldDiv.appendChild(pasteWrapper);
+        }
       }
 
-      body.appendChild(inputsForm);
+      inputsForm.appendChild(fieldDiv);
     }
 
-    function updateExecuteState() {
-      const orgOk = needsOrg ? connected : true;
-      if (!hasInputs) {
-        executeBtn.disabled = !orgOk;
-        return;
-      }
-      const allRequiredFilled = (script.inputs || []).every((/** @type {any} */ inp) => {
-        if (!inp.required) return true;
-        const field = inputFields.get(inp.name);
-        if (!field) return false;
-        if (field instanceof HTMLInputElement && field.type === 'checkbox') return true;
-        return field.value.trim() !== '';
-      });
-      executeBtn.disabled = !(orgOk && allRequiredFilled);
-    }
+    return { element: inputsForm, inputFields };
+  }
 
-    // Register updater for this accordion
-    executeStateUpdaters.set(script.id, updateExecuteState);
+  /**
+   * @typedef {Object} LogViewerRefs
+   * @property {HTMLElement} statusHint
+   * @property {HTMLElement} errorBox
+   * @property {HTMLElement} logViewer
+   * @property {HTMLPreElement} logOutput
+   * @property {HTMLButtonElement} openInEditorBtn
+   */
 
-    // Set initial execute button state
-    if (hasInputs && (script.inputs || []).some((/** @type {any} */ inp) => inp.required)) {
-      executeBtn.disabled = true;
-    }
+  /**
+   * @param {any} script
+   * @param {HTMLElement} section
+   * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
+   */
+  function buildLogViewer(script, section) {
+    const fragment = document.createDocumentFragment();
+    const isApex = script.type !== 'command' && script.type !== 'js';
 
     const statusHint = document.createElement('span');
     statusHint.className = 'status-hint yaml-status';
@@ -963,22 +936,18 @@
     logViewer.className = 'yaml-log-viewer';
     logViewer.style.display = 'none';
 
-    const logOutput = document.createElement('pre');
+    const logOutput = /** @type {HTMLPreElement} */ (document.createElement('pre'));
     logOutput.className = 'yaml-log-output';
 
-    // USER_DEBUG filter only makes sense for Apex scripts
-    if (!isCommand && !isJs) {
+    if (isApex) {
       const filterLabel = document.createElement('label');
       filterLabel.className = 'yaml-log-filter-label';
-
       const filterCheckbox = document.createElement('input');
       filterCheckbox.type = 'checkbox';
       filterCheckbox.className = 'yaml-log-filter-checkbox';
-
       filterLabel.appendChild(filterCheckbox);
       filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
       logViewer.appendChild(filterLabel);
-
       filterCheckbox.addEventListener('change', () => {
         const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
         const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
@@ -988,7 +957,7 @@
 
     logViewer.appendChild(logOutput);
 
-    const openInEditorBtn = document.createElement('button');
+    const openInEditorBtn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     openInEditorBtn.className = 'yaml-open-editor-btn';
     openInEditorBtn.textContent = 'Open in editor';
     openInEditorBtn.style.display = 'none';
@@ -1002,18 +971,28 @@
     });
     logViewer.appendChild(openInEditorBtn);
 
-    body.appendChild(statusHint);
-    body.appendChild(errorBox);
-    body.appendChild(logViewer);
+    fragment.appendChild(statusHint);
+    fragment.appendChild(errorBox);
+    fragment.appendChild(logViewer);
 
-    section.appendChild(header);
-    section.appendChild(body);
+    return { fragment, refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn } };
+  }
 
-    // Execute button handler
+  /**
+   * @param {Object} params
+   * @param {any} params.script
+   * @param {HTMLElement} params.section
+   * @param {HTMLButtonElement} params.executeBtn
+   * @param {boolean} params.needsOrg
+   * @param {Map<string, HTMLInputElement | HTMLSelectElement>} params.inputFields
+   * @param {LogViewerRefs} params.refs
+   */
+  function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
+    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn } = refs;
+
     executeBtn.addEventListener('click', () => {
       if (needsOrg && !connected) return;
 
-      // Collect input values
       /** @type {Record<string, string>} */
       const inputValues = {};
       inputFields.forEach((field, name) => {
@@ -1040,7 +1019,7 @@
         );
         if (filterCheckbox) filterCheckbox.checked = false;
 
-        section.classList.add('open'); // auto-expand to show log output
+        section.classList.add('open');
         _scriptOpId = win.__startAction(executeBtn, () => {
           statusHint.textContent = '';
           win.__vscode.postMessage({ type: 'cancelOperation', opId: _scriptOpId });
@@ -1053,10 +1032,79 @@
         });
       }
 
-      win.__confirmIfSensitive(currentOrgData, 'Execute this script?', doExecute, () => {
-        // button was not pre-disabled; onCancelled is a no-op
-      });
+      win.__confirmIfSensitive(currentOrgData, 'Execute this script?', doExecute, () => {});
     });
+  }
+
+  // ── Build accordion per script ────────────────────────────────────────────
+
+  /**
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @returns {HTMLElement}
+   */
+  function buildAccordion(script) {
+    if (script.invalid) return buildInvalidAccordion(script);
+
+    const isCommand = script.type === 'command';
+    const isJs = script.type === 'js';
+    const needsOrg = !isCommand && !isJs;
+
+    const section = createAccordionSection(script);
+
+    // ── Header ──
+    const header = document.createElement('div');
+    header.className = 'yaml-script-header';
+
+    const executeBtn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    executeBtn.className = 'btn btn-primary yaml-execute-btn';
+    executeBtn.textContent = L.btnExecute;
+    executeBtn.disabled = needsOrg ? !connected : false;
+
+    header.appendChild(createTriggerButton(script, section));
+    header.appendChild(createTypeBadge(script));
+    if (script.source === 'private') header.appendChild(createPrivateBadge());
+    if (script.source !== 'builtin') header.appendChild(createEditButton(script));
+    header.appendChild(executeBtn);
+
+    // ── Body ──
+    const body = document.createElement('div');
+    body.className = 'accordion-body';
+
+    // Input fields + execute state management
+    const hasInputs = script.inputs && script.inputs.length > 0;
+
+    function updateExecuteState() {
+      const orgOk = needsOrg ? connected : true;
+      if (!hasInputs) {
+        executeBtn.disabled = !orgOk;
+        return;
+      }
+      const allRequiredFilled = (script.inputs || []).every((/** @type {any} */ inp) => {
+        if (!inp.required) return true;
+        const field = inputFields.get(inp.name);
+        if (!field) return false;
+        if (field instanceof HTMLInputElement && field.type === 'checkbox') return true;
+        return field.value.trim() !== '';
+      });
+      executeBtn.disabled = !(orgOk && allRequiredFilled);
+    }
+
+    const { element: inputsEl, inputFields } = buildInputFields(script, updateExecuteState);
+    if (inputsEl) body.appendChild(inputsEl);
+    executeStateUpdaters.set(script.id, updateExecuteState);
+
+    if (hasInputs && (script.inputs || []).some((/** @type {any} */ inp) => inp.required)) {
+      executeBtn.disabled = true;
+    }
+
+    // Log viewer
+    const { fragment, refs } = buildLogViewer(script, section);
+    body.appendChild(fragment);
+
+    section.appendChild(header);
+    section.appendChild(body);
+
+    attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs });
 
     return section;
   }
