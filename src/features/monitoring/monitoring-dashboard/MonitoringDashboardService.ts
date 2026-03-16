@@ -39,6 +39,18 @@ export interface MonitoringTableResult {
   totalRows: number;
 }
 
+interface MonitoringRawDoc {
+  name?: string;
+  description?: string;
+  soql?: string;
+  labelField?: string;
+  valueFields?: unknown;
+  valueField?: string;
+  chartType?: string;
+  refreshInterval?: number;
+  stacked?: boolean;
+}
+
 export class MonitoringDashboardService {
   constructor(
     private readonly connectionManager: ConnectionManager,
@@ -235,81 +247,93 @@ export class MonitoringDashboardService {
       const filePath = path.join(dirPath, file);
       try {
         const content = fs.readFileSync(filePath, 'utf8');
-        const parsed = yaml.load(content) as {
-          name?: string;
-          description?: string;
-          soql?: string;
-          labelField?: string;
-          valueFields?: unknown;
-          valueField?: string;
-          chartType?: string;
-          refreshInterval?: number;
-          stacked?: boolean;
-        };
+        const parsed = yaml.load(content) as MonitoringRawDoc;
+        if (!parsed || typeof parsed !== 'object') continue;
 
-        if (!parsed || typeof parsed !== 'object' || !parsed.name || !parsed.soql) {
-          continue;
-        }
+        const validated = this._validateMonitoringDoc(parsed);
+        if (!validated) continue;
 
-        const validChartTypes = ['bar', 'line', 'pie', 'doughnut', 'metric', 'table'];
-        const chartType = validChartTypes.includes(parsed.chartType ?? '')
-          ? (parsed.chartType as MonitoringConfig['chartType'])
-          : 'bar';
-
-        // labelField is required for all types except metric
-        if (!parsed.labelField && chartType !== 'metric') {
-          continue;
-        }
-
-        // Support both valueField (shorthand) and valueFields (full)
-        let valueFields: MonitoringValueField[];
-        if (Array.isArray(parsed.valueFields) && parsed.valueFields.length > 0) {
-          valueFields = (
-            parsed.valueFields as Array<{
-              field: string;
-              label?: string;
-              format?: string;
-              threshold?: number;
-              thresholdCondition?: string;
-            }>
-          ).map((vf) => {
-            const entry: MonitoringValueField = {
-              field: String(vf.field),
-              label: String(vf.label ?? vf.field),
-            };
-            if (vf.format === 'currency' || vf.format === 'percent') {
-              entry.format = vf.format;
-            }
-            if (typeof vf.threshold === 'number') {
-              entry.threshold = vf.threshold;
-              entry.thresholdCondition = vf.thresholdCondition === 'below' ? 'below' : 'above';
-            }
-            return entry;
-          });
-        } else if (parsed.valueField) {
-          valueFields = [{ field: parsed.valueField, label: parsed.valueField }];
-        } else {
-          continue; // No value field defined — skip
-        }
+        const valueFields = this._normalizeValueFields(parsed);
+        if (!valueFields) continue;
 
         const basename = path.basename(file, path.extname(file));
-        configs.push({
-          id: `${folder}/${basename}`,
-          folder,
-          name: parsed.name,
-          description: parsed.description ?? '',
-          soql: parsed.soql,
-          labelField: parsed.labelField ?? '',
-          valueFields,
-          chartType,
-          refreshInterval: Number(parsed.refreshInterval ?? 0),
-          stacked: Boolean(parsed.stacked),
-          source,
-        });
+        configs.push(
+          this._buildMonitoringConfig(parsed, folder, basename, source, valueFields, validated.chartType),
+        );
       } catch {
         // Skip malformed YAML files silently
       }
     }
+  }
+
+  private _validateMonitoringDoc(
+    parsed: MonitoringRawDoc,
+  ): { chartType: MonitoringConfig['chartType'] } | null {
+    if (!parsed.name || !parsed.soql) return null;
+
+    const validChartTypes = ['bar', 'line', 'pie', 'doughnut', 'metric', 'table'];
+    const chartType = validChartTypes.includes(parsed.chartType ?? '')
+      ? (parsed.chartType as MonitoringConfig['chartType'])
+      : 'bar';
+
+    // labelField is required for all types except metric
+    if (!parsed.labelField && chartType !== 'metric') return null;
+
+    return { chartType };
+  }
+
+  private _normalizeValueFields(parsed: MonitoringRawDoc): MonitoringValueField[] | null {
+    if (Array.isArray(parsed.valueFields) && parsed.valueFields.length > 0) {
+      return (
+        parsed.valueFields as Array<{
+          field: string;
+          label?: string;
+          format?: string;
+          threshold?: number;
+          thresholdCondition?: string;
+        }>
+      ).map((vf) => {
+        const entry: MonitoringValueField = {
+          field: String(vf.field),
+          label: String(vf.label ?? vf.field),
+        };
+        if (vf.format === 'currency' || vf.format === 'percent') {
+          entry.format = vf.format;
+        }
+        if (typeof vf.threshold === 'number') {
+          entry.threshold = vf.threshold;
+          entry.thresholdCondition = vf.thresholdCondition === 'below' ? 'below' : 'above';
+        }
+        return entry;
+      });
+    }
+    if (parsed.valueField) {
+      return [{ field: parsed.valueField, label: parsed.valueField }];
+    }
+    return null; // No value field defined
+  }
+
+  private _buildMonitoringConfig(
+    parsed: MonitoringRawDoc,
+    folder: string,
+    basename: string,
+    source: 'builtin' | 'user' | 'private',
+    valueFields: MonitoringValueField[],
+    chartType: MonitoringConfig['chartType'],
+  ): MonitoringConfig {
+    return {
+      id: `${folder}/${basename}`,
+      folder,
+      name: parsed.name!,
+      description: parsed.description ?? '',
+      soql: parsed.soql!,
+      labelField: parsed.labelField ?? '',
+      valueFields,
+      chartType,
+      refreshInterval: Number(parsed.refreshInterval ?? 0),
+      stacked: Boolean(parsed.stacked),
+      source,
+    };
   }
 
   private toSlug(name: string): string {

@@ -184,103 +184,132 @@
 
   // ── Form inputs management ───────────────────────────────────────────────
 
+  /**
+   * Builds the shared header elements for a form input row.
+   * @param {{ name: string, label: string, type: string, required: boolean, options: string, checkboxDefault: boolean }} inp
+   * @param {number} idx
+   * @returns {{ nameInput: HTMLInputElement, labelInput: HTMLInputElement, typeSelect: HTMLSelectElement, reqLabel: HTMLLabelElement, removeBtn: HTMLButtonElement }}
+   */
+  function buildSharedInputHeader(inp, idx) {
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'text-input yaml-input-name';
+    nameInput.placeholder = L.placeholderInputName;
+    nameInput.value = inp.name;
+    nameInput.addEventListener('input', () => {
+      formInputs[idx].name = nameInput.value;
+    });
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'text-input yaml-input-label';
+    labelInput.placeholder = L.placeholderInputLabel;
+    labelInput.value = inp.label;
+    labelInput.addEventListener('input', () => {
+      formInputs[idx].label = labelInput.value;
+    });
+
+    const typeSelect = document.createElement('select');
+    typeSelect.className = 'text-input yaml-input-type-select';
+    const optString = document.createElement('option');
+    optString.value = 'string';
+    optString.textContent = L.typeString;
+    const optPicklist = document.createElement('option');
+    optPicklist.value = 'picklist';
+    optPicklist.textContent = L.typePicklist;
+    const optCheckbox = document.createElement('option');
+    optCheckbox.value = 'checkbox';
+    optCheckbox.textContent = L.typeCheckbox;
+    typeSelect.appendChild(optString);
+    typeSelect.appendChild(optPicklist);
+    typeSelect.appendChild(optCheckbox);
+    typeSelect.value = inp.type;
+
+    const reqLabel = document.createElement('label');
+    reqLabel.className = 'yaml-input-required-label';
+    const reqCheck = document.createElement('input');
+    reqCheck.type = 'checkbox';
+    reqCheck.checked = inp.required;
+    reqCheck.addEventListener('change', () => {
+      formInputs[idx].required = reqCheck.checked;
+    });
+    reqLabel.appendChild(reqCheck);
+    reqLabel.appendChild(document.createTextNode(L.labelRequired));
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn yaml-input-remove-btn';
+    removeBtn.textContent = L.btnRemoveInput;
+    removeBtn.addEventListener('click', () => {
+      formInputs.splice(idx, 1);
+      renderFormInputs();
+    });
+
+    return { nameInput, labelInput, typeSelect, reqLabel, removeBtn };
+  }
+
+  /**
+   * Builds the picklist-specific options sub-row.
+   * @param {{ options: string, type: string }} inp
+   * @param {number} idx
+   * @returns {HTMLElement}
+   */
+  function buildPicklistSubRow(inp, idx) {
+    const optionsRow = document.createElement('div');
+    optionsRow.className = 'yaml-input-options-row';
+    const optionsInput = document.createElement('input');
+    optionsInput.type = 'text';
+    optionsInput.className = 'text-input';
+    optionsInput.placeholder = L.placeholderOptions;
+    optionsInput.value = inp.options;
+    optionsInput.addEventListener('input', () => {
+      formInputs[idx].options = optionsInput.value;
+    });
+    optionsRow.appendChild(optionsInput);
+    optionsRow.style.display = inp.type === 'picklist' ? '' : 'none';
+    return optionsRow;
+  }
+
+  /**
+   * Builds the checkbox-specific default-checked sub-row.
+   * @param {{ checkboxDefault: boolean, type: string }} inp
+   * @param {number} idx
+   * @returns {HTMLElement}
+   */
+  function buildCheckboxSubRow(inp, idx) {
+    const defaultRow = document.createElement('div');
+    defaultRow.className = 'yaml-input-options-row yaml-input-default-row';
+    const defaultLabel = document.createElement('label');
+    defaultLabel.className = 'yaml-input-required-label';
+    const defaultCheck = document.createElement('input');
+    defaultCheck.type = 'checkbox';
+    defaultCheck.checked = inp.checkboxDefault;
+    defaultCheck.addEventListener('change', () => {
+      formInputs[idx].checkboxDefault = defaultCheck.checked;
+    });
+    defaultLabel.appendChild(defaultCheck);
+    defaultLabel.appendChild(document.createTextNode(L.labelCheckboxDefault));
+    defaultRow.appendChild(defaultLabel);
+    defaultRow.style.display = inp.type === 'checkbox' ? '' : 'none';
+    return defaultRow;
+  }
+
   function renderFormInputs() {
     formInputsList.innerHTML = '';
     formInputs.forEach((inp, idx) => {
+      const { nameInput, labelInput, typeSelect, reqLabel, removeBtn } = buildSharedInputHeader(inp, idx);
+      const optionsRow = buildPicklistSubRow(inp, idx);
+      const defaultRow = buildCheckboxSubRow(inp, idx);
+
       const row = document.createElement('div');
       row.className = 'yaml-input-row';
-
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.className = 'text-input yaml-input-name';
-      nameInput.placeholder = L.placeholderInputName;
-      nameInput.value = inp.name;
-      nameInput.addEventListener('input', () => {
-        formInputs[idx].name = nameInput.value;
-      });
-
-      const labelInput = document.createElement('input');
-      labelInput.type = 'text';
-      labelInput.className = 'text-input yaml-input-label';
-      labelInput.placeholder = L.placeholderInputLabel;
-      labelInput.value = inp.label;
-      labelInput.addEventListener('input', () => {
-        formInputs[idx].label = labelInput.value;
-      });
-
-      const typeSelect = document.createElement('select');
-      typeSelect.className = 'text-input yaml-input-type-select';
-      const optString = document.createElement('option');
-      optString.value = 'string';
-      optString.textContent = L.typeString;
-      const optPicklist = document.createElement('option');
-      optPicklist.value = 'picklist';
-      optPicklist.textContent = L.typePicklist;
-      const optCheckbox = document.createElement('option');
-      optCheckbox.value = 'checkbox';
-      optCheckbox.textContent = L.typeCheckbox;
-      typeSelect.appendChild(optString);
-      typeSelect.appendChild(optPicklist);
-      typeSelect.appendChild(optCheckbox);
-      typeSelect.value = inp.type;
-
-      const reqLabel = document.createElement('label');
-      reqLabel.className = 'yaml-input-required-label';
-      const reqCheck = document.createElement('input');
-      reqCheck.type = 'checkbox';
-      reqCheck.checked = inp.required;
-      reqCheck.addEventListener('change', () => {
-        formInputs[idx].required = reqCheck.checked;
-      });
-      reqLabel.appendChild(reqCheck);
-      reqLabel.appendChild(document.createTextNode(L.labelRequired));
-
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn yaml-input-remove-btn';
-      removeBtn.textContent = L.btnRemoveInput;
-      removeBtn.addEventListener('click', () => {
-        formInputs.splice(idx, 1);
-        renderFormInputs();
-      });
-
       row.appendChild(nameInput);
       row.appendChild(labelInput);
       row.appendChild(typeSelect);
       row.appendChild(reqLabel);
       row.appendChild(removeBtn);
       formInputsList.appendChild(row);
-
-      // Options row for picklist (shown/hidden based on type)
-      const optionsRow = document.createElement('div');
-      optionsRow.className = 'yaml-input-options-row';
-      const optionsInput = document.createElement('input');
-      optionsInput.type = 'text';
-      optionsInput.className = 'text-input';
-      optionsInput.placeholder = L.placeholderOptions;
-      optionsInput.value = inp.options;
-      optionsInput.addEventListener('input', () => {
-        formInputs[idx].options = optionsInput.value;
-      });
-      optionsRow.appendChild(optionsInput);
-      optionsRow.style.display = inp.type === 'picklist' ? '' : 'none';
       formInputsList.appendChild(optionsRow);
-
-      // Default-checked row for checkbox (shown/hidden based on type)
-      const defaultRow = document.createElement('div');
-      defaultRow.className = 'yaml-input-options-row yaml-input-default-row';
-      const defaultLabel = document.createElement('label');
-      defaultLabel.className = 'yaml-input-required-label';
-      const defaultCheck = document.createElement('input');
-      defaultCheck.type = 'checkbox';
-      defaultCheck.checked = inp.checkboxDefault;
-      defaultCheck.addEventListener('change', () => {
-        formInputs[idx].checkboxDefault = defaultCheck.checked;
-      });
-      defaultLabel.appendChild(defaultCheck);
-      defaultLabel.appendChild(document.createTextNode(L.labelCheckboxDefault));
-      defaultRow.appendChild(defaultLabel);
-      defaultRow.style.display = inp.type === 'checkbox' ? '' : 'none';
       formInputsList.appendChild(defaultRow);
 
       typeSelect.addEventListener('change', () => {

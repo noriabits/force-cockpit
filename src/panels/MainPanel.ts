@@ -103,7 +103,12 @@ export class MainPanel {
     this.features = featureFactories.map((factory) => factory(connectionManager));
 
     this._update();
+    this._setupLifecycleListeners();
+    this._setupMessageHandlers();
+    this._setupConnectionListeners();
+  }
 
+  private _setupLifecycleListeners(): void {
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     this._panel.onDidChangeViewState(
@@ -115,7 +120,9 @@ export class MainPanel {
       null,
       this._disposables,
     );
+  }
 
+  private _setupMessageHandlers(): void {
     // Route messages from webview to services
     this._panel.webview.onDidReceiveMessage(
       async (message: { type: string; [key: string]: unknown }) => {
@@ -199,7 +206,9 @@ export class MainPanel {
       null,
       this._disposables,
     );
+  }
 
+  private _setupConnectionListeners(): void {
     // Forward connection changes to webview
     const onChanged = (event: ConnectionChangedEvent) => {
       if (event.connected) {
@@ -208,14 +217,14 @@ export class MainPanel {
         this._panel.webview.postMessage({ type: 'orgDisconnected' });
       }
     };
-    connectionManager.on('connectionChanged', onChanged);
+    this.connectionManager.on('connectionChanged', onChanged);
     this._disposables.push({
-      dispose: () => connectionManager.off('connectionChanged', onChanged),
+      dispose: () => this.connectionManager.off('connectionChanged', onChanged),
     });
 
     // If already connected when the panel is first opened, send org info immediately.
     // (The connectionChanged event was emitted before this panel existed.)
-    if (connectionManager.isConnected) {
+    if (this.connectionManager.isConnected) {
       void this._sendOrgInfo();
     }
   }
