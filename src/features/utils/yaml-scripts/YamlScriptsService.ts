@@ -151,20 +151,27 @@ export class YamlScriptsService {
     }
   }
 
-  private substituteInputs(script: YamlScript, values?: Record<string, string>): string {
-    if (!script.inputs?.length || !values) return script.script;
-
-    let result = script.script;
-    for (const input of script.inputs) {
-      const raw = values[input.name] ?? '';
-      const escaped = this.escapeForType(raw, script.type);
+  private substituteVars(
+    code: string,
+    vars: Record<string, string>,
+    type: 'apex' | 'command' | 'js',
+  ): string {
+    let result = code;
+    for (const [key, raw] of Object.entries(vars)) {
+      const escaped = this.escapeForType(raw, type);
       const pattern = new RegExp(
-        `\\$\\{${input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
+        `\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
         'g',
       );
       result = result.replace(pattern, escaped);
     }
     return result;
+  }
+
+  private substituteInputs(script: YamlScript, values?: Record<string, string>): string {
+    if (!script.inputs?.length || !values) return script.script;
+    const vars = Object.fromEntries(script.inputs.map((inp) => [inp.name, values[inp.name] ?? '']));
+    return this.substituteVars(script.script, vars, script.type);
   }
 
   private substituteSystemPlaceholders(
@@ -175,17 +182,7 @@ export class YamlScriptsService {
     const systemVars: Record<string, string> = {
       orgUsername: org?.username ?? '',
     };
-
-    let result = content;
-    for (const [key, raw] of Object.entries(systemVars)) {
-      const escaped = this.escapeForType(raw, scriptType);
-      const pattern = new RegExp(
-        `\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
-        'g',
-      );
-      result = result.replace(pattern, escaped);
-    }
-    return result;
+    return this.substituteVars(content, systemVars, scriptType);
   }
 
   private escapeForType(value: string, type: 'apex' | 'command' | 'js'): string {
