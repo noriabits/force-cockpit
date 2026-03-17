@@ -182,7 +182,8 @@
   /** @param {Record<string, any>} org */
   function setConnected(org) {
     connected = true;
-    statusDot.className = 'status-dot connected';
+    const isProduction = !org.sandboxName;
+    statusDot.className = `status-dot connected${isProduction ? ' production' : ''}`;
     const name = org.alias || org.username;
     statusLabel.textContent = name;
     orgAlias.textContent = org.alias || '—';
@@ -193,7 +194,6 @@
     emptyState.style.display = 'none';
     connectingState.style.display = 'none';
     connectedContent.style.display = '';
-    const isProduction = !org.sandboxName;
     const isSensitiveOrg = isProduction || org.isProtectedOrg;
     productionWarning.textContent = isProduction
       ? '⚠️ Production org — be careful with the actions you execute.'

@@ -84,8 +84,10 @@
   let activeFolderFilter = 'all';
   /** @type {string | null} */
   let activeSubFolder = null;
-  /** @type {'all' | 'shared' | 'private'} */
+  /** @type {'all' | 'favorites' | 'shared' | 'private'} */
   let activeVisibility = 'all';
+  /** @type {Set<string>} */
+  let favoriteIds = new Set();
   /** @type {string | null} */
   let lastSavedScriptId = null;
   /** @type {string | null} */
@@ -135,11 +137,13 @@
 
   function buildVisibilityFilter() {
     visibilityFilterEl.innerHTML = '';
-    const options = /** @type {Array<{value: 'all'|'shared'|'private', label: string}>} */ ([
-      { value: 'all', label: L.filterAll },
-      { value: 'shared', label: L.filterShared },
-      { value: 'private', label: L.filterPrivate },
-    ]);
+    const options =
+      /** @type {Array<{value: 'all'|'favorites'|'shared'|'private', label: string}>} */ ([
+        { value: 'all', label: L.filterAll },
+        { value: 'favorites', label: L.filterFavorites },
+        { value: 'shared', label: L.filterShared },
+        { value: 'private', label: L.filterPrivate },
+      ]);
     for (const opt of options) {
       const btn = document.createElement('button');
       btn.className = 'visibility-filter-btn' + (activeVisibility === opt.value ? ' active' : '');
@@ -169,6 +173,7 @@
   /** @param {any[]} scripts */
   function getVisibleScripts(scripts) {
     if (activeVisibility === 'all') return scripts;
+    if (activeVisibility === 'favorites') return scripts.filter((s) => favoriteIds.has(s.id));
     return scripts.filter((s) =>
       activeVisibility === 'private'
         ? s.source === 'private'
@@ -180,6 +185,7 @@
 
   refreshBtn.addEventListener('click', () => {
     win.__vscode.postMessage({ type: 'loadYamlScripts' });
+    win.__vscode.postMessage({ type: 'loadFavorites' });
   });
 
   // ── Form inputs management ───────────────────────────────────────────────
@@ -615,6 +621,8 @@
 
       const visibilityMatch =
         activeVisibility === 'all' ||
+        (activeVisibility === 'favorites' &&
+          favoriteIds.has(section.getAttribute('data-script-id') ?? '')) ||
         (activeVisibility === 'private' && source === 'private') ||
         (activeVisibility === 'shared' && (source === 'user' || source === 'builtin'));
 
@@ -737,6 +745,37 @@
 
   /**
    * @param {any} script
+   * @returns {HTMLButtonElement}
+   */
+  function createFavoriteButton(script) {
+    const isFav = favoriteIds.has(script.id);
+    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    btn.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
+    btn.textContent = isFav ? '\u2605' : '\u2606';
+    btn.title = isFav ? L.unfavorite : L.favorite;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      win.__vscode.postMessage({ type: 'toggleFavorite', scriptId: script.id });
+    });
+    return btn;
+  }
+
+  function updateFavoriteStars() {
+    scriptsList.querySelectorAll('.accordion').forEach((accordion) => {
+      const scriptId = accordion.getAttribute('data-script-id');
+      const starBtn = /** @type {HTMLButtonElement | null} */ (
+        accordion.querySelector('.yaml-star-btn')
+      );
+      if (!starBtn || !scriptId) return;
+      const isFav = favoriteIds.has(scriptId);
+      starBtn.textContent = isFav ? '\u2605' : '\u2606';
+      starBtn.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
+      starBtn.title = isFav ? L.unfavorite : L.favorite;
+    });
+  }
+
+  /**
+   * @param {any} script
    * @param {string} [extraClasses]
    * @returns {HTMLElement}
    */
@@ -842,6 +881,7 @@
     header.className = 'yaml-script-header';
 
     header.appendChild(createTriggerButton(script, section));
+    header.appendChild(createFavoriteButton(script));
 
     const invalidBadge = document.createElement('span');
     invalidBadge.className = 'script-invalid-badge';
@@ -980,27 +1020,6 @@
    */
 
   /**
-   * @param {HTMLPreElement} logOutput
-   * @returns {HTMLLabelElement}
-   */
-  function buildApexFilterCheckbox(logOutput) {
-    const filterLabel = /** @type {HTMLLabelElement} */ (document.createElement('label'));
-    filterLabel.className = 'yaml-log-filter-label';
-    const filterCheckbox = document.createElement('input');
-    filterCheckbox.type = 'checkbox';
-    filterCheckbox.className = 'yaml-log-filter-checkbox';
-    filterLabel.appendChild(filterCheckbox);
-    filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
-    filterCheckbox.addEventListener('change', () => {
-      const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
-      const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
-      const logText = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
-      logOutput.innerHTML = renderLogWithLinks(logText);
-    });
-    return filterLabel;
-  }
-
-  /**
    * @param {HTMLElement} section
    * @param {HTMLPreElement} logOutput
    * @returns {HTMLButtonElement}
@@ -1011,11 +1030,7 @@
     btn.textContent = 'Open in editor';
     btn.style.display = 'none';
     btn.addEventListener('click', () => {
-      const filterCheckbox = /** @type {HTMLInputElement | null} */ (
-        section.querySelector('.yaml-log-filter-checkbox')
-      );
-      const raw = logOutput.getAttribute('data-raw-log') || '';
-      const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
+      const content = logOutput.textContent || '';
       win.__vscode.postMessage({ type: 'openScriptResult', content });
     });
     return btn;
@@ -1032,11 +1047,7 @@
     btn.textContent = 'Copy to clipboard';
     btn.style.display = 'none';
     btn.addEventListener('click', () => {
-      const filterCheckbox = /** @type {HTMLInputElement | null} */ (
-        section.querySelector('.yaml-log-filter-checkbox')
-      );
-      const raw = logOutput.getAttribute('data-raw-log') || '';
-      const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
+      const content = logOutput.textContent || '';
       navigator.clipboard
         .writeText(content)
         .then(() => {
@@ -1083,7 +1094,45 @@
     });
 
     if (isApex) {
-      logViewer.appendChild(buildApexFilterCheckbox(logOutput));
+      const filterBar = document.createElement('div');
+      filterBar.className = 'yaml-log-filter-bar';
+
+      const filterCheckbox = document.createElement('input');
+      filterCheckbox.type = 'checkbox';
+      filterCheckbox.className = 'yaml-log-filter-checkbox';
+      const filterLabel = document.createElement('label');
+      filterLabel.className = 'yaml-log-filter-label';
+      filterLabel.appendChild(filterCheckbox);
+      filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
+
+      const jsonCheckbox = document.createElement('input');
+      jsonCheckbox.type = 'checkbox';
+      jsonCheckbox.className = 'yaml-log-json-checkbox';
+      const jsonLabel = document.createElement('label');
+      jsonLabel.className = 'yaml-log-filter-label';
+      jsonLabel.appendChild(jsonCheckbox);
+      jsonLabel.appendChild(document.createTextNode(L.checkboxPrettyJson));
+
+      function refresh() {
+        const raw = logOutput.getAttribute('data-raw-log') ?? '';
+        const filtered = logOutput.getAttribute('data-filtered-log') ?? '';
+        const text = filterCheckbox.checked && filtered ? filtered : raw;
+        logOutput.innerHTML = jsonCheckbox.checked
+          ? renderLogWithJsonTables(text)
+          : renderLogWithLinks(text);
+      }
+
+      filterCheckbox.addEventListener('change', refresh);
+      jsonCheckbox.addEventListener('change', () => {
+        if (jsonCheckbox.checked && !filterCheckbox.checked) {
+          filterCheckbox.checked = true;
+        }
+        refresh();
+      });
+
+      filterBar.appendChild(filterLabel);
+      filterBar.appendChild(jsonLabel);
+      logViewer.appendChild(filterBar);
     }
 
     logViewer.appendChild(logOutput);
@@ -1189,6 +1238,7 @@
     executeBtn.disabled = needsOrg ? !connected : false;
 
     header.appendChild(createTriggerButton(script, section));
+    header.appendChild(createFavoriteButton(script));
     header.appendChild(createTypeBadge(script));
     if (script.source === 'private') header.appendChild(createPrivateBadge());
     if (script.source !== 'builtin') header.appendChild(createEditButton(script));
@@ -1255,6 +1305,131 @@
         html += escapeHtml(parts[i]);
       }
     }
+    return html;
+  }
+
+  /** @param {unknown} val @returns {unknown} */
+  function deepParseJson(val) {
+    if (typeof val === 'string') {
+      try {
+        return deepParseJson(JSON.parse(val));
+      } catch {
+        return val;
+      }
+    }
+    if (Array.isArray(val)) return val.map(deepParseJson);
+    if (val !== null && typeof val === 'object') {
+      const out = /** @type {Record<string, unknown>} */ ({});
+      for (const [k, v] of Object.entries(/** @type {object} */ (val))) out[k] = deepParseJson(v);
+      return out;
+    }
+    return val;
+  }
+
+  /** @param {unknown} val @returns {string} */
+  function renderJsonCell(val) {
+    if (val === null) return '<span class="yaml-json-null">null</span>';
+    if (val === undefined) return '';
+    if (typeof val === 'object') return renderJsonAsTable(val);
+    if (typeof val === 'boolean') return `<span class="yaml-json-bool">${val}</span>`;
+    if (typeof val === 'number') return `<span class="yaml-json-num">${val}</span>`;
+    return escapeHtml(String(val));
+  }
+
+  /** @param {unknown} val @returns {string} */
+  function renderJsonAsTable(val) {
+    if (val === null || val === undefined) return escapeHtml(String(val));
+    if (typeof val !== 'object') return escapeHtml(String(val));
+
+    // Array of objects → column-per-key table
+    if (
+      Array.isArray(val) &&
+      val.length > 0 &&
+      val.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item))
+    ) {
+      const keys = [...new Set(val.flatMap((obj) => Object.keys(/** @type {object} */ (obj))))];
+      let h = '<table class="yaml-json-table"><thead><tr>';
+      h += '<th class="yaml-json-th">(index)</th>';
+      for (const k of keys) h += `<th class="yaml-json-th">${escapeHtml(k)}</th>`;
+      h += '</tr></thead><tbody>';
+      val.forEach((row, idx) => {
+        const obj = /** @type {Record<string, unknown>} */ (row);
+        h += `<tr><td class="yaml-json-td yaml-json-td--index">${idx}</td>`;
+        for (const k of keys) h += `<td class="yaml-json-td">${renderJsonCell(obj[k])}</td>`;
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+      return h;
+    }
+
+    // Array of primitives → (index) | Value
+    if (Array.isArray(val)) {
+      let h = '<table class="yaml-json-table"><thead><tr>';
+      h += '<th class="yaml-json-th">(index)</th><th class="yaml-json-th">Value</th>';
+      h += '</tr></thead><tbody>';
+      val.forEach((item, idx) => {
+        h += `<tr><td class="yaml-json-td yaml-json-td--index">${idx}</td>`;
+        h += `<td class="yaml-json-td">${renderJsonCell(item)}</td></tr>`;
+      });
+      h += '</tbody></table>';
+      return h;
+    }
+
+    // Plain object → Key | Value
+    const entries = Object.entries(val);
+    let h = '<table class="yaml-json-table"><thead><tr>';
+    h += '<th class="yaml-json-th">Key</th><th class="yaml-json-th">Value</th>';
+    h += '</tr></thead><tbody>';
+    for (const [k, v] of entries) {
+      h += `<tr><td class="yaml-json-td yaml-json-td--key">${escapeHtml(k)}</td>`;
+      h += `<td class="yaml-json-td">${renderJsonCell(v)}</td></tr>`;
+    }
+    h += '</tbody></table>';
+    return h;
+  }
+
+  /** @param {string} text @returns {string} */
+  function renderLogWithJsonTables(text) {
+    let html = '';
+    let i = 0;
+    let textStart = 0;
+
+    while (i < text.length) {
+      const ch = text[i];
+      if (ch === '{' || ch === '[') {
+        const close = ch === '{' ? '}' : ']';
+        let depth = 1,
+          j = i + 1,
+          inStr = false,
+          esc = false;
+        while (j < text.length && depth > 0) {
+          const c = text[j];
+          if (esc) {
+            esc = false;
+          } else if (c === '\\' && inStr) {
+            esc = true;
+          } else if (c === '"') {
+            inStr = !inStr;
+          } else if (!inStr) {
+            if (c === ch) depth++;
+            else if (c === close) depth--;
+          }
+          j++;
+        }
+        if (depth === 0) {
+          try {
+            const parsed = JSON.parse(text.slice(i, j));
+            if (i > textStart) html += renderLogWithLinks(text.slice(textStart, i));
+            html += renderJsonAsTable(deepParseJson(parsed));
+            i = j;
+            textStart = i;
+            continue;
+          } catch {}
+        }
+      }
+      i++;
+    }
+    if (textStart < text.length) html += renderLogWithLinks(text.slice(textStart));
     return html;
   }
 
@@ -1350,6 +1525,9 @@
     const filterCheckbox = /** @type {HTMLInputElement | null} */ (
       accordion.querySelector('.yaml-log-filter-checkbox')
     );
+    const jsonCheckbox = /** @type {HTMLInputElement | null} */ (
+      accordion.querySelector('.yaml-log-json-checkbox')
+    );
 
     // __endAction re-enables the button; then re-evaluate state (e.g. org may have disconnected)
     win.__endAction(data.opId);
@@ -1382,7 +1560,9 @@
       }
       const logText =
         filterCheckbox?.checked && data.filteredDebugLog ? data.filteredDebugLog : data.debugLog;
-      logOutput.innerHTML = renderLogWithLinks(logText);
+      logOutput.innerHTML = jsonCheckbox?.checked
+        ? renderLogWithJsonTables(logText)
+        : renderLogWithLinks(logText);
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
       openInEditorBtn.style.display = '';
@@ -1405,6 +1585,7 @@
       lastConnectedOrgId = orgId || null;
       if (!sameOrg || currentScripts.length === 0) {
         win.__vscode.postMessage({ type: 'loadYamlScripts' });
+        win.__vscode.postMessage({ type: 'loadFavorites' });
       }
     },
     onOrgDisconnected: () => {
@@ -1455,6 +1636,12 @@
           break;
         case 'deleteYamlScriptError':
           formError.textContent = message.data?.message ?? 'Failed to delete script.';
+          break;
+        case 'loadFavoritesResult':
+        case 'toggleFavoriteResult':
+          favoriteIds = new Set(message.data?.favorites ?? []);
+          updateFavoriteStars();
+          applyFilters();
           break;
         case 'browseForScriptFileResult':
           if (!message.data?.cancelled) {

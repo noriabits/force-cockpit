@@ -80,6 +80,9 @@ body {
 .status-dot.connected {
   background-color: var(--vscode-testing-iconPassed, #4ec94e);
 }
+.status-dot.connected.production {
+  background-color: var(--vscode-testing-iconFailed, #f14c4c);
+}
 .status-dot.disconnected {
   background-color: var(--vscode-disabledForeground);
 }

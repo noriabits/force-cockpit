@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ConnectionManager } from './salesforce/connection';
+import { ConnectionManager, ConnectionChangedEvent } from './salesforce/connection';
 import { MainPanel } from './panels/MainPanel';
 import { getOrgDetails, refreshOrgToken } from './utils/sfCli';
 import { buildOrgUrl } from './utils/salesforceUrl';
@@ -61,6 +61,34 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const connectionManager = new ConnectionManager();
 
+  // Status bar item: shows Sandbox / Production indicator
+  const orgTypeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  orgTypeItem.tooltip = 'Force Cockpit: org type';
+  context.subscriptions.push(orgTypeItem);
+  connectionManager.on('connectionChanged', (event: ConnectionChangedEvent) => {
+    if (!event.connected) {
+      orgTypeItem.hide();
+      return;
+    }
+    void (async () => {
+      try {
+        const isProduction = await connectionManager.isProductionOrg();
+        if (isProduction) {
+          orgTypeItem.text = '$(circle-filled) Production';
+          orgTypeItem.color = new vscode.ThemeColor('errorForeground');
+          orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+        } else {
+          orgTypeItem.text = '$(circle-filled) Sandbox';
+          orgTypeItem.color = new vscode.ThemeColor('testing.iconPassed');
+          orgTypeItem.backgroundColor = undefined;
+        }
+        orgTypeItem.show();
+      } catch {
+        orgTypeItem.hide();
+      }
+    })();
+  });
+
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   const builtInPath = path.join(context.extensionPath, 'force-cockpit');
   const userBasePath =
@@ -104,6 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
       userPath: path.join(userBasePath, 'scripts'),
       privatePath: path.join(userBasePath, 'private', 'scripts'),
       workspaceRoot,
+      workspaceState: context.workspaceState,
     }),
     createMonitoringDashboardFeature({
       builtInPath: path.join(builtInPath, 'monitoring'),
@@ -134,14 +163,29 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: emptyProvider,
   });
   sidebarView.onDidChangeVisibility(({ visible }) => {
-    if (visible) MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig, outputChannel);
+    if (visible)
+      MainPanel.createOrShow(
+        context,
+        connectionManager,
+        allFeatures,
+        workspaceRoot,
+        cockpitConfig,
+        outputChannel,
+      );
   });
   context.subscriptions.push(sidebarView);
 
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig, outputChannel);
+      MainPanel.createOrShow(
+        context,
+        connectionManager,
+        allFeatures,
+        workspaceRoot,
+        cockpitConfig,
+        outputChannel,
+      );
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {

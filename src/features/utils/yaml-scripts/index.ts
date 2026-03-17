@@ -9,6 +9,7 @@ export function createYamlScriptsFeature(paths: {
   userPath: string;
   privatePath: string;
   workspaceRoot: string;
+  workspaceState: vscode.Memento;
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
     const service = new YamlScriptsService(connectionManager, paths);
@@ -97,6 +98,30 @@ export function createYamlScriptsFeature(paths: {
           },
           successType: 'openScriptResultDone',
           errorType: 'openScriptResultError',
+        },
+        loadFavorites: {
+          handler: async () => {
+            const favorites: string[] = paths.workspaceState.get('yamlScripts.favorites', []);
+            return { favorites };
+          },
+          successType: 'loadFavoritesResult',
+          errorType: 'loadFavoritesError',
+        },
+        toggleFavorite: {
+          handler: async (msg) => {
+            const scriptId = msg.scriptId as string;
+            const favorites: string[] = paths.workspaceState.get('yamlScripts.favorites', []);
+            const index = favorites.indexOf(scriptId);
+            if (index >= 0) {
+              favorites.splice(index, 1);
+            } else {
+              favorites.push(scriptId);
+            }
+            await paths.workspaceState.update('yamlScripts.favorites', favorites);
+            return { favorites };
+          },
+          successType: 'toggleFavoriteResult',
+          errorType: 'toggleFavoriteError',
         },
         deleteYamlScript: {
           handler: async (msg) => {
