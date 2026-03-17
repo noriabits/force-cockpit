@@ -965,6 +965,7 @@
    * @property {HTMLElement} logViewer
    * @property {HTMLPreElement} logOutput
    * @property {HTMLButtonElement} openInEditorBtn
+   * @property {HTMLButtonElement} copyToClipboardBtn
    */
 
   /**
@@ -1009,6 +1010,30 @@
   }
 
   /**
+   * @param {HTMLElement} section
+   * @param {HTMLPreElement} logOutput
+   * @returns {HTMLButtonElement}
+   */
+  function buildCopyToClipboardButton(section, logOutput) {
+    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    btn.className = 'yaml-copy-output-btn';
+    btn.textContent = 'Copy to clipboard';
+    btn.style.display = 'none';
+    btn.addEventListener('click', () => {
+      const filterCheckbox = /** @type {HTMLInputElement | null} */ (
+        section.querySelector('.yaml-log-filter-checkbox')
+      );
+      const raw = logOutput.getAttribute('data-raw-log') || '';
+      const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
+      navigator.clipboard.writeText(content).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 1500);
+      }).catch(() => {});
+    });
+    return btn;
+  }
+
+  /**
    * @param {any} script
    * @param {HTMLElement} section
    * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
@@ -1039,11 +1064,14 @@
     const openInEditorBtn = buildOpenInEditorButton(section, logOutput);
     logViewer.appendChild(openInEditorBtn);
 
+    const copyToClipboardBtn = buildCopyToClipboardButton(section, logOutput);
+    logViewer.appendChild(copyToClipboardBtn);
+
     fragment.appendChild(statusHint);
     fragment.appendChild(errorBox);
     fragment.appendChild(logViewer);
 
-    return { fragment, refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn } };
+    return { fragment, refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } };
   }
 
   /**
@@ -1056,7 +1084,7 @@
    * @param {LogViewerRefs} params.refs
    */
   function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
-    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn } = refs;
+    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } = refs;
 
     executeBtn.addEventListener('click', () => {
       if (needsOrg && !connected) return;
@@ -1081,6 +1109,7 @@
         logOutput.textContent = '';
         logOutput.classList.remove('yaml-log-output--success', 'yaml-log-output--error');
         openInEditorBtn.style.display = 'none';
+        copyToClipboardBtn.style.display = 'none';
 
         const filterCheckbox = /** @type {HTMLInputElement | null} */ (
           section.querySelector('.yaml-log-filter-checkbox')
@@ -1296,6 +1325,9 @@
     const openInEditorBtn = /** @type {HTMLElement} */ (
       accordion.querySelector('.yaml-open-editor-btn')
     );
+    const copyToClipboardBtn = /** @type {HTMLElement} */ (
+      accordion.querySelector('.yaml-copy-output-btn')
+    );
     if (data.debugLog) {
       logOutput.setAttribute('data-raw-log', data.debugLog);
       if (data.filteredDebugLog) {
@@ -1307,8 +1339,10 @@
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
       openInEditorBtn.style.display = '';
+      copyToClipboardBtn.style.display = '';
     } else {
       openInEditorBtn.style.display = 'none';
+      copyToClipboardBtn.style.display = 'none';
     }
   }
 

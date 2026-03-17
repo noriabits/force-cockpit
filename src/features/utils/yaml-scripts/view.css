@@ -98,6 +98,22 @@
   background: var(--vscode-button-secondaryHoverBackground);
 }
 
+.yaml-copy-output-btn {
+  margin-top: 6px;
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--vscode-button-secondaryBackground);
+  color: var(--vscode-foreground);
+  border-radius: 3px;
+}
+
+.yaml-copy-output-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
 /* Header row: trigger fills remaining space, badge + execute button stay right-aligned */
 .yaml-script-header {
   display: flex;
