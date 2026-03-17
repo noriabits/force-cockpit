@@ -454,7 +454,7 @@
     formInputs = (script.inputs || []).map((/** @type {any} */ inp) => ({
       name: inp.name || '',
       label: inp.label || '',
-      type: inp.type === 'picklist' ? 'picklist' : inp.type === 'checkbox' ? 'checkbox' : 'string',
+      type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'),
       required: !!inp.required,
       options: inp.type === 'picklist' && Array.isArray(inp.options) ? inp.options.join(', ') : '',
       checkboxDefault: inp.type === 'checkbox' ? inp.default === true : false,
@@ -521,7 +521,7 @@
     const cleanedInputs = formInputs
       .filter((inp) => inp.name.trim())
       .map((inp) => {
-        /** @type {{ name: string; label?: string; type?: 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }} */
+        /** @type {{ name: string; label?: string; type?: 'picklist' | 'checkbox' | 'textarea'; required?: boolean; options?: string[]; default?: boolean }} */
         const entry = { name: inp.name.trim() };
         if (inp.label.trim()) entry.label = inp.label.trim();
         if (inp.type === 'picklist') {
@@ -533,6 +533,8 @@
         } else if (inp.type === 'checkbox') {
           entry.type = 'checkbox';
           if (inp.checkboxDefault) entry.default = true;
+        } else if (inp.type === 'textarea') {
+          entry.type = 'textarea';
         }
         if (inp.required) entry.required = true;
         return entry;
@@ -865,7 +867,7 @@
    * @returns {{ element: HTMLElement | null, inputFields: Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> }}
    */
   function buildInputFields(script, updateExecuteState) {
-    /** @type {Map<string, HTMLInputElement | HTMLSelectElement>} */
+    /** @type {Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} */
     const inputFields = new Map();
     if (!script.inputs || script.inputs.length === 0) {
       return { element: null, inputFields };
@@ -1080,7 +1082,7 @@
    * @param {HTMLElement} params.section
    * @param {HTMLButtonElement} params.executeBtn
    * @param {boolean} params.needsOrg
-   * @param {Map<string, HTMLInputElement | HTMLSelectElement>} params.inputFields
+   * @param {Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} params.inputFields
    * @param {LogViewerRefs} params.refs
    */
   function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
