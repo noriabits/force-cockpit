@@ -56,6 +56,7 @@ export class MainPanel {
     featureFactories: FeatureModuleFactory[],
     workspaceRoot: string = '',
     config: CockpitConfig,
+    outputChannel?: vscode.OutputChannel,
   ): MainPanel {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -90,6 +91,7 @@ export class MainPanel {
       featureFactories,
       workspaceRoot,
       config,
+      outputChannel,
     );
     return MainPanel.currentPanel;
   }
@@ -101,6 +103,7 @@ export class MainPanel {
     featureFactories: FeatureModuleFactory[],
     private readonly workspaceRoot: string = '',
     private config: CockpitConfig,
+    private readonly outputChannel?: vscode.OutputChannel,
   ) {
     this._panel = panel;
     this.queryService = new QueryService(connectionManager);
@@ -111,7 +114,9 @@ export class MainPanel {
       }
     }
 
-    void this._update();
+    void this._update().catch((err: unknown) => {
+      this.outputChannel?.appendLine(`[Error] Panel init failed: ${String(err)}`);
+    });
     this._setupLifecycleListeners();
     this._setupMessageHandlers();
     this._setupConnectionListeners();
@@ -283,8 +288,8 @@ export class MainPanel {
     try {
       const limits = await this.connectionManager.getLimits();
       this._panel.webview.postMessage({ type: 'storageLimits', data: limits });
-    } catch {
-      // Storage limits are non-critical — silently ignore failures
+    } catch (err) {
+      this.outputChannel?.appendLine(`[Warn] Storage limits unavailable: ${String(err)}`);
     }
   }
 

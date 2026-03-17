@@ -56,6 +56,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // Root logger already initialized — no action needed
   }
 
+  const outputChannel = vscode.window.createOutputChannel('Force Cockpit');
+  context.subscriptions.push(outputChannel);
+
   const connectionManager = new ConnectionManager();
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
@@ -131,14 +134,14 @@ export function activate(context: vscode.ExtensionContext): void {
     treeDataProvider: emptyProvider,
   });
   sidebarView.onDidChangeVisibility(({ visible }) => {
-    if (visible) MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig);
+    if (visible) MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig, outputChannel);
   });
   context.subscriptions.push(sidebarView);
 
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig);
+      MainPanel.createOrShow(context, connectionManager, allFeatures, workspaceRoot, cockpitConfig, outputChannel);
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {
@@ -221,8 +224,8 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage(
           `Force Cockpit: failed to connect to org "${target}". ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
         );
-      } catch {
-        // Silent — file read / JSON parse errors (workspace not an SFDX project)
+      } catch (err) {
+        outputChannel.appendLine(`[Error] connectFromConfig failed: ${String(err)}`);
       }
     }
 
