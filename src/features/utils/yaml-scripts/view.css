@@ -198,6 +198,8 @@
 .yaml-form-textarea {
   resize: vertical;
   min-height: 54px;
+  flex: none;
+  width: 100%;
 }
 
 .yaml-form-content {
@@ -423,20 +425,7 @@
 }
 
 .input-with-paste--textarea {
-  display: block;
-  position: relative;
-}
-
-.input-with-paste--textarea .yaml-input-textarea {
-  width: 100%;
-  padding-right: 32px;
-  box-sizing: border-box;
-}
-
-.input-with-paste--textarea .paste-btn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+  align-items: flex-start;
 }
 
 /* ── File link in accordion subtitle ── */
