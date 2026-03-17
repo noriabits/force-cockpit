@@ -301,7 +301,10 @@
   function renderFormInputs() {
     formInputsList.innerHTML = '';
     formInputs.forEach((inp, idx) => {
-      const { nameInput, labelInput, typeSelect, reqLabel, removeBtn } = buildSharedInputHeader(inp, idx);
+      const { nameInput, labelInput, typeSelect, reqLabel, removeBtn } = buildSharedInputHeader(
+        inp,
+        idx,
+      );
       const optionsRow = buildPicklistSubRow(inp, idx);
       const defaultRow = buildCheckboxSubRow(inp, idx);
 
@@ -454,7 +457,9 @@
     formInputs = (script.inputs || []).map((/** @type {any} */ inp) => ({
       name: inp.name || '',
       label: inp.label || '',
-      type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'),
+      type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (
+        ['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'
+      ),
       required: !!inp.required,
       options: inp.type === 'picklist' && Array.isArray(inp.options) ? inp.options.join(', ') : '',
       checkboxDefault: inp.type === 'checkbox' ? inp.default === true : false,
@@ -818,7 +823,11 @@
     const span = document.createElement('span');
     span.className =
       'script-type-badge ' +
-      (isJs ? 'script-type-badge--js' : isCmd ? 'script-type-badge--command' : 'script-type-badge--apex');
+      (isJs
+        ? 'script-type-badge--js'
+        : isCmd
+          ? 'script-type-badge--command'
+          : 'script-type-badge--apex');
     span.textContent = isJs ? L.badgeJs : isCmd ? L.badgeCommand : L.badgeApex;
     return span;
   }
@@ -985,7 +994,8 @@
     filterCheckbox.addEventListener('change', () => {
       const rawLog = logOutput.getAttribute('data-raw-log') ?? '';
       const filteredLog = logOutput.getAttribute('data-filtered-log') ?? '';
-      logOutput.textContent = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
+      const logText = filterCheckbox.checked && filteredLog ? filteredLog : rawLog;
+      logOutput.innerHTML = renderLogWithLinks(logText);
     });
     return filterLabel;
   }
@@ -1027,10 +1037,15 @@
       );
       const raw = logOutput.getAttribute('data-raw-log') || '';
       const content = filterCheckbox?.checked ? logOutput.textContent || '' : raw;
-      navigator.clipboard.writeText(content).then(() => {
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 1500);
-      }).catch(() => {});
+      navigator.clipboard
+        .writeText(content)
+        .then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = 'Copy to clipboard';
+          }, 1500);
+        })
+        .catch(() => {});
     });
     return btn;
   }
@@ -1056,6 +1071,16 @@
 
     const logOutput = /** @type {HTMLPreElement} */ (document.createElement('pre'));
     logOutput.className = 'yaml-log-output';
+    logOutput.addEventListener('click', (e) => {
+      const target = /** @type {HTMLElement} */ (e.target);
+      if (target.tagName === 'A' && target.classList.contains('yaml-log-link')) {
+        e.preventDefault();
+        const url = target.getAttribute('data-url');
+        if (url) {
+          win.__vscode.postMessage({ type: 'openExternalUrl', url });
+        }
+      }
+    });
 
     if (isApex) {
       logViewer.appendChild(buildApexFilterCheckbox(logOutput));
@@ -1073,7 +1098,10 @@
     fragment.appendChild(errorBox);
     fragment.appendChild(logViewer);
 
-    return { fragment, refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } };
+    return {
+      fragment,
+      refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn },
+    };
   }
 
   /**
@@ -1086,7 +1114,8 @@
    * @param {LogViewerRefs} params.refs
    */
   function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
-    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } = refs;
+    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } =
+      refs;
 
     executeBtn.addEventListener('click', () => {
       if (needsOrg && !connected) return;
@@ -1213,6 +1242,22 @@
     return win.__escapeHtml(str);
   }
 
+  /** @param {string} text @returns {string} */
+  function renderLogWithLinks(text) {
+    const URL_RE = /(https?:\/\/[^\s<>"')\]]+)/g;
+    const parts = text.split(URL_RE);
+    let html = '';
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        const escapedUrl = escapeHtml(parts[i]);
+        html += `<a class="yaml-log-link" href="#" data-url="${escapedUrl}">${escapedUrl}</a>`;
+      } else {
+        html += escapeHtml(parts[i]);
+      }
+    }
+    return html;
+  }
+
   // ── Render scripts list ───────────────────────────────────────────────────
 
   /**
@@ -1335,9 +1380,9 @@
       if (data.filteredDebugLog) {
         logOutput.setAttribute('data-filtered-log', data.filteredDebugLog);
       }
-      logOutput.textContent = filterCheckbox?.checked && data.filteredDebugLog
-        ? data.filteredDebugLog
-        : data.debugLog;
+      const logText =
+        filterCheckbox?.checked && data.filteredDebugLog ? data.filteredDebugLog : data.debugLog;
+      logOutput.innerHTML = renderLogWithLinks(logText);
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
       openInEditorBtn.style.display = '';

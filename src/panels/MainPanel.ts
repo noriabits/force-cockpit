@@ -4,7 +4,11 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
-import type { FeatureModule, FeatureModuleFactory, RouteDescriptor } from '../features/FeatureModule';
+import type {
+  FeatureModule,
+  FeatureModuleFactory,
+  RouteDescriptor,
+} from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { CockpitConfig } from '../utils/config';
 
@@ -180,6 +184,13 @@ export class MainPanel {
             const org = this.connectionManager.getCurrentOrg();
             if (org) {
               const url = buildRecordUrl(org, message.recordId as string);
+              await vscode.env.openExternal(vscode.Uri.parse(url));
+            }
+            return;
+          }
+          case 'openExternalUrl': {
+            const url = message.url as string;
+            if (url && /^https?:\/\//i.test(url)) {
               await vscode.env.openExternal(vscode.Uri.parse(url));
             }
             return;
