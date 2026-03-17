@@ -78,6 +78,24 @@ describe('YamlScriptsService', () => {
     it('command: returns the raw value unchanged', () => {
       expect((svc as any).escapeForType("raw'value", 'command')).toBe("raw'value");
     });
+
+    it('apex: escapes LF newlines as \\n', () => {
+      expect((svc as any).escapeForType('line1\nline2', 'apex')).toBe('line1\\nline2');
+    });
+
+    it('apex: escapes CRLF newlines as \\n', () => {
+      expect((svc as any).escapeForType('line1\r\nline2', 'apex')).toBe('line1\\nline2');
+    });
+
+    it('apex: escapes CR newlines as \\n', () => {
+      expect((svc as any).escapeForType('line1\rline2', 'apex')).toBe('line1\\nline2');
+    });
+
+    it('js: escapes newlines via JSON (\\n → \\\\n in output)', () => {
+      // JSON.stringify('a\nb') = '"a\\nb"' → slice gives 'a\\nb'
+      const result: string = (svc as any).escapeForType('a\nb', 'js');
+      expect(result).toBe('a\\nb');
+    });
   });
 
   describe('substituteInputs (private)', () => {
@@ -103,6 +121,16 @@ describe('YamlScriptsService', () => {
       const script = { inputs: [], type: 'apex', script: 'SELECT Id FROM Account' } as any;
       const result: string = (svc as any).substituteInputs(script, {});
       expect(result).toBe('SELECT Id FROM Account');
+    });
+
+    it('substitutes a textarea value with newlines into an Apex string (newlines escaped)', () => {
+      const script = {
+        inputs: [{ name: 'items', type: 'textarea' }],
+        type: 'apex',
+        script: "String s = '${items}';",
+      } as any;
+      const result: string = (svc as any).substituteInputs(script, { items: 'a\nb\nc' });
+      expect(result).toBe("String s = 'a\\nb\\nc';");
     });
 
     it('handles regex-special characters in input names', () => {
@@ -242,6 +270,34 @@ describe('YamlScriptsService', () => {
     it('filters out non-object entries', () => {
       const result = (svc as any).parseInputs(['not-an-object', 42, null]);
       expect(result).toEqual([]);
+    });
+
+    it('parses a textarea input', () => {
+      const result = (svc as any).parseInputs([{ name: 'itemList', type: 'textarea', required: true }]);
+      expect(result).toEqual([{ name: 'itemList', type: 'textarea', required: true }]);
+    });
+  });
+
+  describe('serializeInputs (private)', () => {
+    const svc = makeService();
+
+    it('returns undefined for empty inputs', () => {
+      expect((svc as any).serializeInputs([])).toBeUndefined();
+    });
+
+    it('serializes a textarea input', () => {
+      const result = (svc as any).serializeInputs([{ name: 'itemList', type: 'textarea' }]);
+      expect(result).toEqual([{ name: 'itemList', type: 'textarea' }]);
+    });
+
+    it('omits type for string inputs (implied default)', () => {
+      const result = (svc as any).serializeInputs([{ name: 'x' }]);
+      expect(result).toEqual([{ name: 'x' }]);
+    });
+
+    it('serializes textarea input with required flag', () => {
+      const result = (svc as any).serializeInputs([{ name: 'items', type: 'textarea', required: true }]);
+      expect(result).toEqual([{ name: 'items', type: 'textarea', required: true }]);
     });
   });
 

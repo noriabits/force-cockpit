@@ -73,7 +73,7 @@
   formDeleteBtn.style.display = 'none';
   formFileRow.style.display = 'none';
 
-  /** @type {{ name: string; label: string; type: 'string' | 'picklist' | 'checkbox'; required: boolean; options: string; checkboxDefault: boolean }[]} */
+  /** @type {{ name: string; label: string; type: 'string' | 'picklist' | 'checkbox' | 'textarea'; required: boolean; options: string; checkboxDefault: boolean }[]} */
   let formInputs = [];
 
   let connected = false;
@@ -220,9 +220,13 @@
     const optCheckbox = document.createElement('option');
     optCheckbox.value = 'checkbox';
     optCheckbox.textContent = L.typeCheckbox;
+    const optTextarea = document.createElement('option');
+    optTextarea.value = 'textarea';
+    optTextarea.textContent = L.typeTextarea;
     typeSelect.appendChild(optString);
     typeSelect.appendChild(optPicklist);
     typeSelect.appendChild(optCheckbox);
+    typeSelect.appendChild(optTextarea);
     typeSelect.value = inp.type;
 
     const reqLabel = document.createElement('label');
@@ -858,7 +862,7 @@
   /**
    * @param {any} script
    * @param {() => void} updateExecuteState
-   * @returns {{ element: HTMLElement | null, inputFields: Map<string, HTMLInputElement | HTMLSelectElement> }}
+   * @returns {{ element: HTMLElement | null, inputFields: Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> }}
    */
   function buildInputFields(script, updateExecuteState) {
     /** @type {Map<string, HTMLInputElement | HTMLSelectElement>} */
@@ -911,6 +915,23 @@
           select.addEventListener('change', updateExecuteState);
           inputFields.set(inp.name, select);
           fieldDiv.appendChild(select);
+        } else if (inp.type === 'textarea') {
+          const ta = document.createElement('textarea');
+          ta.className = 'text-input yaml-input-textarea';
+          ta.placeholder = inp.label || inp.name;
+          ta.rows = 4;
+          ta.addEventListener('input', updateExecuteState);
+          inputFields.set(inp.name, ta);
+          const pasteWrapper = document.createElement('div');
+          pasteWrapper.className = 'input-with-paste input-with-paste--textarea';
+          const pasteBtn = document.createElement('button');
+          pasteBtn.type = 'button';
+          pasteBtn.className = 'paste-btn';
+          pasteBtn.title = 'Paste from clipboard';
+          pasteBtn.textContent = '📋';
+          pasteWrapper.appendChild(ta);
+          pasteWrapper.appendChild(pasteBtn);
+          fieldDiv.appendChild(pasteWrapper);
         } else {
           const input = document.createElement('input');
           input.type = 'text';

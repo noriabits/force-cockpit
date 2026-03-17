@@ -22,7 +22,7 @@ type ParsedYamlDoc = {
 export interface ScriptInput {
   name: string; // variable identifier used in ${name} placeholders
   label?: string; // display label (defaults to name)
-  type?: 'string' | 'picklist' | 'checkbox'; // default 'string'
+  type?: 'string' | 'picklist' | 'checkbox' | 'textarea'; // default 'string'
   required?: boolean;
   options?: string[]; // required when type is 'picklist'
   default?: boolean; // initial checked state for checkbox type
@@ -175,7 +175,12 @@ export class YamlScriptsService {
   private escapeForType(value: string, type: 'apex' | 'command' | 'js'): string {
     switch (type) {
       case 'apex':
-        return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+        return value
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "''")
+          .replace(/\r\n/g, '\\n')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\n');
       case 'js':
         return JSON.stringify(value).slice(1, -1);
       case 'command':
@@ -465,6 +470,8 @@ export class YamlScriptsService {
         } else if (inp.type === 'checkbox') {
           entry.type = 'checkbox';
           if (inp.default === true) entry.default = true;
+        } else if (inp.type === 'textarea') {
+          entry.type = 'textarea';
         }
         if (inp.required === true) entry.required = true;
         return entry;
@@ -482,6 +489,8 @@ export class YamlScriptsService {
       } else if (inp.type === 'checkbox') {
         entry.type = 'checkbox';
         if (inp.default) entry.default = true;
+      } else if (inp.type === 'textarea') {
+        entry.type = 'textarea';
       }
       if (inp.required) entry.required = true;
       return entry;
