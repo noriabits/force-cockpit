@@ -136,7 +136,8 @@ export class MainPanel {
     this._panel.webview.onDidReceiveMessage(
       async (message: { type: string; [key: string]: unknown }) => {
         switch (message.type) {
-          case 'refresh':
+          case 'ready':
+            // Webview is fully initialized — safe to deliver current org state
             await this._sendOrgInfo();
             break;
           case 'query':
@@ -235,12 +236,6 @@ export class MainPanel {
     this._disposables.push({
       dispose: () => this.connectionManager.off('connectionChanged', onChanged),
     });
-
-    // If already connected when the panel is first opened, send org info immediately.
-    // (The connectionChanged event was emitted before this panel existed.)
-    if (this.connectionManager.isConnected) {
-      void this._sendOrgInfo();
-    }
   }
 
   /** Route a service call: on success post successType, on error post errorType.
@@ -296,8 +291,8 @@ export class MainPanel {
   private async _update(): Promise<void> {
     this._panel.title = this.config.panelTitle;
     this._panel.webview.html = await this._getHtml();
-    // Give the webview a tick to initialize its message listener before sending org state
-    setTimeout(() => void this._sendOrgInfo(), 100);
+    // Org info is delivered in response to the webview's 'ready' message,
+    // which fires after all scripts have initialized their message listeners.
   }
 
   private _resolveLogoUri(webview: vscode.Webview): vscode.Uri {

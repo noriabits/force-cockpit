@@ -614,6 +614,8 @@
   });
 
   // ── Initial state ─────────────────────────────────────────────────────────
-  // Ask extension for current state (handles panel restore / re-show)
-  vscode.postMessage({ type: 'refresh' });
+  // Signal to the extension host that the webview is fully initialized and its
+  // message listener is in place. Extension host will respond with orgConnected
+  // or orgDisconnected based on current connection state.
+  vscode.postMessage({ type: 'ready' });
 })();
