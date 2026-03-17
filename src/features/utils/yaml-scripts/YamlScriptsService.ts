@@ -5,6 +5,7 @@ import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import { assertApexSuccess, filterUserDebugLines } from '../../apexUtils';
 import { runTerminalCommand } from '../../../utils/terminalCommand';
+import { loadYamlItems, type YamlSource } from '../../../utils/yaml-loader';
 
 type ParsedYamlDoc = {
   name?: string;
@@ -72,23 +73,9 @@ export class YamlScriptsService {
   ) {}
 
   async loadScripts(): Promise<YamlScript[]> {
-    const builtIn = this.loadFromPath(this.paths.builtInPath, 'builtin');
-    const user = this.loadFromPath(this.paths.userPath, 'user');
-    const priv = this.loadFromPath(this.paths.privatePath, 'private');
-
-    // Merge: builtin < user < private (later sources override earlier by same id)
-    const map = new Map<string, YamlScript>();
-    for (const script of builtIn) {
-      map.set(script.id, script);
-    }
-    for (const script of user) {
-      map.set(script.id, script);
-    }
-    for (const script of priv) {
-      map.set(script.id, script);
-    }
-
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return loadYamlItems(this.paths, (filePath, id, folder, source) =>
+      this.parseScript(filePath, id, folder, source),
+    );
   }
 
   async executeScript(
@@ -510,53 +497,11 @@ export class YamlScriptsService {
     );
   }
 
-  private loadFromPath(basePath: string, source: 'builtin' | 'user' | 'private'): YamlScript[] {
-    if (!basePath || !fs.existsSync(basePath)) {
-      return [];
-    }
-
-    const scripts: YamlScript[] = [];
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(basePath, { withFileTypes: true });
-    } catch {
-      return [];
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      const parentFolder = entry.name;
-      const folderPath = path.join(basePath, parentFolder);
-
-      let folderEntries: fs.Dirent[];
-      try {
-        folderEntries = fs.readdirSync(folderPath, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-
-      // Process YAML files in this folder
-      this.loadYamlFiles(folderPath, parentFolder, source, scripts);
-
-      // Process sub-folders (one level of nesting)
-      for (const subEntry of folderEntries) {
-        if (!subEntry.isDirectory()) continue;
-        const subFolder = `${parentFolder}/${subEntry.name}`;
-        const subFolderPath = path.join(folderPath, subEntry.name);
-        this.loadYamlFiles(subFolderPath, subFolder, source, scripts);
-      }
-    }
-
-    return scripts;
-  }
-
-  private processYamlFile(
+  private parseScript(
     filePath: string,
     id: string,
     folder: string,
-    source: 'builtin' | 'user' | 'private',
+    source: YamlSource,
   ): YamlScript | null {
     const basename = path.basename(filePath, path.extname(filePath));
 
@@ -595,27 +540,6 @@ export class YamlScriptsService {
       source,
       ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
     };
-  }
-
-  private loadYamlFiles(
-    dirPath: string,
-    folder: string,
-    source: 'builtin' | 'user' | 'private',
-    scripts: YamlScript[],
-  ): void {
-    let files: string[];
-    try {
-      files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
-    } catch {
-      return;
-    }
-
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const id = `${folder}/${path.basename(file, path.extname(file))}`;
-      const result = this.processYamlFile(filePath, id, folder, source);
-      if (result !== null) scripts.push(result);
-    }
   }
 
   private readRawYamlFile(filePath: string): string | null {

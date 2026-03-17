@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ConnectionManager } from '../../../salesforce/connection';
+import { loadYamlItems, type YamlSource } from '../../../utils/yaml-loader';
 
 export interface MonitoringValueField {
   field: string;
@@ -58,23 +59,9 @@ export class MonitoringDashboardService {
   ) {}
 
   async loadConfigs(): Promise<MonitoringConfig[]> {
-    const builtIn = this.loadFromPath(this.paths.builtInPath, 'builtin');
-    const user = this.loadFromPath(this.paths.userPath, 'user');
-    const priv = this.loadFromPath(this.paths.privatePath, 'private');
-
-    // Merge: builtin < user < private (later sources override earlier by same id)
-    const map = new Map<string, MonitoringConfig>();
-    for (const cfg of builtIn) {
-      map.set(cfg.id, cfg);
-    }
-    for (const cfg of user) {
-      map.set(cfg.id, cfg);
-    }
-    for (const cfg of priv) {
-      map.set(cfg.id, cfg);
-    }
-
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return loadYamlItems(this.paths, (filePath, id, folder, source) =>
+      this.parseMonitoringFile(filePath, id, folder, source),
+    );
   }
 
   async runQuery(
@@ -185,84 +172,26 @@ export class MonitoringDashboardService {
     return { ...config, id, folder: resolvedFolder, source: isPrivate ? 'private' : 'user' };
   }
 
-  private loadFromPath(
-    basePath: string,
-    source: 'builtin' | 'user' | 'private',
-  ): MonitoringConfig[] {
-    if (!basePath || !fs.existsSync(basePath)) {
-      return [];
-    }
-
-    const configs: MonitoringConfig[] = [];
-
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(basePath, { withFileTypes: true });
-    } catch {
-      return [];
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-
-      const parentFolder = entry.name;
-      const folderPath = path.join(basePath, parentFolder);
-
-      let folderEntries: fs.Dirent[];
-      try {
-        folderEntries = fs.readdirSync(folderPath, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-
-      // Process YAML files in this folder
-      this.loadMonitoringYamlFiles(folderPath, parentFolder, source, configs);
-
-      // Process sub-folders (one level of nesting)
-      for (const subEntry of folderEntries) {
-        if (!subEntry.isDirectory()) continue;
-        const subFolder = `${parentFolder}/${subEntry.name}`;
-        const subFolderPath = path.join(folderPath, subEntry.name);
-        this.loadMonitoringYamlFiles(subFolderPath, subFolder, source, configs);
-      }
-    }
-
-    return configs;
-  }
-
-  private loadMonitoringYamlFiles(
-    dirPath: string,
+  private parseMonitoringFile(
+    filePath: string,
+    id: string,
     folder: string,
-    source: 'builtin' | 'user' | 'private',
-    configs: MonitoringConfig[],
-  ): void {
-    let files: string[];
+    source: YamlSource,
+  ): MonitoringConfig | null {
     try {
-      files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
+      const content = fs.readFileSync(filePath, 'utf8');
+      const parsed = yaml.load(content) as MonitoringRawDoc;
+      if (!parsed || typeof parsed !== 'object') return null;
+
+      const validated = this._validateMonitoringDoc(parsed);
+      if (!validated) return null;
+
+      const valueFields = this._normalizeValueFields(parsed);
+      if (!valueFields) return null;
+
+      return this._buildMonitoringConfig(parsed, id, folder, source, valueFields, validated.chartType);
     } catch {
-      return;
-    }
-
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const parsed = yaml.load(content) as MonitoringRawDoc;
-        if (!parsed || typeof parsed !== 'object') continue;
-
-        const validated = this._validateMonitoringDoc(parsed);
-        if (!validated) continue;
-
-        const valueFields = this._normalizeValueFields(parsed);
-        if (!valueFields) continue;
-
-        const basename = path.basename(file, path.extname(file));
-        configs.push(
-          this._buildMonitoringConfig(parsed, folder, basename, source, valueFields, validated.chartType),
-        );
-      } catch {
-        // Skip malformed YAML files silently
-      }
+      return null;
     }
   }
 
@@ -315,14 +244,14 @@ export class MonitoringDashboardService {
 
   private _buildMonitoringConfig(
     parsed: MonitoringRawDoc,
+    id: string,
     folder: string,
-    basename: string,
-    source: 'builtin' | 'user' | 'private',
+    source: YamlSource,
     valueFields: MonitoringValueField[],
     chartType: MonitoringConfig['chartType'],
   ): MonitoringConfig {
     return {
-      id: `${folder}/${basename}`,
+      id,
       folder,
       name: parsed.name!,
       description: parsed.description ?? '',
