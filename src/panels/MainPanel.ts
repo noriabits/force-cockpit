@@ -26,15 +26,17 @@ export class MainPanel {
 
   // Generic operation tracking
   private _activeTerminalOps = new Map<string, AbortController>();
-  private _webviewBusyCount = 0;
+  // Set of opIds currently active in the webview — drift-safe vs a counter
+  private _activeWebviewOps = new Set<string>();
 
   get hasActiveOperations(): boolean {
-    return this._webviewBusyCount > 0;
+    return this._activeWebviewOps.size > 0;
   }
 
   cancelAllOps(): void {
     for (const ac of this._activeTerminalOps.values()) ac.abort();
     this._activeTerminalOps.clear();
+    this._activeWebviewOps.clear();
     this._panel.webview.postMessage({ type: 'cancelAllOperations' });
   }
 
@@ -109,7 +111,7 @@ export class MainPanel {
       }
     }
 
-    this._update();
+    void this._update();
     this._setupLifecycleListeners();
     this._setupMessageHandlers();
     this._setupConnectionListeners();
@@ -144,12 +146,21 @@ export class MainPanel {
               'queryError',
             );
             break;
-          case 'operationStarted':
-            this._webviewBusyCount = (message.count as number) ?? 1;
+          case 'operationStarted': {
+            const opId = message.opId as string | undefined;
+            if (opId) this._activeWebviewOps.add(opId);
             break;
-          case 'operationEnded':
-            this._webviewBusyCount = (message.count as number) ?? 0;
+          }
+          case 'operationEnded': {
+            const opId = message.opId as string | undefined;
+            if (opId) {
+              this._activeWebviewOps.delete(opId);
+            } else {
+              // Bulk clear sent by cancelAllOperations handler in the webview
+              this._activeWebviewOps.clear();
+            }
             break;
+          }
           case 'cancelOperation': {
             const opId = message.opId as string;
             const ac = this._activeTerminalOps.get(opId);
@@ -282,9 +293,9 @@ export class MainPanel {
     }
   }
 
-  private _update(): void {
+  private async _update(): Promise<void> {
     this._panel.title = this.config.panelTitle;
-    this._panel.webview.html = this._getHtml();
+    this._panel.webview.html = await this._getHtml();
     // Give the webview a tick to initialize its message listener before sending org state
     setTimeout(() => void this._sendOrgInfo(), 100);
   }
@@ -296,21 +307,27 @@ export class MainPanel {
     return webview.asWebviewUri(vscode.Uri.file(resolvedLogoPath));
   }
 
-  private _collectFeatureAssets(
+  private async _collectFeatureAssets(
     nonce: string,
-  ): { tabFragments: Record<string, string>; linkTags: string[]; scriptTags: string[] } {
+  ): Promise<{ tabFragments: Record<string, string>; linkTags: string[]; scriptTags: string[] }> {
     const webview = this._panel.webview;
     const tabFragments: Record<string, string> = {};
     const linkTags: string[] = [];
     const scriptTags: string[] = [];
 
-    for (const feature of this.features) {
-      const absHtml = path.join(this.context.extensionPath, feature.htmlPath);
+    // Read all feature HTML files in parallel
+    const htmlContents = await Promise.all(
+      this.features.map((f) =>
+        fs.promises.readFile(path.join(this.context.extensionPath, f.htmlPath), 'utf8'),
+      ),
+    );
+
+    for (let i = 0; i < this.features.length; i++) {
+      const feature = this.features[i];
       const absJs = path.join(this.context.extensionPath, feature.jsPath);
       const absCss = path.join(this.context.extensionPath, feature.cssPath);
 
-      tabFragments[feature.tab] =
-        (tabFragments[feature.tab] ?? '') + fs.readFileSync(absHtml, 'utf8');
+      tabFragments[feature.tab] = (tabFragments[feature.tab] ?? '') + htmlContents[i];
 
       const cssUri = webview.asWebviewUri(vscode.Uri.file(absCss));
       linkTags.push(`<link rel="stylesheet" href="${cssUri}">`);
@@ -329,7 +346,7 @@ export class MainPanel {
     return { tabFragments, linkTags, scriptTags };
   }
 
-  private _getHtml(): string {
+  private async _getHtml(): Promise<string> {
     const webview = this._panel.webview;
     const nonce = getNonce();
 
@@ -346,9 +363,13 @@ export class MainPanel {
     const logoUri = this._resolveLogoUri(webview);
     const panelTitle = this.config.panelTitle;
 
-    const { tabFragments, linkTags, scriptTags } = this._collectFeatureAssets(nonce);
+    // Read main template and all feature HTML files in parallel
+    const [mainHtml, { tabFragments, linkTags, scriptTags }] = await Promise.all([
+      fs.promises.readFile(htmlPath, 'utf8'),
+      this._collectFeatureAssets(nonce),
+    ]);
 
-    let html = fs.readFileSync(htmlPath, 'utf8');
+    let html = mainHtml;
     html = html
       .replace(/\$\{nonce\}/g, nonce)
       .replace(/\$\{cssUri\}/g, cssUri.toString())

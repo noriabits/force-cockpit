@@ -97,7 +97,7 @@
 
     btn.parentElement?.insertBefore(cancelBtn, btn.nextSibling);
     _activeOps.set(opId, { btn, cancelBtn, onCancel });
-    vscode.postMessage({ type: 'operationStarted', count: _activeOps.size });
+    vscode.postMessage({ type: 'operationStarted', opId, count: _activeOps.size });
     return opId;
   };
 
@@ -118,7 +118,7 @@
     op.btn.classList.remove('running');
     op.btn.disabled = false;
     op.cancelBtn.remove();
-    vscode.postMessage({ type: 'operationEnded', count: _activeOps.size });
+    vscode.postMessage({ type: 'operationEnded', opId, count: _activeOps.size });
   }
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
