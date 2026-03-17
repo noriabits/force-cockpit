@@ -116,19 +116,20 @@ export class YamlScriptsService {
       }
     }
 
-    // Substitute input placeholders
+    // Substitute input placeholders, then system placeholders
     const resolvedScript = this.substituteInputs(script, inputValues);
+    const finalScript = this.substituteSystemPlaceholders(resolvedScript, script.type);
 
     if (script.type === 'command') {
-      return this.executeTerminalCommand({ ...script, script: resolvedScript }, signal);
+      return this.executeTerminalCommand({ ...script, script: finalScript }, signal);
     }
 
     if (script.type === 'js') {
-      return this.executeJs({ ...script, script: resolvedScript }, signal);
+      return this.executeJs({ ...script, script: finalScript }, signal);
     }
 
     try {
-      const result = await this.connectionManager.executeAnonymousWithDebugLog(resolvedScript, {
+      const result = await this.connectionManager.executeAnonymousWithDebugLog(finalScript, {
         logLevels: { Apex_code: 'DEBUG' },
       });
       assertApexSuccess(result);
@@ -159,6 +160,27 @@ export class YamlScriptsService {
       const escaped = this.escapeForType(raw, script.type);
       const pattern = new RegExp(
         `\\$\\{${input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
+        'g',
+      );
+      result = result.replace(pattern, escaped);
+    }
+    return result;
+  }
+
+  private substituteSystemPlaceholders(
+    content: string,
+    scriptType: 'apex' | 'command' | 'js',
+  ): string {
+    const org = this.connectionManager.getCurrentOrg();
+    const systemVars: Record<string, string> = {
+      orgUsername: org?.username ?? '',
+    };
+
+    let result = content;
+    for (const [key, raw] of Object.entries(systemVars)) {
+      const escaped = this.escapeForType(raw, scriptType);
+      const pattern = new RegExp(
+        `\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
         'g',
       );
       result = result.replace(pattern, escaped);

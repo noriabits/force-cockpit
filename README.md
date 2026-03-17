@@ -300,6 +300,22 @@ Each input supports:
 
 Write `${variableName}` in your script code where you want the value substituted. Escaping is handled automatically (Apex-safe for `apex`, JSON-safe for `js`, raw for `command`).
 
+### System Placeholders
+
+In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
+
+| Placeholder | Description |
+|-------------|-------------|
+| `${orgUsername}` | Salesforce username (not alias) of the connected org |
+
+System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
+
+```yaml
+name: Show My User
+apex: |
+  System.debug('Running as: ${orgUsername}');
+```
+
 | Type | Badge | Org required | Output |
 |------|-------|-------------|--------|
 | Apex | Blue | Yes | Debug log (USER_DEBUG filter available) |

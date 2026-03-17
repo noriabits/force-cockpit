@@ -116,6 +116,98 @@ describe('YamlScriptsService', () => {
     });
   });
 
+  describe('substituteSystemPlaceholders (private)', () => {
+    it('replaces ${orgUsername} with the connected org username', () => {
+      const mock = makeMock();
+      (mock.getCurrentOrg as ReturnType<typeof vi.fn>).mockReturnValue({
+        username: 'admin@myorg.com',
+      });
+      const svc = new YamlScriptsService(mock, {
+        builtInPath: '',
+        userPath: '',
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        "String u = '${orgUsername}';",
+        'apex',
+      );
+      expect(result).toBe("String u = 'admin@myorg.com';");
+    });
+
+    it('applies Apex escaping to the username', () => {
+      const mock = makeMock();
+      (mock.getCurrentOrg as ReturnType<typeof vi.fn>).mockReturnValue({
+        username: "it's@org.com",
+      });
+      const svc = new YamlScriptsService(mock, {
+        builtInPath: '',
+        userPath: '',
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        "'${orgUsername}'",
+        'apex',
+      );
+      expect(result).toBe("'it''s@org.com'");
+    });
+
+    it('applies JS escaping to the username', () => {
+      const mock = makeMock();
+      (mock.getCurrentOrg as ReturnType<typeof vi.fn>).mockReturnValue({
+        username: 'user"name@org.com',
+      });
+      const svc = new YamlScriptsService(mock, {
+        builtInPath: '',
+        userPath: '',
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        '"${orgUsername}"',
+        'js',
+      );
+      expect(result).toBe('"user\\"name@org.com"');
+    });
+
+    it('resolves to empty string when no org is connected', () => {
+      const svc = makeService();
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        'echo ${orgUsername}',
+        'command',
+      );
+      expect(result).toBe('echo ');
+    });
+
+    it('replaces multiple occurrences', () => {
+      const mock = makeMock();
+      (mock.getCurrentOrg as ReturnType<typeof vi.fn>).mockReturnValue({
+        username: 'admin@myorg.com',
+      });
+      const svc = new YamlScriptsService(mock, {
+        builtInPath: '',
+        userPath: '',
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        '${orgUsername} and ${orgUsername}',
+        'command',
+      );
+      expect(result).toBe('admin@myorg.com and admin@myorg.com');
+    });
+
+    it('leaves content unchanged when no system placeholders are present', () => {
+      const svc = makeService();
+      const result: string = (svc as any).substituteSystemPlaceholders(
+        "System.debug('hello');",
+        'apex',
+      );
+      expect(result).toBe("System.debug('hello');");
+    });
+  });
+
   describe('parseInputs (private)', () => {
     const svc = makeService();
 
