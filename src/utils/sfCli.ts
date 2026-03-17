@@ -1,8 +1,8 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { StateAggregator } from '@salesforce/core';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface SfOrg {
   alias?: string;
@@ -32,7 +32,9 @@ export interface OrgDetails extends SfOrg {
  */
 export async function refreshOrgToken(aliasOrUsername: string): Promise<void> {
   try {
-    await execAsync(`sf org display --target-org "${aliasOrUsername}" --json`, { timeout: 15000 });
+    await execFileAsync('sf', ['org', 'display', '--target-org', aliasOrUsername, '--json'], {
+      timeout: 15000,
+    });
   } catch {
     // Best-effort — ignore errors; the subsequent connect attempt will surface the real issue
   }

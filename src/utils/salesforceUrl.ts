@@ -5,9 +5,9 @@ export function buildOrgUrl(org: OrgDetails): string {
 }
 
 export function buildRecordUrl(org: OrgDetails, recordId: string): string {
-  return `${org.instanceUrl}/${recordId}`;
+  return `${org.instanceUrl}/${encodeURIComponent(recordId)}`;
 }
 
 export function buildRecordInAppUrl(org: OrgDetails, recordId: string, app: string): string {
-  return `${org.instanceUrl}/lightning/app/${app}/r/${recordId}/view`;
+  return `${org.instanceUrl}/lightning/app/${encodeURIComponent(app)}/r/${encodeURIComponent(recordId)}/view`;
 }

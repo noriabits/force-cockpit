@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
-import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
+import type { FeatureModule, FeatureModuleFactory, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { CockpitConfig } from '../utils/config';
 
@@ -21,6 +21,8 @@ export class MainPanel {
   private readonly queryService: QueryService;
   // Feature modules (loaded from registry)
   private readonly features: FeatureModule[];
+  // Flat map of message type → route descriptor for O(1) dispatch
+  private readonly _routeMap = new Map<string, RouteDescriptor>();
 
   // Generic operation tracking
   private _activeTerminalOps = new Map<string, AbortController>();
@@ -101,6 +103,11 @@ export class MainPanel {
     this._panel = panel;
     this.queryService = new QueryService(connectionManager);
     this.features = featureFactories.map((factory) => factory(connectionManager));
+    for (const feature of this.features) {
+      for (const [type, route] of Object.entries(feature.routes)) {
+        this._routeMap.set(type, route);
+      }
+    }
 
     this._update();
     this._setupLifecycleListeners();
@@ -180,24 +187,20 @@ export class MainPanel {
             return;
           }
           default: {
-            // Dispatch to feature module routes
-            for (const feature of this.features) {
-              const route = feature.routes[message.type];
-              if (route) {
-                const opId = message.opId as string | undefined;
-                const ac = new AbortController();
-                if (opId) this._activeTerminalOps.set(opId, ac);
+            const route = this._routeMap.get(message.type);
+            if (route) {
+              const opId = message.opId as string | undefined;
+              const ac = new AbortController();
+              if (opId) this._activeTerminalOps.set(opId, ac);
 
-                await this._route(
-                  () => route.handler(message, opId ? ac.signal : undefined),
-                  route.successType,
-                  route.errorType,
-                  message as Record<string, unknown>, // includes opId — echoed in result
-                );
+              await this._route(
+                () => route.handler(message, opId ? ac.signal : undefined),
+                route.successType,
+                route.errorType,
+                message as Record<string, unknown>, // includes opId — echoed in result
+              );
 
-                if (opId) this._activeTerminalOps.delete(opId);
-                return;
-              }
+              if (opId) this._activeTerminalOps.delete(opId);
             }
             break;
           }

@@ -31,6 +31,10 @@ function copyAssets(src, dest) {
 }
 
 try {
+  // Clean destination first to remove stale files from deleted/renamed features
+  if (fs.existsSync(DEST_DIR)) {
+    fs.rmSync(DEST_DIR, { recursive: true, force: true });
+  }
   copyAssets(SRC_DIR, DEST_DIR);
   console.log('Feature assets copied: src/features/ → dist/features/');
 } catch (err) {
