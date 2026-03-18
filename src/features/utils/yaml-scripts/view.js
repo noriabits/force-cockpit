@@ -36,6 +36,7 @@
     document.getElementById('yaml-form-content')
   );
   const highlightCode = /** @type {HTMLElement} */ (document.getElementById('yaml-highlight-code'));
+  const gutter = /** @type {HTMLElement} */ (document.getElementById('yaml-code-gutter'));
   const formSource = /** @type {HTMLSelectElement} */ (document.getElementById('yaml-form-source'));
   const formFileRow = /** @type {HTMLElement} */ (document.getElementById('yaml-form-file-row'));
   const formFilePath = /** @type {HTMLInputElement} */ (
@@ -95,6 +96,12 @@
 
   function syncHighlight() {
     const text = formContent.value;
+    // Update line numbers
+    const lineCount = text ? text.split('\n').length : 1;
+    const nums = [];
+    for (let i = 1; i <= lineCount; i++) nums.push(i);
+    gutter.textContent = nums.join('\n');
+
     if (!text) {
       highlightCode.innerHTML = '';
       return;
@@ -111,6 +118,7 @@
       pre.scrollTop = formContent.scrollTop;
       pre.scrollLeft = formContent.scrollLeft;
     }
+    gutter.scrollTop = formContent.scrollTop;
   });
 
   // Tab key: insert 2 spaces (preserves native undo)

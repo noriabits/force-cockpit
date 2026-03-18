@@ -65,16 +65,19 @@
     <div class="yaml-form-row" id="yaml-form-content-row">
       <label class="yaml-form-label" id="yaml-form-content-label"></label>
       <div class="yaml-code-editor">
-        <pre
-          class="yaml-code-highlight"
-          aria-hidden="true"
-        ><code id="yaml-highlight-code"></code></pre>
-        <textarea
-          class="text-input yaml-code-textarea"
-          id="yaml-form-content"
-          rows="6"
-          spellcheck="false"
-        ></textarea>
+        <div class="yaml-code-gutter" id="yaml-code-gutter" aria-hidden="true">1</div>
+        <div class="yaml-code-body">
+          <pre
+            class="yaml-code-highlight"
+            aria-hidden="true"
+          ><code id="yaml-highlight-code"></code></pre>
+          <textarea
+            class="text-input yaml-code-textarea"
+            id="yaml-form-content"
+            rows="6"
+            spellcheck="false"
+          ></textarea>
+        </div>
       </div>
     </div>
     <div class="error-box" id="yaml-form-error"></div>

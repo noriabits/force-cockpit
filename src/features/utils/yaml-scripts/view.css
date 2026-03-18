@@ -266,13 +266,38 @@
 }
 
 /* ── Code editor: textarea + highlight.js overlay ── */
-/* Grid stacks both children in the same cell so they always share the same size. */
 .yaml-code-editor {
-  display: grid;
+  display: flex;
   width: 100%;
 }
 
-.yaml-code-editor > * {
+/* Line-number gutter */
+.yaml-code-gutter {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 6px 8px 8px;
+  margin: 0;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-right: none;
+  border-radius: 3px 0 0 3px;
+  background: var(--vscode-editorGutter-background, var(--vscode-input-background));
+  color: var(--vscode-editorLineNumber-foreground, #858585);
+  text-align: right;
+  user-select: none;
+  overflow: hidden;
+  white-space: pre;
+  min-width: 2.5em;
+}
+
+/* Body: grid stacks textarea + highlight in the same cell */
+.yaml-code-body {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.yaml-code-body > * {
   grid-area: 1 / 1 / 2 / 2;
 }
 
@@ -285,7 +310,7 @@
   padding: 8px;
   margin: 0;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 3px;
+  border-radius: 0 3px 3px 0;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
