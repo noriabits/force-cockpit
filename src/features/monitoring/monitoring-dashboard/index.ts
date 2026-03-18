@@ -9,6 +9,28 @@ import type { MonitoringValueField, MonitoringConfig } from './MonitoringDashboa
 const notificationCooldowns = new Map<string, number>();
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
+const STORAGE_KEY = 'monitoring.notificationCooldowns';
+
+function loadPersistedSnoozes(workspaceState: vscode.Memento): void {
+  const persisted: Record<string, number> = workspaceState.get(STORAGE_KEY, {});
+  const now = Date.now();
+  for (const [key, until] of Object.entries(persisted)) {
+    if (until > now) {
+      notificationCooldowns.set(key, until);
+    }
+  }
+}
+
+function persistSnoozes(workspaceState: vscode.Memento): void {
+  const now = Date.now();
+  const toSave: Record<string, number> = {};
+  for (const [key, until] of notificationCooldowns) {
+    if (until > now && until - now > COOLDOWN_MS) {
+      toSave[key] = until;
+    }
+  }
+  workspaceState.update(STORAGE_KEY, toSave);
+}
 
 function formatValueForNotification(value: number, format?: string): string {
   if (format === 'currency')
@@ -49,15 +71,20 @@ function checkThresholds(
   return breaches;
 }
 
-function fireBreachNotifications(breaches: Array<{ message: string; cooldownKey: string }>): void {
+function fireBreachNotifications(
+  breaches: Array<{ message: string; cooldownKey: string }>,
+  workspaceState: vscode.Memento,
+): void {
   for (const { message, cooldownKey } of breaches) {
     vscode.window.showWarningMessage(message, 'Snooze 1h', 'Snooze for today').then((selection) => {
       if (selection === 'Snooze 1h') {
         notificationCooldowns.set(cooldownKey, Date.now() + SNOOZE_1H_MS);
+        persistSnoozes(workspaceState);
       } else if (selection === 'Snooze for today') {
         const midnight = new Date();
         midnight.setHours(24, 0, 0, 0);
         notificationCooldowns.set(cooldownKey, midnight.getTime());
+        persistSnoozes(workspaceState);
       }
     });
   }
@@ -67,7 +94,9 @@ export function createMonitoringDashboardFeature(paths: {
   builtInPath: string;
   userPath: string;
   privatePath: string;
+  workspaceState: vscode.Memento;
 }): FeatureModuleFactory {
+  loadPersistedSnoozes(paths.workspaceState);
   return (connectionManager: ConnectionManager): FeatureModule => {
     const service = new MonitoringDashboardService(connectionManager, paths);
     const base = path.join('dist', 'features', 'monitoring', 'monitoring-dashboard');
@@ -100,6 +129,7 @@ export function createMonitoringDashboardFeature(paths: {
                   result.datasets,
                   msg.valueFields as MonitoringValueField[],
                 ),
+                paths.workspaceState,
               );
             }
             return result;
@@ -128,6 +158,7 @@ export function createMonitoringDashboardFeature(paths: {
                   datasets,
                   valueFields,
                 ),
+                paths.workspaceState,
               );
             }
             return result;

@@ -114,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
       builtInPath: path.join(builtInPath, 'monitoring'),
       userPath: path.join(userBasePath, 'monitoring'),
       privatePath: path.join(userBasePath, 'private', 'monitoring'),
+      workspaceState: context.workspaceState,
     }),
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),
   ];
