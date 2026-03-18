@@ -265,14 +265,92 @@
   width: 100%;
 }
 
-/* ── CodeMirror code editor ── */
+/* ── Code editor: textarea + highlight.js overlay ── */
+/* Grid stacks both children in the same cell so they always share the same size. */
 .yaml-code-editor {
-  min-height: 100px;
+  display: grid;
   width: 100%;
 }
 
-.yaml-code-editor .cm-editor {
+.yaml-code-editor > * {
+  grid-area: 1 / 1 / 2 / 2;
+}
+
+/* Shared properties — must match EXACTLY for text alignment */
+.yaml-code-textarea,
+.yaml-code-highlight {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px;
+  margin: 0;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  tab-size: 2;
+  overflow: auto;
+}
+
+/* Textarea on top — transparent text/bg so highlight shows through */
+.yaml-code-textarea {
+  z-index: 1;
+  width: 100%;
   min-height: 100px;
+  resize: vertical;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--vscode-editorCursor-foreground, #fff);
+  outline: none;
+}
+
+.yaml-code-textarea:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.yaml-code-textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+/* Highlight layer behind — receives pointer events through textarea */
+.yaml-code-highlight {
+  z-index: 0;
+  pointer-events: none;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-color: transparent; /* only the textarea border is visible */
+}
+
+.yaml-code-highlight code {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+  padding: 0;
+}
+
+/* highlight.js token colors — VSCode CSS variables */
+.yaml-code-highlight .hljs-keyword {
+  color: var(--vscode-debugTokenExpression-name, #569cd6);
+}
+.yaml-code-highlight .hljs-string {
+  color: var(--vscode-debugTokenExpression-string, #ce9178);
+}
+.yaml-code-highlight .hljs-comment {
+  color: var(--vscode-descriptionForeground, #6a9955);
+}
+.yaml-code-highlight .hljs-number {
+  color: var(--vscode-debugTokenExpression-number, #b5cea8);
+}
+.yaml-code-highlight .hljs-title {
+  color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+}
+.yaml-code-highlight .hljs-built_in {
+  color: var(--vscode-symbolIcon-methodForeground, #dcdcaa);
+}
+.yaml-code-highlight .hljs-literal {
+  color: var(--vscode-debugTokenExpression-boolean, #569cd6);
 }
 
 /* ── Edit button in accordion header ── */

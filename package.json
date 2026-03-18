@@ -72,9 +72,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-codemirror.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "compile": "tsc -p ./",
-    "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-codemirror.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"src/features/**/*.{js,css,html}\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
@@ -104,16 +104,9 @@
     "eslint": "^10.0.0"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-java": "^6.0.2",
-    "@codemirror/lang-javascript": "^6.2.5",
-    "@codemirror/language": "^6.12.2",
-    "@codemirror/legacy-modes": "^6.5.2",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.40.0",
-    "@lezer/highlight": "^1.2.3",
     "@salesforce/core": "^8.26.3",
     "chart.js": "^4.5.1",
+    "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.0",
     "jsforce": "^3.4.0"
   },
