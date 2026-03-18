@@ -48,6 +48,10 @@ export class MainPanel {
     this._panel.webview.postMessage({ type: 'orgConnecting', orgName });
   }
 
+  notifyLogsChanged(): void {
+    this._panel.webview.postMessage({ type: 'executionLogsChanged' });
+  }
+
   updateConfig(config: CockpitConfig): void {
     this.config = config;
     this._panel.title = config.panelTitle;

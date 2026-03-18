@@ -7,6 +7,7 @@ import { getOrgDetails, refreshOrgToken } from './utils/sfCli';
 import { buildOrgUrl } from './utils/salesforceUrl';
 import { featureRegistry } from './features/registry';
 import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
+import { createExecutionLogsFeature } from './features/utils/execution-logs/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/monitoring-dashboard/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
@@ -114,7 +115,19 @@ export function activate(context: vscode.ExtensionContext): void {
       userPath: path.join(userBasePath, 'monitoring'),
       privatePath: path.join(userBasePath, 'private', 'monitoring'),
     }),
+    createExecutionLogsFeature(path.join(userBasePath, 'logs')),
   ];
+
+  // Watch for new/deleted execution logs and notify the webview
+  if (path.isAbsolute(userBasePath)) {
+    const logsWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(userBasePath, 'logs/*.log'),
+    );
+    const notifyLogs = () => MainPanel.currentPanel?.notifyLogsChanged();
+    logsWatcher.onDidCreate(notifyLogs);
+    logsWatcher.onDidDelete(notifyLogs);
+    context.subscriptions.push(logsWatcher);
+  }
 
   // Guard: if any operation is running, warn before switching/disconnecting
   async function guardBusy(action: string): Promise<boolean> {
