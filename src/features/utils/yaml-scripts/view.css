@@ -311,9 +311,7 @@
   margin: 0;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
   border-radius: 0 3px 3px 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  white-space: pre;
   tab-size: 2;
   overflow: auto;
 }
@@ -355,27 +353,86 @@
   padding: 0;
 }
 
-/* highlight.js token colors — VSCode CSS variables */
-.yaml-code-highlight .hljs-keyword {
-  color: var(--vscode-debugTokenExpression-name, #569cd6);
+/* highlight.js token colors — Dark Modern theme */
+.yaml-code-highlight .hljs-keyword,
+.yaml-code-highlight .hljs-name,
+.yaml-code-highlight .hljs-selector-tag {
+  color: #c586c0;
+}
+.yaml-code-highlight .hljs-variable.language_ {
+  color: #569cd6;
+}
+.yaml-code-highlight .hljs-operator {
+  color: #d4d4d4;
 }
 .yaml-code-highlight .hljs-string {
-  color: var(--vscode-debugTokenExpression-string, #ce9178);
+  color: #ce9178;
+}
+.yaml-code-highlight .hljs-meta .hljs-string,
+.yaml-code-highlight .hljs-quote {
+  color: #ce9178;
 }
 .yaml-code-highlight .hljs-comment {
-  color: var(--vscode-descriptionForeground, #6a9955);
+  color: #6a9955;
 }
 .yaml-code-highlight .hljs-number {
-  color: var(--vscode-debugTokenExpression-number, #b5cea8);
+  color: #b5cea8;
 }
-.yaml-code-highlight .hljs-title {
-  color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+.yaml-code-highlight .hljs-literal,
+.yaml-code-highlight .hljs-char.escape_,
+.yaml-code-highlight .hljs-regexp {
+  color: #569cd6;
 }
+.yaml-code-highlight .hljs-type,
 .yaml-code-highlight .hljs-built_in {
-  color: var(--vscode-symbolIcon-methodForeground, #dcdcaa);
+  color: #569cd6;
 }
-.yaml-code-highlight .hljs-literal {
-  color: var(--vscode-debugTokenExpression-boolean, #569cd6);
+.yaml-code-highlight .hljs-title.class_,
+.yaml-code-highlight .hljs-title.class_.inherited__ {
+  color: #4ec9b0;
+}
+.yaml-code-highlight .hljs-title,
+.yaml-code-highlight .hljs-title.function_,
+.yaml-code-highlight .hljs-title.function_.invoke__ {
+  color: #dcdcaa;
+}
+.yaml-code-highlight .hljs-meta {
+  color: #dcdcaa;
+}
+.yaml-code-highlight .hljs-params,
+.yaml-code-highlight .hljs-variable {
+  color: #9cdcfe;
+}
+.yaml-code-highlight .hljs-property {
+  color: #9cdcfe;
+}
+.yaml-code-highlight .hljs-attr {
+  color: #9cdcfe;
+}
+.yaml-code-highlight .hljs-doctag {
+  color: #569cd6;
+}
+.yaml-code-highlight .hljs-soql {
+  color: #4ec9b0;
+  font-style: italic;
+}
+.yaml-code-highlight .hljs-soql .hljs-keyword {
+  color: #c586c0;
+  font-style: normal;
+}
+.yaml-code-highlight .hljs-soql .hljs-title.function_,
+.yaml-code-highlight .hljs-soql .hljs-title.function_.invoke__ {
+  color: #dcdcaa;
+  font-style: normal;
+}
+.yaml-code-highlight .hljs-soql .hljs-params,
+.yaml-code-highlight .hljs-soql .hljs-variable {
+  color: #9cdcfe;
+  font-style: normal;
+}
+.yaml-code-highlight .hljs-soql .hljs-punctuation,
+.yaml-code-highlight .hljs-soql .hljs-operator {
+  font-style: normal;
 }
 
 /* ── Edit button in accordion header ── */

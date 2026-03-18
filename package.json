@@ -107,6 +107,7 @@
     "@salesforce/core": "^8.26.3",
     "chart.js": "^4.5.1",
     "highlight.js": "^11.11.1",
+    "highlightjs-apex": "^1.5.0",
     "js-yaml": "^4.1.0",
     "jsforce": "^3.4.0"
   },

@@ -80,7 +80,7 @@
 
   // ── Textarea + highlight.js editor ──────────────────────────────────────
   const hljs = win.hljs;
-  let currentLang = 'java';
+  let currentLang = 'apex';
 
   /** @param {'apex' | 'command' | 'js'} type */
   function langForType(type) {
@@ -90,7 +90,7 @@
       case 'command':
         return 'bash';
       default:
-        return 'java';
+        return 'apex';
     }
   }
 
