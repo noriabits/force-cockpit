@@ -371,6 +371,11 @@ export class MainPanel {
     const chartJsUri = webview.asWebviewUri(
       vscode.Uri.file(path.join(this.context.extensionPath, 'dist', 'vendor', 'chart.umd.js')),
     );
+    const codemirrorJsUri = webview.asWebviewUri(
+      vscode.Uri.file(
+        path.join(this.context.extensionPath, 'dist', 'vendor', 'codemirror.bundle.js'),
+      ),
+    );
     const logoUri = this._resolveLogoUri(webview);
     const panelTitle = this.config.panelTitle;
 
@@ -386,6 +391,7 @@ export class MainPanel {
       .replace(/\$\{cssUri\}/g, cssUri.toString())
       .replace(/\$\{jsUri\}/g, jsUri.toString())
       .replace(/\$\{chartJsUri\}/g, chartJsUri.toString())
+      .replace(/\$\{codemirrorJsUri\}/g, codemirrorJsUri.toString())
       .replace(/\$\{cspSource\}/g, webview.cspSource)
       .replace(/\$\{logoUri\}/g, logoUri.toString())
       .replace(/\$\{panelTitle\}/g, panelTitle);

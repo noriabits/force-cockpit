@@ -265,9 +265,13 @@
   width: 100%;
 }
 
-.yaml-form-content {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 12px;
+/* ── CodeMirror code editor ── */
+.yaml-code-editor {
+  min-height: 100px;
+  width: 100%;
+}
+
+.yaml-code-editor .cm-editor {
   min-height: 100px;
 }
 
@@ -515,7 +519,8 @@
   cursor: pointer;
   font-size: 16px;
   padding: 2px 4px;
-  opacity: 0.4;
+  opacity: 0.6;
+  color: var(--vscode-charts-yellow, #e2c541);
   transition: opacity 0.15s;
 }
 

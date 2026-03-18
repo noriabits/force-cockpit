@@ -29,9 +29,7 @@
   const folderDropdown = /** @type {HTMLElement} */ (
     document.getElementById('yaml-folder-dropdown')
   );
-  const formContent = /** @type {HTMLTextAreaElement} */ (
-    document.getElementById('yaml-form-content')
-  );
+  const editorContainer = /** @type {HTMLElement} */ (document.getElementById('yaml-form-editor'));
   const formSource = /** @type {HTMLSelectElement} */ (document.getElementById('yaml-form-source'));
   const formFileRow = /** @type {HTMLElement} */ (document.getElementById('yaml-form-file-row'));
   const formFilePath = /** @type {HTMLInputElement} */ (
@@ -73,6 +71,192 @@
   formDeleteBtn.style.display = 'none';
   formFileRow.style.display = 'none';
 
+  // ── CodeMirror editor setup ───────────────────────────────────────────────
+  const CM = win.CodeMirrorBundle;
+  const languageConf = new CM.Compartment();
+  const placeholderConf = new CM.Compartment();
+
+  /** @param {'apex' | 'command' | 'js'} type */
+  function langForType(type) {
+    switch (type) {
+      case 'js':
+        return CM.javascript();
+      case 'apex':
+        return CM.java();
+      case 'command':
+        return CM.StreamLanguage.define(CM.shell);
+      default:
+        return CM.java();
+    }
+  }
+
+  const vsCodeHighlight = CM.syntaxHighlighting(
+    CM.HighlightStyle.define([
+      { tag: CM.tags.keyword, color: 'var(--vscode-debugTokenExpression-name, #569cd6)' },
+      { tag: CM.tags.string, color: 'var(--vscode-debugTokenExpression-string, #ce9178)' },
+      { tag: CM.tags.comment, color: 'var(--vscode-descriptionForeground, #6a9955)' },
+      { tag: CM.tags.number, color: 'var(--vscode-debugTokenExpression-number, #b5cea8)' },
+      { tag: CM.tags.typeName, color: 'var(--vscode-symbolIcon-classForeground, #4ec9b0)' },
+      {
+        tag: CM.tags.function(CM.tags.variableName),
+        color: 'var(--vscode-symbolIcon-methodForeground, #dcdcaa)',
+      },
+      { tag: CM.tags.operator, color: 'var(--vscode-foreground, #d4d4d4)' },
+      { tag: CM.tags.bool, color: 'var(--vscode-debugTokenExpression-boolean, #569cd6)' },
+      { tag: CM.tags.punctuation, color: 'var(--vscode-foreground, #d4d4d4)' },
+    ]),
+  );
+
+  const vsCodeTheme = CM.EditorView.theme({
+    '&': {
+      backgroundColor: 'var(--vscode-input-background)',
+      color: 'var(--vscode-input-foreground)',
+      border: '1px solid var(--vscode-input-border, var(--vscode-panel-border))',
+      borderRadius: '3px',
+      fontFamily: 'var(--vscode-editor-font-family, monospace)',
+      fontSize: '12px',
+    },
+    '&.cm-focused': {
+      outline: '1px solid var(--vscode-focusBorder)',
+    },
+    '.cm-gutters': {
+      backgroundColor: 'var(--vscode-editorGutter-background, var(--vscode-input-background))',
+      color: 'var(--vscode-editorLineNumber-foreground, #858585)',
+      border: 'none',
+      borderRight: '1px solid var(--vscode-panel-border)',
+    },
+    '.cm-activeLineGutter': {
+      backgroundColor: 'var(--vscode-editor-lineHighlightBackground, transparent)',
+    },
+    '.cm-activeLine': {
+      backgroundColor: 'var(--vscode-editor-lineHighlightBackground, transparent)',
+    },
+    '.cm-cursor': {
+      borderLeftColor: 'var(--vscode-editorCursor-foreground, #fff)',
+    },
+    // Style native browser selection — only override background so text keeps its
+    // syntax-highlighted color. VS Code injects --vscode-editor-selectionBackground
+    // with a theme-appropriate value (dark blue for dark themes, light blue for light).
+    '.cm-content ::selection': {
+      backgroundColor: 'var(--vscode-editor-selectionBackground, #264f78)',
+    },
+    '.cm-content': {
+      caretColor: 'var(--vscode-editorCursor-foreground, #fff)',
+    },
+    '.cm-scroller': {
+      overflowX: 'auto',
+    },
+  });
+
+  // Custom Enter: copy current line's indentation only, no language-smart indent
+  const insertNewlineKeepIndent = (/** @type {any} */ { state, dispatch }) => {
+    const range = state.selection.main;
+    const line = state.doc.lineAt(range.from);
+    const indent = /** @type {RegExpExecArray} */ (/^\s*/.exec(line.text))[0];
+    const insert = '\n' + indent;
+    dispatch(
+      state.update({
+        changes: [{ from: range.from, to: range.to, insert }],
+        selection: { anchor: range.from + insert.length },
+        scrollIntoView: true,
+        userEvent: 'input',
+      }),
+    );
+    return true;
+  };
+
+  const editorView = new CM.EditorView({
+    state: CM.EditorState.create({
+      doc: '',
+      extensions: [
+        CM.lineNumbers(),
+        CM.history(),
+        CM.highlightSpecialChars(),
+        vsCodeTheme,
+        vsCodeHighlight,
+        languageConf.of(langForType('apex')),
+        placeholderConf.of([]),
+        CM.keymap.of([
+          { key: 'Enter', run: insertNewlineKeepIndent },
+          // Always consume undo/redo keys — if CM returns false, the browser/VS Code
+          // takes over and acts on the contenteditable's own history, causing redo.
+          {
+            key: 'Mod-z',
+            run: (/** @type {any} */ v) => {
+              CM.undo(v);
+              return true;
+            },
+            preventDefault: true,
+          },
+          {
+            key: 'Mod-y',
+            run: (/** @type {any} */ v) => {
+              CM.redo(v);
+              return true;
+            },
+            preventDefault: true,
+          },
+          {
+            key: 'Mod-Z',
+            run: (/** @type {any} */ v) => {
+              CM.redo(v);
+              return true;
+            },
+            preventDefault: true,
+          },
+          {
+            key: 'Tab',
+            run: (/** @type {any} */ view) => {
+              const { state } = view;
+              const sel = state.selection.main;
+              if (!sel.empty) return CM.indentMore(view);
+              const line = state.doc.lineAt(sel.from);
+              const leading = /** @type {RegExpExecArray} */ (/^\s*/.exec(line.text))[0].length;
+              if (sel.from <= line.from + leading) return CM.indentMore(view);
+              view.dispatch(
+                state.update({
+                  changes: { from: sel.from, to: sel.to, insert: '  ' },
+                  selection: { anchor: sel.from + 2 },
+                  userEvent: 'input',
+                }),
+              );
+              return true;
+            },
+            shift: (/** @type {any} */ view) => CM.indentLess(view),
+          },
+          ...CM.defaultKeymap,
+        ]),
+      ],
+    }),
+    parent: editorContainer,
+  });
+
+  function getEditorContent() {
+    return editorView.state.doc.toString();
+  }
+
+  /** @param {string} text */
+  function setEditorContent(text) {
+    editorView.dispatch({
+      changes: { from: 0, to: editorView.state.doc.length, insert: text || '' },
+      annotations: CM.Transaction.addToHistory.of(false),
+    });
+  }
+
+  /** @param {'apex' | 'command' | 'js'} type */
+  function setEditorLanguage(type) {
+    editorView.dispatch({
+      effects: languageConf.reconfigure(langForType(type)),
+    });
+  }
+
+  /** @param {string} text */
+  function setEditorPlaceholder(text) {
+    editorView.dispatch({
+      effects: placeholderConf.reconfigure(text ? CM.placeholder(text) : []),
+    });
+  }
+
   /** @type {{ name: string; label: string; type: 'string' | 'picklist' | 'checkbox' | 'textarea'; required: boolean; options: string; checkboxDefault: boolean }[]} */
   let formInputs = [];
 
@@ -112,7 +296,7 @@
   const labelDescription = document.querySelector('label[for="yaml-form-description"]');
   const labelType = document.querySelector('label[for="yaml-form-type"]');
   const labelFolder = document.querySelector('label[for="yaml-form-folder"]');
-  const labelContent = document.querySelector('label[for="yaml-form-content"]');
+  const labelContent = document.getElementById('yaml-form-content-label');
   if (labelName) labelName.textContent = L.labelName;
   if (labelDescription) labelDescription.textContent = L.labelDescription;
   if (labelType) labelType.textContent = L.labelType;
@@ -140,9 +324,9 @@
     const options =
       /** @type {Array<{value: 'all'|'favorites'|'shared'|'private', label: string}>} */ ([
         { value: 'all', label: L.filterAll },
-        { value: 'favorites', label: L.filterFavorites },
         { value: 'shared', label: L.filterShared },
         { value: 'private', label: L.filterPrivate },
+        { value: 'favorites', label: L.filterFavorites },
       ]);
     for (const opt of options) {
       const btn = document.createElement('button');
@@ -358,15 +542,16 @@
       command: L.placeholderCommandContent,
       js: L.placeholderJsContent,
     };
-    formContent.placeholder =
+    setEditorPlaceholder(
       placeholders[/** @type {'apex'|'command'|'js'} */ (formType.value)] ??
-      L.placeholderApexContent;
+        L.placeholderApexContent,
+    );
   }
 
   function updateSourceMode() {
     const isFile = formSource.value === 'file';
-    const contentRow = formContent.closest('.yaml-form-row');
-    if (contentRow) /** @type {HTMLElement} */ (contentRow).style.display = isFile ? 'none' : '';
+    const contentRow = document.getElementById('yaml-form-content-row');
+    if (contentRow) contentRow.style.display = isFile ? 'none' : '';
     formFileRow.style.display = isFile ? '' : 'none';
   }
 
@@ -381,11 +566,12 @@
     formFolder.value = '';
     formSource.value = 'inline';
     formFilePath.value = '';
-    formContent.value = '';
+    setEditorContent('');
     formError.textContent = '';
     formInputs = [];
     renderFormInputs();
     updateContentPlaceholder();
+    setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
     updateSourceMode();
     updateSaveBtn();
   }
@@ -458,7 +644,8 @@
     formFolder.value = script.folder;
     formSource.value = script.scriptFile ? 'file' : 'inline';
     formFilePath.value = script.scriptFile ?? '';
-    formContent.value = script.scriptFile ? '' : (script.script ?? '');
+    setEditorContent(script.scriptFile ? '' : (script.script ?? ''));
+    setEditorLanguage(script.type);
     formError.textContent = '';
     formInputs = (script.inputs || []).map((/** @type {any} */ inp) => ({
       name: inp.name || '',
@@ -490,7 +677,10 @@
 
   updateContentPlaceholder();
   updateSourceMode();
-  formType.addEventListener('change', updateContentPlaceholder);
+  formType.addEventListener('change', () => {
+    updateContentPlaceholder();
+    setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+  });
   formSource.addEventListener('change', updateSourceMode);
   formFolder.addEventListener('input', updateSaveBtn);
   formBrowseBtn.addEventListener('click', () => {
@@ -507,7 +697,7 @@
     const folderVal = formFolder.value.trim();
     const isFile = formSource.value === 'file';
     const filePathVal = formFilePath.value.trim();
-    const contentVal = formContent.value.trim();
+    const contentVal = getEditorContent().trim();
     if (!nameVal) {
       formError.textContent = L.errorNameRequired;
       formName.focus();
@@ -520,7 +710,7 @@
     }
     if (!isFile && !contentVal) {
       formError.textContent = L.errorContentRequired;
-      formContent.focus();
+      editorView.focus();
       return;
     }
     if (isFile && !filePathVal) {
