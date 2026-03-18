@@ -1,4 +1,7 @@
 import { spawn } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export interface TerminalCommandResult {
   success: boolean;
@@ -15,10 +18,21 @@ export function runTerminalCommand(
   command: string,
   workspaceRoot?: string,
   signal?: AbortSignal,
+  onOutput?: (chunk: string) => void,
 ): Promise<TerminalCommandResult> {
+  const isWindows = process.platform === 'win32';
+  const ext = isWindows ? '.cmd' : '.sh';
+  const tmpFile = path.join(os.tmpdir(), `fc-script-${Date.now()}${ext}`);
+  fs.writeFileSync(tmpFile, command, 'utf8');
+  if (!isWindows) {
+    fs.chmodSync(tmpFile, 0o755);
+  }
+
+  const spawnCmd = isWindows ? 'cmd' : 'sh';
+  const spawnArgs = isWindows ? ['/c', tmpFile] : [tmpFile];
+
   return new Promise((resolve) => {
-    const child = spawn(command, [], {
-      shell: true,
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd: workspaceRoot || undefined,
     });
 
@@ -26,6 +40,11 @@ export function runTerminalCommand(
     const done = (result: TerminalCommandResult) => {
       if (!settled) {
         settled = true;
+        try {
+          fs.unlinkSync(tmpFile);
+        } catch {
+          /* ignore */
+        }
         resolve(result);
       }
     };
@@ -44,8 +63,16 @@ export function runTerminalCommand(
     const stdout: string[] = [];
     const stderr: string[] = [];
 
-    child.stdout?.on('data', (chunk: Buffer) => stdout.push(chunk.toString()));
-    child.stderr?.on('data', (chunk: Buffer) => stderr.push(chunk.toString()));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const s = chunk.toString();
+      stdout.push(s);
+      onOutput?.(s);
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const s = chunk.toString();
+      stderr.push(s);
+      onOutput?.(s);
+    });
 
     child.on('error', (err: Error) => {
       done({ success: false, output: err.message });

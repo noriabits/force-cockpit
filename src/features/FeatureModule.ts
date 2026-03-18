@@ -1,7 +1,11 @@
 import type { ConnectionManager } from '../salesforce/connection';
 
 export interface RouteDescriptor {
-  handler: (message: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>;
+  handler: (
+    message: Record<string, unknown>,
+    signal?: AbortSignal,
+    onChunk?: (chunk: string) => void,
+  ) => Promise<unknown>;
   successType: string;
   errorType: string;
 }

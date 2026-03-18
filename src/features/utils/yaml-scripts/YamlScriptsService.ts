@@ -83,6 +83,7 @@ export class YamlScriptsService {
     scripts: YamlScript[],
     inputValues?: Record<string, string>,
     signal?: AbortSignal,
+    onLogChunk?: (chunk: string) => void,
   ): Promise<ExecuteScriptResult> {
     const script = scripts.find((s) => s.id === scriptId);
     if (!script) {
@@ -107,35 +108,37 @@ export class YamlScriptsService {
     const resolvedScript = this.substituteInputs(script, inputValues);
     const finalScript = this.substituteSystemPlaceholders(resolvedScript, script.type);
 
+    let result: ExecuteScriptResult;
+
     if (script.type === 'command') {
-      return this.executeTerminalCommand({ ...script, script: finalScript }, signal);
+      result = await this.executeTerminalCommand(
+        { ...script, script: finalScript },
+        signal,
+        onLogChunk,
+      );
+    } else if (script.type === 'js') {
+      result = await this.executeJs({ ...script, script: finalScript }, signal, onLogChunk);
+    } else {
+      try {
+        const apexResult = await this.connectionManager.executeAnonymousWithDebugLog(finalScript, {
+          logLevels: { Apex_code: 'DEBUG' },
+        });
+        assertApexSuccess(apexResult);
+        const debugLog = apexResult.debugLog ?? '';
+        result = {
+          scriptId,
+          success: true,
+          message: `Script "${script.name}" executed successfully.`,
+          debugLog,
+          filteredDebugLog: filterUserDebugLines(debugLog),
+        };
+      } catch (err) {
+        result = { scriptId, success: false, message: (err as Error).message, debugLog: '' };
+      }
     }
 
-    if (script.type === 'js') {
-      return this.executeJs({ ...script, script: finalScript }, signal);
-    }
-
-    try {
-      const result = await this.connectionManager.executeAnonymousWithDebugLog(finalScript, {
-        logLevels: { Apex_code: 'DEBUG' },
-      });
-      assertApexSuccess(result);
-      const debugLog = result.debugLog ?? '';
-      return {
-        scriptId,
-        success: true,
-        message: `Script "${script.name}" executed successfully.`,
-        debugLog,
-        filteredDebugLog: filterUserDebugLines(debugLog),
-      };
-    } catch (err) {
-      return {
-        scriptId,
-        success: false,
-        message: (err as Error).message,
-        debugLog: '',
-      };
-    }
+    this.saveExecutionLog(script.name, result.debugLog);
+    return result;
   }
 
   private substituteVars(
@@ -146,10 +149,7 @@ export class YamlScriptsService {
     let result = code;
     for (const [key, raw] of Object.entries(vars)) {
       const escaped = this.escapeForType(raw, type);
-      const pattern = new RegExp(
-        `\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`,
-        'g',
-      );
+      const pattern = new RegExp(`\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`, 'g');
       result = result.replace(pattern, escaped);
     }
     return result;
@@ -188,13 +188,21 @@ export class YamlScriptsService {
     }
   }
 
-  private async executeJs(script: YamlScript, signal?: AbortSignal): Promise<ExecuteScriptResult> {
+  private async executeJs(
+    script: YamlScript,
+    signal?: AbortSignal,
+    onLogChunk?: (chunk: string) => void,
+  ): Promise<ExecuteScriptResult> {
     const output: string[] = [];
     const logFn = (...args: unknown[]) => {
-      output.push(args.map(String).join(' '));
+      const line = args.map(String).join(' ');
+      output.push(line);
+      onLogChunk?.(line + '\n');
     };
     const errorFn = (...args: unknown[]) => {
-      output.push(`[ERROR] ${args.map(String).join(' ')}`);
+      const line = `[ERROR] ${args.map(String).join(' ')}`;
+      output.push(line);
+      onLogChunk?.(line + '\n');
     };
 
     try {
@@ -253,11 +261,13 @@ export class YamlScriptsService {
   private async executeTerminalCommand(
     script: YamlScript,
     signal?: AbortSignal,
+    onLogChunk?: (chunk: string) => void,
   ): Promise<ExecuteScriptResult> {
     const result = await runTerminalCommand(
       script.script,
       this.paths.workspaceRoot || undefined,
       signal,
+      onLogChunk,
     );
     if (result.cancelled) {
       return { scriptId: script.id, success: false, message: '', debugLog: '', cancelled: true };
@@ -665,27 +675,82 @@ export class YamlScriptsService {
       return { content: (parsed.apex ?? parsed.js ?? parsed.command)! };
     }
 
-    const base = { id, folder, name: parsed.name!, description: parsed.description ?? '', source, type, inputs: parsedInputs };
+    const base = {
+      id,
+      folder,
+      name: parsed.name!,
+      description: parsed.description ?? '',
+      source,
+      type,
+      inputs: parsedInputs,
+    };
 
     if (!this.paths.workspaceRoot) {
-      return { invalid: this.makeInvalidScript(base, 'Cannot resolve file path: no workspace folder is open.') };
+      return {
+        invalid: this.makeInvalidScript(
+          base,
+          'Cannot resolve file path: no workspace folder is open.',
+        ),
+      };
     }
 
     const absPath = path.resolve(this.paths.workspaceRoot, scriptFile);
     const rootResolved = path.resolve(this.paths.workspaceRoot);
     if (!absPath.startsWith(rootResolved + path.sep) && absPath !== rootResolved) {
-      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, 'Script file must be inside the workspace folder.') };
+      return {
+        invalid: this.makeInvalidScript(
+          { ...base, scriptFile },
+          'Script file must be inside the workspace folder.',
+        ),
+      };
     }
 
     if (!fs.existsSync(absPath)) {
-      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, `Script file not found: ${scriptFile}`) };
+      return {
+        invalid: this.makeInvalidScript(
+          { ...base, scriptFile },
+          `Script file not found: ${scriptFile}`,
+        ),
+      };
     }
 
     try {
       return { content: fs.readFileSync(absPath, 'utf8') };
     } catch (err) {
-      return { invalid: this.makeInvalidScript({ ...base, scriptFile }, `Failed to read script file: ${(err as Error).message}`) };
+      return {
+        invalid: this.makeInvalidScript(
+          { ...base, scriptFile },
+          `Failed to read script file: ${(err as Error).message}`,
+        ),
+      };
     }
+  }
+
+  private saveExecutionLog(scriptName: string, debugLog: string): void {
+    if (!debugLog) return;
+    if (!this.paths.userPath || !path.isAbsolute(this.paths.userPath)) return;
+    try {
+      const logsDir = path.join(path.dirname(this.paths.userPath), 'logs');
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true });
+        fs.writeFileSync(path.join(logsDir, '.gitignore'), '*\n', 'utf8');
+      }
+      const slug = scriptName
+        .replace(/[^a-z0-9]/gi, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .toLowerCase();
+      const ts = this.localTimestamp();
+      fs.writeFileSync(path.join(logsDir, `${slug}_${ts}.log`), debugLog, 'utf8');
+    } catch {
+      // Silent — log saving must never affect execution result
+    }
+  }
+
+  private localTimestamp(): string {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
   }
 
   private makeInvalidScript(

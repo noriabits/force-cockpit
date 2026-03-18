@@ -28,11 +28,11 @@ export function createYamlScriptsFeature(paths: {
           errorType: 'loadYamlScriptsError',
         },
         executeYamlScript: {
-          handler: async (msg, signal) => {
+          handler: async (msg, signal, onChunk) => {
             const scriptId = msg.scriptId as string;
             const inputValues = (msg.inputs ?? {}) as Record<string, string>;
             const scripts = await service.loadScripts();
-            return service.executeScript(scriptId, scripts, inputValues, signal);
+            return service.executeScript(scriptId, scripts, inputValues, signal, onChunk);
           },
           successType: 'executeYamlScriptResult',
           errorType: 'executeYamlScriptError',

@@ -11,37 +11,6 @@ import { createMonitoringDashboardFeature } from './features/monitoring/monitori
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 
-function ensurePrivateGitignored(workspaceRoot: string): void {
-  if (!workspaceRoot) return;
-  const gitignorePath = path.join(workspaceRoot, '.gitignore');
-  const privateEntry = 'force-cockpit/private/';
-
-  try {
-    if (!fs.existsSync(gitignorePath)) {
-      fs.writeFileSync(gitignorePath, `${privateEntry}\n`, 'utf8');
-      return;
-    }
-
-    const content = fs.readFileSync(gitignorePath, 'utf8');
-    const lines = content.split('\n').map((l) => l.trim());
-    if (
-      lines.some(
-        (line) =>
-          line === privateEntry ||
-          line === 'force-cockpit/private' ||
-          line === 'force-cockpit/private/**',
-      )
-    ) {
-      return;
-    }
-
-    const separator = content.endsWith('\n') ? '' : '\n';
-    fs.appendFileSync(gitignorePath, `${separator}${privateEntry}\n`, 'utf8');
-  } catch {
-    // Silent — gitignore management is best-effort
-  }
-}
-
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
   // The transport uses a relative file path that cannot be resolved after esbuild bundling.
@@ -104,10 +73,16 @@ export function activate(context: vscode.ExtensionContext): void {
     fs.mkdirSync(path.join(userBasePath, 'monitoring'), { recursive: true });
     fs.mkdirSync(path.join(userBasePath, 'private', 'scripts'), { recursive: true });
     fs.mkdirSync(path.join(userBasePath, 'private', 'monitoring'), { recursive: true });
+    // Drop a .gitignore inside private/ so its contents are never committed
+    const privateGitignore = path.join(userBasePath, 'private', '.gitignore');
+    if (!fs.existsSync(privateGitignore)) {
+      try {
+        fs.writeFileSync(privateGitignore, '*\n', 'utf8');
+      } catch {
+        // Silent — gitignore management is best-effort
+      }
+    }
   }
-
-  // Ensure private folder is gitignored so users don't commit private scripts by mistake
-  ensurePrivateGitignored(workspaceRoot);
 
   // Watch config.yaml for live changes
   function reloadConfig(): void {

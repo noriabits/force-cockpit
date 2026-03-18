@@ -221,8 +221,16 @@ export class MainPanel {
               const ac = new AbortController();
               if (opId) this._activeTerminalOps.set(opId, ac);
 
+              const postChunk = opId
+                ? (chunk: string) =>
+                    this._panel.webview.postMessage({
+                      type: 'scriptLogChunk',
+                      data: { opId, chunk },
+                    })
+                : undefined;
+
               await this._route(
-                () => route.handler(message, opId ? ac.signal : undefined),
+                () => route.handler(message, opId ? ac.signal : undefined, postChunk),
                 route.successType,
                 route.errorType,
                 message as Record<string, unknown>, // includes opId — echoed in result

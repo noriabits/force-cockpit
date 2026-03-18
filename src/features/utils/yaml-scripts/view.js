@@ -11,6 +11,9 @@
     document.getElementById('yaml-visibility-filter')
   );
   const scriptsList = /** @type {HTMLElement} */ (document.getElementById('yaml-scripts-list'));
+
+  /** @type {Map<string, string>} Maps opId → scriptId for in-flight executions */
+  const opIdToScriptId = new Map();
   const noResults = /** @type {HTMLElement} */ (document.getElementById('yaml-no-results'));
   const loadError = /** @type {HTMLElement} */ (document.getElementById('yaml-load-error'));
 
@@ -1162,6 +1165,12 @@
           ta.placeholder = inp.label || inp.name;
           ta.rows = 4;
           ta.addEventListener('input', updateExecuteState);
+          ta.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const text = e.clipboardData?.getData('text') ?? '';
+            ta.value = text.trim();
+            updateExecuteState();
+          });
           inputFields.set(inp.name, ta);
           const pasteWrapper = document.createElement('div');
           pasteWrapper.className = 'input-with-paste input-with-paste--textarea';
@@ -1170,6 +1179,16 @@
           pasteBtn.className = 'paste-btn';
           pasteBtn.title = 'Paste from clipboard';
           pasteBtn.textContent = '📋';
+          pasteBtn.tabIndex = -1;
+          pasteBtn.addEventListener('click', () => {
+            navigator.clipboard
+              .readText()
+              .then((text) => {
+                ta.value = text.trim();
+                updateExecuteState();
+              })
+              .catch(() => {});
+          });
           pasteWrapper.appendChild(ta);
           pasteWrapper.appendChild(pasteBtn);
           fieldDiv.appendChild(pasteWrapper);
@@ -1179,6 +1198,12 @@
           input.className = 'text-input';
           input.placeholder = inp.label || inp.name;
           input.addEventListener('input', updateExecuteState);
+          input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const text = e.clipboardData?.getData('text') ?? '';
+            input.value = text.trim();
+            updateExecuteState();
+          });
           inputFields.set(inp.name, input);
           const pasteWrapper = document.createElement('div');
           pasteWrapper.className = 'input-with-paste';
@@ -1187,6 +1212,16 @@
           pasteBtn.className = 'paste-btn';
           pasteBtn.title = 'Paste from clipboard';
           pasteBtn.textContent = '📋';
+          pasteBtn.tabIndex = -1;
+          pasteBtn.addEventListener('click', () => {
+            navigator.clipboard
+              .readText()
+              .then((text) => {
+                input.value = text.trim();
+                updateExecuteState();
+              })
+              .catch(() => {});
+          });
           pasteWrapper.appendChild(input);
           pasteWrapper.appendChild(pasteBtn);
           fieldDiv.appendChild(pasteWrapper);
@@ -1365,7 +1400,7 @@
         if (field instanceof HTMLInputElement && field.type === 'checkbox') {
           inputValues[name] = field.checked ? 'true' : 'false';
         } else {
-          inputValues[name] = field.value;
+          inputValues[name] = field.value.trim();
         }
       });
 
@@ -1375,8 +1410,10 @@
       function doExecute() {
         statusHint.textContent = L.statusExecuting;
         errorBox.textContent = '';
-        logViewer.style.display = 'none';
+        logViewer.style.display = 'block';
         logOutput.textContent = '';
+        logOutput.removeAttribute('data-raw-log');
+        logOutput.removeAttribute('data-filtered-log');
         logOutput.classList.remove('yaml-log-output--success', 'yaml-log-output--error');
         openInEditorBtn.style.display = 'none';
         copyToClipboardBtn.style.display = 'none';
@@ -1391,6 +1428,7 @@
           statusHint.textContent = '';
           win.__vscode.postMessage({ type: 'cancelOperation', opId: _scriptOpId });
         });
+        if (_scriptOpId) opIdToScriptId.set(_scriptOpId, script.id);
         win.__vscode.postMessage({
           type: 'executeYamlScript',
           scriptId: script.id,
@@ -1720,6 +1758,7 @@
     );
 
     // __endAction re-enables the button; then re-evaluate state (e.g. org may have disconnected)
+    if (data.opId) opIdToScriptId.delete(data.opId);
     win.__endAction(data.opId);
     const updater = executeStateUpdaters.get(data.scriptId);
     if (updater) updater();
@@ -1760,6 +1799,7 @@
     } else {
       openInEditorBtn.style.display = 'none';
       copyToClipboardBtn.style.display = 'none';
+      logViewer.style.display = 'none';
     }
   }
 
@@ -1795,6 +1835,28 @@
         case 'executeYamlScriptResult':
           handleExecuteResult(message.data);
           break;
+        case 'scriptLogChunk': {
+          const { opId, chunk } = message.data;
+          const scriptId = opIdToScriptId.get(opId);
+          if (!scriptId) break;
+          const chunkAccordion = /** @type {HTMLElement | null} */ (
+            scriptsList.querySelector(`[data-script-id="${CSS.escape(scriptId)}"]`)
+          );
+          if (!chunkAccordion) break;
+          const chunkViewer = /** @type {HTMLElement | null} */ (
+            chunkAccordion.querySelector('.yaml-log-viewer')
+          );
+          const chunkOutput = /** @type {HTMLElement | null} */ (
+            chunkAccordion.querySelector('.yaml-log-output')
+          );
+          if (!chunkViewer || !chunkOutput) break;
+          chunkViewer.style.display = 'block';
+          const prev = chunkOutput.getAttribute('data-raw-log') || '';
+          const next = prev + chunk;
+          chunkOutput.setAttribute('data-raw-log', next);
+          chunkOutput.textContent = next;
+          break;
+        }
         case 'executeYamlScriptError':
           // Unexpected throw from service — end the action and show error
           win.__endAction(message.data?.opId);
