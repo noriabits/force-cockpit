@@ -1,5 +1,11 @@
 # Force Cockpit
 
+[![Version](https://img.shields.io/visual-studio-marketplace/v/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Release](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml/badge.svg)](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml)
+[![License](https://img.shields.io/github/license/noriabits/force-cockpit)](https://github.com/noriabits/force-cockpit/blob/main/LICENSE)
+
 A VSCode extension that provides a Salesforce utilities cockpit. It connects to Salesforce orgs via the SF CLI and offers operational tools for monitoring and general utilities — all from within VSCode. Contact: Pablo Fernández Posadas
 
 ---
