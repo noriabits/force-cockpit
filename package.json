@@ -14,8 +14,7 @@
   "publisher": "noriabits",
   "icon": "media/fc-logo.png",
   "categories": [
-    "Other",
-    "Testing"
+    "Other"
   ],
   "repository": "noriabits/force-cockpit",
   "activationEvents": [],
