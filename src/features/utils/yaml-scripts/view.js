@@ -1547,7 +1547,9 @@
             i = j;
             textStart = i;
             continue;
-          } catch {}
+          } catch {
+            /* JSON parse failed — treat as plain text */
+          }
         }
       }
       i++;

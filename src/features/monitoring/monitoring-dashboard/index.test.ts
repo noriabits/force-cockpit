@@ -6,12 +6,14 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('./MonitoringDashboardService', () => ({
-  MonitoringDashboardService: vi.fn().mockImplementation(() => ({
-    loadConfigs: vi.fn(),
-    runQuery: vi.fn(),
-    runTableQuery: vi.fn(),
-    saveConfig: vi.fn(),
-  })),
+  MonitoringDashboardService: vi.fn().mockImplementation(function () {
+    return {
+      loadConfigs: vi.fn(),
+      runQuery: vi.fn(),
+      runTableQuery: vi.fn(),
+      saveConfig: vi.fn(),
+    };
+  }),
 }));
 
 function makeMemento(initial: Record<string, unknown> = {}): {
@@ -56,7 +58,7 @@ describe('monitoring snooze persistence', () => {
 
     const handler = feature.routes['runMonitoringQuery'].handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
-    const serviceInstance = (mockService as any).mock.results[0].value;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
       labels: ['A'],
       datasets: [{ data: [200] }],
@@ -75,6 +77,7 @@ describe('monitoring snooze persistence', () => {
   });
 
   it('prunes expired entries on load', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
     const expiredTime = Date.now() - 1000;
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({
@@ -96,7 +99,7 @@ describe('monitoring snooze persistence', () => {
     // Trigger a query for the "expired" config — should NOT be suppressed
     const handler = feature.routes['runMonitoringQuery'].handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
-    const serviceInstance = (mockService as any).mock.results[0].value;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
       labels: ['A'],
       datasets: [{ data: [200] }],
@@ -130,7 +133,7 @@ describe('monitoring snooze persistence', () => {
 
     const handler = feature.routes['runMonitoringQuery'].handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
-    const serviceInstance = (mockService as any).mock.results[0].value;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
       labels: ['A'],
       datasets: [{ data: [200] }],
@@ -175,7 +178,7 @@ describe('monitoring snooze persistence', () => {
 
     const handler = feature.routes['runMonitoringQuery'].handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
-    const serviceInstance = (mockService as any).mock.results[0].value;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
       labels: ['A'],
       datasets: [{ data: [200] }],
@@ -218,7 +221,7 @@ describe('monitoring snooze persistence', () => {
 
     const handler = feature.routes['runMonitoringQuery'].handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
-    const serviceInstance = (mockService as any).mock.results[0].value;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
       labels: ['A'],
       datasets: [{ data: [200] }],

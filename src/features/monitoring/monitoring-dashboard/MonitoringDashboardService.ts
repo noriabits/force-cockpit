@@ -189,7 +189,14 @@ export class MonitoringDashboardService {
       const valueFields = this._normalizeValueFields(parsed);
       if (!valueFields) return null;
 
-      return this._buildMonitoringConfig(parsed, id, folder, source, valueFields, validated.chartType);
+      return this._buildMonitoringConfig(
+        parsed,
+        id,
+        folder,
+        source,
+        valueFields,
+        validated.chartType,
+      );
     } catch {
       return null;
     }

@@ -174,10 +174,7 @@ describe('YamlScriptsService', () => {
         privatePath: '',
         workspaceRoot: '',
       });
-      const result: string = (svc as any).substituteSystemPlaceholders(
-        "'${orgUsername}'",
-        'apex',
-      );
+      const result: string = (svc as any).substituteSystemPlaceholders("'${orgUsername}'", 'apex');
       expect(result).toBe("'it''s@org.com'");
     });
 
@@ -192,10 +189,7 @@ describe('YamlScriptsService', () => {
         privatePath: '',
         workspaceRoot: '',
       });
-      const result: string = (svc as any).substituteSystemPlaceholders(
-        '"${orgUsername}"',
-        'js',
-      );
+      const result: string = (svc as any).substituteSystemPlaceholders('"${orgUsername}"', 'js');
       expect(result).toBe('"user\\"name@org.com"');
     });
 
@@ -273,7 +267,9 @@ describe('YamlScriptsService', () => {
     });
 
     it('parses a textarea input', () => {
-      const result = (svc as any).parseInputs([{ name: 'itemList', type: 'textarea', required: true }]);
+      const result = (svc as any).parseInputs([
+        { name: 'itemList', type: 'textarea', required: true },
+      ]);
       expect(result).toEqual([{ name: 'itemList', type: 'textarea', required: true }]);
     });
   });
@@ -296,7 +292,9 @@ describe('YamlScriptsService', () => {
     });
 
     it('serializes textarea input with required flag', () => {
-      const result = (svc as any).serializeInputs([{ name: 'items', type: 'textarea', required: true }]);
+      const result = (svc as any).serializeInputs([
+        { name: 'items', type: 'textarea', required: true },
+      ]);
       expect(result).toEqual([{ name: 'items', type: 'textarea', required: true }]);
     });
   });
@@ -658,7 +656,14 @@ describe('YamlScriptsService', () => {
 
     it('omits scriptFile when falsy', () => {
       const result = (svc as any).makeInvalidScript(
-        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', scriptFile: undefined },
+        {
+          id: 'cat/s',
+          folder: 'cat',
+          name: 'S',
+          description: '',
+          source: 'user',
+          scriptFile: undefined,
+        },
         'err',
       );
       expect(result.scriptFile).toBeUndefined();
@@ -666,7 +671,14 @@ describe('YamlScriptsService', () => {
 
     it('includes scriptFile when provided', () => {
       const result = (svc as any).makeInvalidScript(
-        { id: 'cat/s', folder: 'cat', name: 'S', description: '', source: 'user', scriptFile: 'my.cls' },
+        {
+          id: 'cat/s',
+          folder: 'cat',
+          name: 'S',
+          description: '',
+          source: 'user',
+          scriptFile: 'my.cls',
+        },
         'err',
       );
       expect(result.scriptFile).toBe('my.cls');
@@ -714,7 +726,10 @@ describe('YamlScriptsService', () => {
     it('returns null for a valid doc', () => {
       const result = (svc as any).validateYamlDoc(
         { name: 'S', apex: 'x' },
-        base.id, base.folder, base.source, [],
+        base.id,
+        base.folder,
+        base.source,
+        [],
       );
       expect(result).toBeNull();
     });
@@ -722,7 +737,10 @@ describe('YamlScriptsService', () => {
     it('returns invalid script when name is missing', () => {
       const result = (svc as any).validateYamlDoc(
         { apex: 'x' },
-        base.id, base.folder, base.source, [],
+        base.id,
+        base.folder,
+        base.source,
+        [],
       );
       expect(result?.invalid).toBe(true);
       expect(result?.error).toContain("'name'");
@@ -731,7 +749,10 @@ describe('YamlScriptsService', () => {
     it('returns invalid script when multiple script fields are set', () => {
       const result = (svc as any).validateYamlDoc(
         { name: 'S', apex: 'x', command: 'y' },
-        base.id, base.folder, base.source, [],
+        base.id,
+        base.folder,
+        base.source,
+        [],
       );
       expect(result?.invalid).toBe(true);
       expect(result?.error).toContain('Ambiguous');
@@ -740,7 +761,10 @@ describe('YamlScriptsService', () => {
     it('returns invalid script when no script field is present', () => {
       const result = (svc as any).validateYamlDoc(
         { name: 'S' },
-        base.id, base.folder, base.source, [],
+        base.id,
+        base.folder,
+        base.source,
+        [],
       );
       expect(result?.invalid).toBe(true);
       expect(result?.error).toContain('apex');
@@ -763,7 +787,13 @@ describe('YamlScriptsService', () => {
     it('returns content directly for an inline script', () => {
       const svc = makeService();
       const result = (svc as any).resolveScriptContent(
-        { apex: 'System.debug();' }, base.id, base.folder, base.source, [], 'apex', undefined,
+        { apex: 'System.debug();' },
+        base.id,
+        base.folder,
+        base.source,
+        [],
+        'apex',
+        undefined,
       );
       expect(result).toEqual({ content: 'System.debug();' });
     });
@@ -771,7 +801,13 @@ describe('YamlScriptsService', () => {
     it('returns invalid when workspaceRoot is empty and scriptFile is set', () => {
       const svc = makeService({ workspaceRoot: '' });
       const result = (svc as any).resolveScriptContent(
-        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'my.cls',
+        { name: 'S', description: '' },
+        base.id,
+        base.folder,
+        base.source,
+        [],
+        'apex',
+        'my.cls',
       );
       expect(result.invalid?.invalid).toBe(true);
       expect(result.invalid?.error).toContain('no workspace folder');
@@ -780,7 +816,13 @@ describe('YamlScriptsService', () => {
     it('returns invalid when scriptFile is outside the workspace', () => {
       const svc = makeService({ workspaceRoot: tmpDir });
       const result = (svc as any).resolveScriptContent(
-        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', '../outside.cls',
+        { name: 'S', description: '' },
+        base.id,
+        base.folder,
+        base.source,
+        [],
+        'apex',
+        '../outside.cls',
       );
       expect(result.invalid?.invalid).toBe(true);
       expect(result.invalid?.error).toContain('inside the workspace');
@@ -789,7 +831,13 @@ describe('YamlScriptsService', () => {
     it('returns invalid when scriptFile does not exist', () => {
       const svc = makeService({ workspaceRoot: tmpDir });
       const result = (svc as any).resolveScriptContent(
-        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'missing.cls',
+        { name: 'S', description: '' },
+        base.id,
+        base.folder,
+        base.source,
+        [],
+        'apex',
+        'missing.cls',
       );
       expect(result.invalid?.invalid).toBe(true);
       expect(result.invalid?.error).toContain('not found');
@@ -799,7 +847,13 @@ describe('YamlScriptsService', () => {
       fs.writeFileSync(path.join(tmpDir, 'my.cls'), 'System.debug();', 'utf8');
       const svc = makeService({ workspaceRoot: tmpDir });
       const result = (svc as any).resolveScriptContent(
-        { name: 'S', description: '' }, base.id, base.folder, base.source, [], 'apex', 'my.cls',
+        { name: 'S', description: '' },
+        base.id,
+        base.folder,
+        base.source,
+        [],
+        'apex',
+        'my.cls',
       );
       expect(result).toEqual({ content: 'System.debug();' });
     });

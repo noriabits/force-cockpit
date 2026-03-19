@@ -7,4 +7,5 @@ hljs.registerLanguage('apex', apex);
 hljs.registerLanguage('javascript', javascript);
 hljs.registerLanguage('bash', bash);
 
+// eslint-disable-next-line no-undef
 window.hljs = hljs;
