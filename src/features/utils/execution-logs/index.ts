@@ -40,6 +40,26 @@ export function createExecutionLogsFeature(logsDir: string): FeatureModuleFactor
           successType: 'openExecutionLogResult',
           errorType: 'openExecutionLogError',
         },
+        deleteExecutionLogs: {
+          handler: async (msg) => {
+            const filenames = msg.filenames as string[];
+            const count = filenames.length;
+            const label = count === 1 ? `"${filenames[0]}"` : `${count} logs`;
+            const confirmed = await vscode.window.showWarningMessage(
+              `Delete ${label}? This cannot be undone.`,
+              { modal: true },
+              'Delete',
+            );
+            if (confirmed !== 'Delete') return { deleted: false };
+            for (const filename of filenames) {
+              const absPath = path.join(logsDir, filename);
+              if (fs.existsSync(absPath)) fs.unlinkSync(absPath);
+            }
+            return { deleted: true, count };
+          },
+          successType: 'deleteExecutionLogsResult',
+          errorType: 'deleteExecutionLogsError',
+        },
       },
     };
   };

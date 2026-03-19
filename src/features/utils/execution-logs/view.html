@@ -1,5 +1,8 @@
 <div class="execution-logs-panel">
   <div class="execution-logs-toolbar">
+    <label class="logs-select-all-label" id="logs-select-all-label" style="display: none">
+      <input type="checkbox" id="logs-select-all" />
+    </label>
     <input
       type="text"
       class="text-input"
@@ -7,6 +10,7 @@
       placeholder="Search logs..."
       autocomplete="off"
     />
+    <button class="btn logs-delete-btn" id="logs-delete-btn" style="display: none">Delete</button>
   </div>
   <div id="logs-list" class="logs-list"></div>
   <div id="logs-empty" class="logs-empty">No execution logs yet.</div>
