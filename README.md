@@ -445,4 +445,13 @@ npm run build       # Build extension (copy assets + esbuild bundle)
 npm run watch       # Build in watch mode
 npm run compile     # TypeScript type-check only
 npm run package     # Build + create .vsix
+npm run audit:prod  # Check production dependencies for known vulnerabilities
 ```
+
+---
+
+## Security
+
+- **Dependency auditing**: Every PR runs `npm audit` against production dependencies in CI. [Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs when vulnerable packages have updates available.
+- **Webview CSP**: The webview uses a strict Content Security Policy with nonce-based script loading — no inline scripts are allowed.
+- **`.npmrc` hardening**: `audit-level=high`, `engine-strict=true`, and `save-exact=true` ensure safe and reproducible installs.

@@ -81,6 +81,7 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"src/features/**/*.{js,css,html}\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "audit:prod": "npm audit --audit-level=high --omit=dev",
     "package": "vsce package",
     "prepare": "husky",
     "install:ext": "code --install-extension force-cockpit-0.0.1.vsix"

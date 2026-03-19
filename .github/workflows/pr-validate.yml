@@ -58,10 +58,22 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@4
+      - uses: actions/setup-node@4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm audit --audit-level=high --omit=dev
+
   validate-build:
     name: Build & Package
     runs-on: ubuntu-latest
-    needs: [lint, format, typecheck, test]
+    needs: [lint, format, typecheck, test, security-audit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
