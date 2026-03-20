@@ -67,9 +67,9 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 ## Utils Tab — YAML Scripts
 
 <div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
-<div align="center"><img src="media/scriptEditView.png" alt="Script Editor" /></div>
 
 > Scripts can also be created and edited directly in the UI — no need to write YAML by hand.
+<div align="center"><img src="media/scriptEditView.png" alt="Script Editor" /></div>
 
 The **Scripts** sub-tab executes scripts defined in YAML files. Three script types are supported. Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 > [!TIP]
