@@ -1,0 +1,8 @@
+name: 🧪 Abort Tests
+description: Aborts all in-progress and queued Apex test runs.
+apex: |
+  List<ApexTestQueueItem> testItems = [SELECT Status FROM ApexTestQueueItem WHERE Status != 'Completed'];
+  for (ApexTestQueueItem atqi : testItems) {
+      atqi.Status = 'Aborted';
+  }
+  update testItems;

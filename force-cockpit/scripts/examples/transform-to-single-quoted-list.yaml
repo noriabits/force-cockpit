@@ -1,0 +1,33 @@
+name: 📄Transform to Single‑Quoted List
+description: Useful for generating SOQL‑friendly ('item1', 'item2', ...) lists.
+inputs:
+  - name: items
+    label: Items
+    type: textarea
+    required: true
+  - name: parenthesized
+    label: Parenthesized
+    type: checkbox
+    default: true
+js: |-
+  const input = '${items}';
+  const parenthesized = String('${parenthesized}').toLowerCase() === 'true';
+
+  if (input == null) return '';
+
+  const items = String(input)
+    .split(/\r?\n|,/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const quoted = items
+    .map(s => {
+      const escaped = s.replace(/'/g, `''`);
+      return `'${escaped}'`;
+    })
+    .join(', ');
+
+  // Conditionally add parentheses
+  const result = parenthesized ? `(${quoted})` : quoted;
+
+  this.log(result);

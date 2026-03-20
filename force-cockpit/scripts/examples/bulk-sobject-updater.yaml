@@ -1,0 +1,47 @@
+name: 👩‍🔧 Bulk SObject Updater
+description: >-
+  Batch-updates a specified field on records for a given sObject using dynamic
+  SOQL. Supports an optional where clause and configurable BatchSize; expects
+  object, field, newValue (and optionally where).
+inputs:
+  - name: sobject
+    label: sObject
+    required: true
+  - name: field
+    label: Field
+    required: true
+  - name: newValue
+    label: New value
+    required: true
+  - name: where
+    label: WHERE condition
+js: |-
+  const sobject = '${sobject}';
+  const field = '${field}';
+  const newValue = '${newValue}';
+  const where = `${where}`;
+
+  if (!sobject || !field) {
+    throw new Error('Missing required params: object, field');
+  }
+
+  const whereClause = where ? ` WHERE ${where}` : '';
+  const soql = `SELECT Id FROM ${sobject}${whereClause}`;
+  // For 100k+ use the bulk2.loadAndWaitForResults approach instead.
+  log('Updating records...');
+  const results = await connection
+    .query(soql)
+    .update(
+      { [field]: newValue },
+      sobject
+    );
+
+  const failedResults = results.filter(record => !record.success);
+  const successes = results.length - failedResults.length;
+
+  log(`Done. ${successes} updated, ${failedResults.length} failed`);
+
+  if (failedResults.length > 0) {
+    error(JSON.stringify(failedResults, null, 2));
+    throw new Error('One or more updates failed.');
+  }

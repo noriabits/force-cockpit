@@ -24,6 +24,7 @@ export interface MonitoringConfig {
   refreshInterval: number; // seconds, 0 = manual
   stacked?: boolean;
   source?: 'builtin' | 'user' | 'private';
+  position?: number;
 }
 
 export interface MonitoringQueryResult {
@@ -50,6 +51,7 @@ interface MonitoringRawDoc {
   chartType?: string;
   refreshInterval?: number;
   stacked?: boolean;
+  position?: number;
 }
 
 export class MonitoringDashboardService {
@@ -167,6 +169,10 @@ export class MonitoringDashboardService {
       data.stacked = true;
     }
 
+    if (typeof config.position === 'number') {
+      data.position = config.position;
+    }
+
     fs.writeFileSync(targetPath, yaml.dump(data), 'utf8');
 
     return { ...config, id, folder: resolvedFolder, source: isPrivate ? 'private' : 'user' };
@@ -269,7 +275,33 @@ export class MonitoringDashboardService {
       refreshInterval: Number(parsed.refreshInterval ?? 0),
       stacked: Boolean(parsed.stacked),
       source,
+      ...(typeof parsed.position === 'number' ? { position: parsed.position } : {}),
     };
+  }
+
+  savePositions(positions: Array<{ id: string; position: number; source: string }>): void {
+    for (const entry of positions) {
+      const basePath = entry.source === 'private' ? this.paths.privatePath : this.paths.userPath;
+      if (!basePath) continue;
+      const parts = entry.id.split('/');
+      const folder = parts[0];
+      const filename = parts.slice(1).join('/');
+      if (!filename) continue;
+      let filePath = path.join(basePath, folder, `${filename}.yaml`);
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(basePath, folder, `${filename}.yml`);
+        if (!fs.existsSync(filePath)) continue;
+      }
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const doc = yaml.load(content) as Record<string, unknown>;
+        if (!doc || typeof doc !== 'object') continue;
+        doc.position = entry.position;
+        fs.writeFileSync(filePath, yaml.dump(doc), 'utf8');
+      } catch {
+        // Skip files that can't be updated
+      }
+    }
   }
 
   private toSlug(name: string): string {

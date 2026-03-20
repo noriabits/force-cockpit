@@ -1,8 +1,8 @@
 # Force Cockpit
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/noriabits.force-cockpit)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Version](https://vsmarketplacebadges.dev/version/noriabits.force-cockpit.png)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Installs](https://vsmarketplacebadges.dev/installs/noriabits.force-cockpit.png)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
+[![Rating](https://vsmarketplacebadges.dev/rating/noriabits.force-cockpit.png)](https://marketplace.visualstudio.com/items?itemName=noriabits.force-cockpit)
 [![Release](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml/badge.svg)](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/noriabits/force-cockpit)](https://github.com/noriabits/force-cockpit/blob/main/LICENSE)
 
@@ -65,6 +65,8 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 ---
 
 ## Monitoring Tab
+
+<div align="center"><img src="media/monitoringTab.png" alt="Monitoring Tab" /></div>
 
 The Monitoring tab displays live charts built from SOQL queries. Each chart is defined by a YAML configuration file. Charts are rendered using [Chart.js](https://www.chartjs.org/) and can be refreshed manually or on a timer.
 
@@ -230,12 +232,7 @@ chartType: table
 
 ### Examples
 
-The extension ships with example charts under `force-cockpit/monitoring/examples/`:
-
-- **Open Orders by Status** — bar chart of orders grouped by status
-- **Accounts by Type** — bar chart of accounts grouped by type
-- **Open Orders** — metric card showing a live count
-- **Recent Orders** — table view of the last 20 orders
+There are example charts in this repository under `force-cockpit/monitoring/examples/`:
 
 ### Editing and saving charts in the UI
 
@@ -245,7 +242,11 @@ Each card has an **Edit** button that opens an inline form. Changes to the SOQL 
 
 ## Utils Tab — YAML Scripts
 
+<div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
+
 The **Scripts** sub-tab executes scripts defined in YAML files. Three script types are supported. Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+> [!TIP]
+> **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
 
 ```yaml
 # Apex script — requires org connection
@@ -333,47 +334,6 @@ apex: |
 ### Private scripts
 
 Check **Private** when creating or editing a script to save it to `force-cockpit/private/scripts/` instead of the shared folder. The extension automatically adds `force-cockpit/private/` to `.gitignore` on startup. Private scripts show a 🔒 badge and can be filtered with the **All / Shared / Private** control. You cannot save a private script with the same category + name as an existing shared one.
-
-### JS datafix example
-
-Because JS scripts use jsforce directly, they can query and update records in a loop without hitting Apex governor limits (no DML row limits, no CPU timeout). This makes them ideal for bulk datafixes that would otherwise require a Batch Apex class.
-
-```yaml
-name: Backfill Account Region
-description: Sets Region__c = 'EU' on all Accounts where it is blank. Processes in chunks of 200.
-js: |
-  const BATCH_SIZE = 200;
-  let updated = 0;
-  let done = false;
-
-  while (!done) {
-    const result = await query(
-      `SELECT Id FROM Account WHERE Region__c = null LIMIT ${BATCH_SIZE}`
-    );
-
-    if (result.records.length === 0) {
-      done = true;
-      break;
-    }
-
-    const records = result.records.map(r => ({
-      Id: r.Id,
-      Region__c: 'EU'
-    }));
-
-    const res = await connection.sobject('Account').update(records);
-    const successes = res.filter(r => r.success).length;
-    const failures = res.filter(r => !r.success).length;
-    updated += successes;
-
-    log(`Batch done — ${successes} updated, ${failures} failed`);
-    if (failures > 0) {
-      error(JSON.stringify(res.filter(r => !r.success), null, 2));
-    }
-  }
-
-  log(`\nDone. Total updated: ${updated}`);
-```
 
 ---
 

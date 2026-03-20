@@ -41,6 +41,8 @@
   const refreshTimers = new Map();
   /** @type {Set<string>} configIds currently being queried */
   const pendingQueries = new Set();
+  /** configId currently being dragged, or null */
+  let dragSrcId = /** @type {string | null} */ (null);
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   const monitoringPanel = /** @type {HTMLElement} */ (document.getElementById('monitoring-panel'));
@@ -155,7 +157,12 @@
 
   /** @param {any[]} newConfigs */
   function onConfigsLoaded(newConfigs) {
-    configs = newConfigs;
+    configs = newConfigs.slice().sort((a, b) => {
+      const pa = a.position ?? Infinity;
+      const pb = b.position ?? Infinity;
+      if (pa !== pb) return pa - pb;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
     renderAll(configs);
   }
 
@@ -347,9 +354,19 @@
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
+  function isFiltered() {
+    return (
+      activeFolder !== 'all' ||
+      activeSubFolder !== null ||
+      searchQuery !== '' ||
+      activeVisibility !== 'all'
+    );
+  }
+
   function applyFilters() {
     const cards = grid.querySelectorAll('.card[data-config-id]');
     let visibleCount = 0;
+    const filtered = isFiltered();
 
     for (const card of cards) {
       const folder = card.getAttribute('data-folder') || '';
@@ -373,8 +390,14 @@
 
       const searchMatch = !searchQuery || search.includes(searchQuery);
       const visible = visibilityMatch && folderMatch && searchMatch;
-      /** @type {HTMLElement} */ (card).style.display = visible ? '' : 'none';
+      const cardEl = /** @type {HTMLElement} */ (card);
+      cardEl.style.display = visible ? '' : 'none';
       if (visible) visibleCount++;
+
+      // Enable/disable drag based on filter state
+      /** @type {any} */ (cardEl).draggable = !filtered;
+      const handle = cardEl.querySelector('.monitoring-drag-handle');
+      if (handle) /** @type {HTMLElement} */ (handle).style.display = filtered ? 'none' : '';
     }
 
     // Also check "new card" in edit mode (no data-config-id)
@@ -383,6 +406,21 @@
 
     noResults.textContent = L.noResults;
     noResults.style.display = visibleCount === 0 && configs.length > 0 ? '' : 'none';
+  }
+
+  // ── Card ordering ───────────────────────────────────────────────────────────
+  function saveCardOrder() {
+    const allCards = Array.from(grid.querySelectorAll('.card[data-config-id]'));
+    const positions = allCards.map((card, idx) => ({
+      id: card.getAttribute('data-config-id') || '',
+      position: idx,
+      source: card.getAttribute('data-source') || '',
+    }));
+    for (const { id, position } of positions) {
+      const cfg = configs.find((/** @type {any} */ c) => c.id === id);
+      if (cfg) cfg.position = position;
+    }
+    vscode.postMessage({ type: 'saveMonitoringPositions', positions });
   }
 
   // ── Build view-mode card ───────────────────────────────────────────────────
@@ -428,6 +466,73 @@
     card.setAttribute('data-folder', cfg.folder);
     card.setAttribute('data-source', cfg.source || '');
     card.setAttribute('data-search-text', cfg.name + ' ' + cfg.description + ' ' + cfg.folder);
+    card.draggable = true;
+
+    card.addEventListener('dragstart', (e) => {
+      dragSrcId = cfg.id;
+      card.classList.add('monitoring-card--dragging');
+      /** @type {DataTransfer} */ (e.dataTransfer).effectAllowed = 'move';
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('monitoring-card--dragging');
+      dragSrcId = null;
+      grid
+        .querySelectorAll('.monitoring-card--drag-over-before, .monitoring-card--drag-over-after')
+        .forEach((el) => {
+          el.classList.remove(
+            'monitoring-card--drag-over-before',
+            'monitoring-card--drag-over-after',
+          );
+        });
+    });
+
+    card.addEventListener('dragover', (e) => {
+      if (!dragSrcId || dragSrcId === cfg.id) return;
+      e.preventDefault();
+      /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = 'move';
+      const rect = card.getBoundingClientRect();
+      const isBefore = /** @type {DragEvent} */ (e).clientY < rect.top + rect.height / 2;
+      grid
+        .querySelectorAll('.monitoring-card--drag-over-before, .monitoring-card--drag-over-after')
+        .forEach((el) => {
+          el.classList.remove(
+            'monitoring-card--drag-over-before',
+            'monitoring-card--drag-over-after',
+          );
+        });
+      card.classList.add(
+        isBefore ? 'monitoring-card--drag-over-before' : 'monitoring-card--drag-over-after',
+      );
+    });
+
+    card.addEventListener('dragleave', () => {
+      card.classList.remove(
+        'monitoring-card--drag-over-before',
+        'monitoring-card--drag-over-after',
+      );
+    });
+
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!dragSrcId || dragSrcId === cfg.id) return;
+      const dragCard = /** @type {HTMLElement | null} */ (
+        grid.querySelector(`.card[data-config-id="${dragSrcId}"]`)
+      );
+      if (!dragCard) return;
+      const rect = card.getBoundingClientRect();
+      const isBefore = /** @type {DragEvent} */ (e).clientY < rect.top + rect.height / 2;
+      card.classList.remove(
+        'monitoring-card--drag-over-before',
+        'monitoring-card--drag-over-after',
+      );
+      if (isBefore) {
+        grid.insertBefore(dragCard, card);
+      } else {
+        grid.insertBefore(dragCard, card.nextSibling);
+      }
+      saveCardOrder();
+    });
 
     card.appendChild(buildCardHeader(cfg));
 
@@ -454,6 +559,12 @@
   function buildCardHeader(cfg) {
     const header = document.createElement('div');
     header.className = 'monitoring-card-header';
+
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'monitoring-drag-handle';
+    dragHandle.textContent = '⠿';
+    dragHandle.title = 'Drag to reorder';
+    header.appendChild(dragHandle);
 
     const title = document.createElement('span');
     title.className = 'monitoring-card-title';

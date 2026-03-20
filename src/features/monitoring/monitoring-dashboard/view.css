@@ -75,6 +75,7 @@
   position: relative;
   height: 240px;
   width: 100%;
+  overflow: hidden;
 }
 
 .monitoring-canvas-wrapper canvas {
@@ -261,4 +262,36 @@
 .monitoring-preview-wrapper {
   position: relative;
   min-height: 60px;
+  flex-shrink: 0;
+}
+
+/* ── Drag handle ── */
+.monitoring-drag-handle {
+  cursor: grab;
+  color: var(--vscode-descriptionForeground);
+  font-size: 14px;
+  padding: 0 4px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  line-height: 1;
+  user-select: none;
+}
+
+.monitoring-drag-handle:hover {
+  opacity: 1;
+}
+
+/* Dragging state */
+.monitoring-card--dragging {
+  opacity: 0.4;
+  outline: 2px dashed var(--vscode-focusBorder);
+}
+
+/* Drop target indicator */
+.monitoring-card--drag-over-before {
+  border-top: 2px solid var(--vscode-focusBorder);
+}
+
+.monitoring-card--drag-over-after {
+  border-bottom: 2px solid var(--vscode-focusBorder);
 }

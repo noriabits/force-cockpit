@@ -177,6 +177,16 @@ export function createMonitoringDashboardFeature(paths: {
           successType: 'saveMonitoringConfigResult',
           errorType: 'saveMonitoringConfigError',
         },
+        saveMonitoringPositions: {
+          handler: async (msg) => {
+            service.savePositions(
+              msg.positions as Array<{ id: string; position: number; source: string }>,
+            );
+            return {};
+          },
+          successType: 'saveMonitoringPositionsResult',
+          errorType: 'saveMonitoringPositionsError',
+        },
       },
     };
   };
