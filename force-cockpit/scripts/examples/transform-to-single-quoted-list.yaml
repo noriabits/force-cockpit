@@ -1,5 +1,5 @@
-name: 📄Transform to Single‑Quoted List
-description: Useful for generating SOQL‑friendly ('item1', 'item2', ...) lists.
+name: 📄Transform to Single-Quoted List
+description: Useful for generating SOQL-friendly ('item1', 'item2', ...) lists.
 inputs:
   - name: items
     label: Items

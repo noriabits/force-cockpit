@@ -64,6 +64,103 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 
 ---
 
+## Utils Tab — YAML Scripts
+
+<div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
+
+The **Scripts** sub-tab executes scripts defined in YAML files. Three script types are supported. Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+> [!TIP]
+> **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
+
+```yaml
+# Apex script — requires org connection
+name: My Apex Script
+description: What this script does.
+apex: |
+  System.debug('Hello from Apex');
+
+# Terminal command — no org connection required
+name: My Command
+description: Runs a local shell command.
+command: npm run build
+
+# JavaScript script — runs in Node.js VM sandbox, org connection is optional
+name: My JS Script
+description: Query Salesforce with jsforce.
+js: |
+  const result = await query("SELECT Id, Name FROM Account LIMIT 5");
+  log(JSON.stringify(result.records, null, 2));
+```
+
+Exactly one of `apex:`, `command:`, or `js:` is required. Click **Execute** on any script card to run it.
+
+### Configurable Inputs
+
+Scripts can declare input variables that are prompted at execution time. Add an `inputs:` section to your YAML:
+
+```yaml
+name: Update Order Status
+description: Updates an order and its line items.
+inputs:
+  - name: orderId
+    label: Order ID
+    required: true
+  - name: status
+    label: Status
+    type: picklist
+    required: true
+    options:
+      - New
+      - Submitted
+      - Completed
+      - Cancelled
+      - In Progress
+apex: |
+  Id orderId = '${orderId}';
+  // ... use orderId and status in your Apex code
+```
+
+Each input supports:
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Variable identifier (alphanumeric + underscore) — used as `${name}` in the script body |
+| `label` | No | Display label (defaults to `name`) |
+| `type` | No | `string` (text input, default) or `picklist` (dropdown) |
+| `required` | No | If `true`, Execute is disabled until the field is filled |
+| `options` | Picklist only | List of selectable values |
+
+Write `${variableName}` in your script code where you want the value substituted. Escaping is handled automatically (Apex-safe for `apex`, JSON-safe for `js`, raw for `command`).
+
+### System Placeholders
+
+In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
+
+| Placeholder | Description |
+|-------------|-------------|
+| `${orgUsername}` | Salesforce username (not alias) of the connected org |
+
+System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
+
+```yaml
+name: Show My User
+apex: |
+  System.debug('Running as: ${orgUsername}');
+```
+
+| Type | Badge | Org required | Output |
+|------|-------|-------------|--------|
+| Apex | Blue | Yes | Debug log (USER_DEBUG filter available) |
+| Command | Purple | No | stdout/stderr |
+| JavaScript | Green | No | `log()` / `console.log()` output |
+
+**JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
+
+### Private scripts
+
+Check **Private** when creating or editing a script to save it to `force-cockpit/private/scripts/` instead of the shared folder. The extension automatically adds `force-cockpit/private/` to `.gitignore` on startup. Private scripts show a 🔒 badge and can be filtered with the **All / Shared / Private** control. You cannot save a private script with the same category + name as an existing shared one.
+
+---
+
 ## Monitoring Tab
 
 <div align="center"><img src="media/monitoringTab.png" alt="Monitoring Tab" /></div>
@@ -232,108 +329,12 @@ chartType: table
 
 ### Examples
 
-There are example charts in this repository under `force-cockpit/monitoring/examples/`:
+> [!TIP]
+> **Repository examples:** There are example charts in this repository under `force-cockpit/monitoring/examples/`.
 
 ### Editing and saving charts in the UI
 
 Each card has an **Edit** button that opens an inline form. Changes to the SOQL field trigger an auto-preview after 800 ms. Check **Private** to save to the private folder; leave unchecked to save to the shared workspace path. Clicking **Save** writes the YAML — it never overwrites bundled extension charts.
-
----
-
-## Utils Tab — YAML Scripts
-
-<div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
-
-The **Scripts** sub-tab executes scripts defined in YAML files. Three script types are supported. Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
-> [!TIP]
-> **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
-
-```yaml
-# Apex script — requires org connection
-name: My Apex Script
-description: What this script does.
-apex: |
-  System.debug('Hello from Apex');
-
-# Terminal command — no org connection required
-name: My Command
-description: Runs a local shell command.
-command: npm run build
-
-# JavaScript script — runs in Node.js VM sandbox, org connection is optional
-name: My JS Script
-description: Query Salesforce with jsforce.
-js: |
-  const result = await query("SELECT Id, Name FROM Account LIMIT 5");
-  log(JSON.stringify(result.records, null, 2));
-```
-
-Exactly one of `apex:`, `command:`, or `js:` is required. Click **Execute** on any script card to run it.
-
-### Configurable Inputs
-
-Scripts can declare input variables that are prompted at execution time. Add an `inputs:` section to your YAML:
-
-```yaml
-name: Update Order Status
-description: Updates an order and its line items.
-inputs:
-  - name: orderId
-    label: Order ID
-    required: true
-  - name: status
-    label: Status
-    type: picklist
-    required: true
-    options:
-      - New
-      - Submitted
-      - Completed
-      - Cancelled
-      - In Progress
-apex: |
-  Id orderId = '${orderId}';
-  // ... use orderId and status in your Apex code
-```
-
-Each input supports:
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Variable identifier (alphanumeric + underscore) — used as `${name}` in the script body |
-| `label` | No | Display label (defaults to `name`) |
-| `type` | No | `string` (text input, default) or `picklist` (dropdown) |
-| `required` | No | If `true`, Execute is disabled until the field is filled |
-| `options` | Picklist only | List of selectable values |
-
-Write `${variableName}` in your script code where you want the value substituted. Escaping is handled automatically (Apex-safe for `apex`, JSON-safe for `js`, raw for `command`).
-
-### System Placeholders
-
-In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
-
-| Placeholder | Description |
-|-------------|-------------|
-| `${orgUsername}` | Salesforce username (not alias) of the connected org |
-
-System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
-
-```yaml
-name: Show My User
-apex: |
-  System.debug('Running as: ${orgUsername}');
-```
-
-| Type | Badge | Org required | Output |
-|------|-------|-------------|--------|
-| Apex | Blue | Yes | Debug log (USER_DEBUG filter available) |
-| Command | Purple | No | stdout/stderr |
-| JavaScript | Green | No | `log()` / `console.log()` output |
-
-**JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
-
-### Private scripts
-
-Check **Private** when creating or editing a script to save it to `force-cockpit/private/scripts/` instead of the shared folder. The extension automatically adds `force-cockpit/private/` to `.gitignore` on startup. Private scripts show a 🔒 badge and can be filtered with the **All / Shared / Private** control. You cannot save a private script with the same category + name as an existing shared one.
 
 ---
 
