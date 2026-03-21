@@ -172,11 +172,10 @@ The Monitoring tab displays live charts built from SOQL queries. Each chart is d
 
 ### Where charts come from
 
-Charts are loaded from three sources (merged at runtime, later wins):
+Charts are loaded from two sources (merged at runtime, later wins):
 
 | Source | Path | Purpose |
 |--------|------|---------|
-| **Bundled** | `{extension}/force-cockpit/monitoring/{category}/*.yaml` | Shared defaults shipped with the extension |
 | **User-defined** | `{workspace}/force-cockpit/monitoring/{category}/*.yaml` | Your own charts, committed to git |
 | **Private** | `{workspace}/force-cockpit/private/monitoring/{category}/*.yaml` | Personal charts, **not** committed to git |
 
@@ -423,5 +422,4 @@ npm run audit:prod  # Check production dependencies for known vulnerabilities
 ## Security
 
 - **Dependency auditing**: Every PR runs `npm audit` against production dependencies in CI. [Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs when vulnerable packages have updates available.
-- **Webview CSP**: The webview uses a strict Content Security Policy with nonce-based script loading — no inline scripts are allowed.
 - **`.npmrc` hardening**: `audit-level=high`, `engine-strict=true`, and `save-exact=true` ensure safe and reproducible installs.

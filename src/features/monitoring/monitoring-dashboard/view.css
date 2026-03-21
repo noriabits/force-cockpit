@@ -174,6 +174,68 @@
   margin-top: 4px;
 }
 
+/* ── Category combobox ── */
+.monitoring-folder-combobox {
+  position: relative;
+  display: flex;
+}
+
+.monitoring-folder-combobox .text-input {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.monitoring-folder-toggle {
+  flex-shrink: 0;
+  padding: 0 6px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-left: none;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.monitoring-folder-toggle:hover {
+  background: var(--vscode-inputOption-hoverBackground);
+}
+
+.monitoring-folder-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  margin-top: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.monitoring-folder-dropdown.open {
+  display: block;
+}
+
+.monitoring-folder-option {
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+}
+
+.monitoring-folder-option:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
 /* ── Metric card ── */
 .monitoring-metric-display {
   display: flex;
