@@ -724,12 +724,7 @@
     );
 
     // Category
-    form.appendChild(
-      makeFormRow(
-        L.labelCategory,
-        makeInput('text', cfg.folder, L.placeholderCategory, 'monitoring-edit-folder'),
-      ),
-    );
+    form.appendChild(makeFormRow(L.labelCategory, makeFolderCombobox(cfg.folder)));
 
     // Description
     form.appendChild(
@@ -1107,6 +1102,70 @@
     input.placeholder = placeholder || '';
     if (id) input.id = id;
     return input;
+  }
+
+  /**
+   * Build a combobox for the Category field (text input + dropdown of existing folders).
+   * @param {string} currentValue
+   * @returns {HTMLDivElement}
+   */
+  function makeFolderCombobox(currentValue) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'monitoring-folder-combobox';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'text-input';
+    input.value = currentValue || '';
+    input.placeholder = L.placeholderCategory;
+    input.id = 'monitoring-edit-folder';
+    input.autocomplete = 'off';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'monitoring-folder-toggle';
+    toggle.tabIndex = -1;
+    toggle.innerHTML = '&#9662;';
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'monitoring-folder-dropdown';
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(toggle);
+    wrapper.appendChild(dropdown);
+
+    // Populate dropdown from existing config folders
+    const folders = [...new Set(configs.map((/** @type {any} */ c) => c.folder))].sort();
+    for (const folder of folders) {
+      const opt = document.createElement('div');
+      opt.className = 'monitoring-folder-option';
+      opt.textContent = folder;
+      opt.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = folder;
+        dropdown.classList.remove('open');
+      });
+      dropdown.appendChild(opt);
+    }
+
+    // Toggle button
+    toggle.addEventListener('click', () => {
+      if (dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+      } else if (dropdown.children.length > 0) {
+        dropdown.classList.add('open');
+      }
+      input.focus();
+    });
+
+    // Click-outside close
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(/** @type {Node} */ (e.target))) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    return wrapper;
   }
 
   /** @param {string} currentFormat @returns {HTMLSelectElement} */
