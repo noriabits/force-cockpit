@@ -204,6 +204,80 @@ describe('monitoring snooze persistence', () => {
     expect(snoozeUntil).toBe(midnight.getTime());
   });
 
+  it('prunes cooldowns when threshold is removed on save', async () => {
+    showWarningMessage.mockResolvedValue('Snooze 1h');
+
+    const futureTime = Date.now() + 3_600_000;
+    const memento = makeMemento({
+      'monitoring.notificationCooldowns': { 'chart1:0': futureTime, 'other:0': futureTime },
+    });
+    const createFeature = await loadFactory();
+    const factory = createFeature({
+      builtInPath: '',
+      userPath: '',
+      privatePath: '',
+      workspaceState: memento as any,
+    });
+    const cm = { query: vi.fn() } as any;
+    const feature = factory(cm);
+
+    const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
+    // saveConfig returns the saved config (threshold removed)
+    serviceInstance.saveConfig.mockReturnValue({
+      id: 'chart1',
+      name: 'Chart 1',
+      valueFields: [{ field: 'Cnt', label: 'Count' }], // no threshold
+    });
+
+    const saveHandler = feature.routes['saveMonitoringConfig'].handler;
+    await saveHandler({ config: { id: 'chart1' }, isPrivate: false });
+
+    // chart1:0 should be pruned, other:0 should remain
+    const savedData = memento.update.mock.calls.at(-1)?.[1] as Record<string, number>;
+    expect(savedData).not.toHaveProperty('chart1:0');
+    expect(savedData).toHaveProperty('other:0');
+  });
+
+  it('prunes cooldowns for out-of-bounds field indexes on save', async () => {
+    const futureTime = Date.now() + 3_600_000;
+    const memento = makeMemento({
+      'monitoring.notificationCooldowns': {
+        'chart1:0': futureTime,
+        'chart1:1': futureTime,
+        'chart1:2': futureTime,
+      },
+    });
+    const createFeature = await loadFactory();
+    const factory = createFeature({
+      builtInPath: '',
+      userPath: '',
+      privatePath: '',
+      workspaceState: memento as any,
+    });
+    const cm = { query: vi.fn() } as any;
+    const feature = factory(cm);
+
+    const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
+    // Save with only 1 valueField (had 3 before), keeping threshold on field 0
+    serviceInstance.saveConfig.mockReturnValue({
+      id: 'chart1',
+      name: 'Chart 1',
+      valueFields: [{ field: 'Cnt', label: 'Count', threshold: 100 }],
+    });
+
+    const saveHandler = feature.routes['saveMonitoringConfig'].handler;
+    await saveHandler({ config: { id: 'chart1' }, isPrivate: false });
+
+    const savedData = memento.update.mock.calls.at(-1)?.[1] as Record<string, number>;
+    // field 0 still has threshold — keep it
+    expect(savedData).toHaveProperty('chart1:0');
+    // fields 1 and 2 are out of bounds — pruned
+    expect(savedData).not.toHaveProperty('chart1:1');
+    expect(savedData).not.toHaveProperty('chart1:2');
+  });
+
   it('does not persist the default 1-minute cooldown', async () => {
     // User dismisses the notification without snoozing
     showWarningMessage.mockResolvedValue(undefined);
