@@ -858,4 +858,133 @@ describe('YamlScriptsService', () => {
       expect(result).toEqual({ content: 'System.debug();' });
     });
   });
+
+  // ─── filterUserDebug / formatJson defaults ───────────────────────────────
+
+  describe('filterUserDebug and formatJson defaults', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'svc-defaults-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('parses filter-user-debug:true on apex script', async () => {
+      writeScript(
+        tmpDir,
+        'cat',
+        's.yaml',
+        'name: S\napex: System.debug();\nfilter-user-debug: true\n',
+      );
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].filterUserDebug).toBe(true);
+      expect(scripts[0].formatJson).toBeUndefined();
+    });
+
+    it('parses format-json:true on apex script', async () => {
+      writeScript(tmpDir, 'cat', 's.yaml', 'name: S\napex: System.debug();\nformat-json: true\n');
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].formatJson).toBe(true);
+      expect(scripts[0].filterUserDebug).toBeUndefined();
+    });
+
+    it('parses both flags together on apex script', async () => {
+      writeScript(
+        tmpDir,
+        'cat',
+        's.yaml',
+        'name: S\napex: System.debug();\nfilter-user-debug: true\nformat-json: true\n',
+      );
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].filterUserDebug).toBe(true);
+      expect(scripts[0].formatJson).toBe(true);
+    });
+
+    it('leaves both fields undefined when absent', async () => {
+      writeScript(tmpDir, 'cat', 's.yaml', 'name: S\napex: System.debug();\n');
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].filterUserDebug).toBeUndefined();
+      expect(scripts[0].formatJson).toBeUndefined();
+    });
+
+    it('ignores filter-user-debug on command script', async () => {
+      writeScript(tmpDir, 'cat', 's.yaml', 'name: S\ncommand: echo hi\nfilter-user-debug: true\n');
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].filterUserDebug).toBeUndefined();
+    });
+
+    it('ignores format-json on js script', async () => {
+      writeScript(tmpDir, 'cat', 's.yaml', "name: S\njs: log('hi');\nformat-json: true\n");
+      const svc = makeService({ userPath: tmpDir });
+      const scripts = await svc.loadScripts();
+      expect(scripts[0].formatJson).toBeUndefined();
+    });
+
+    it('buildYamlData includes filter-user-debug when filterUserDebug set on apex', () => {
+      const svc = makeService();
+      const data = (svc as any).buildYamlData({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script: 'System.debug();',
+        folder: 'cat',
+        filterUserDebug: true,
+      });
+      expect(data['filter-user-debug']).toBe(true);
+      expect(data['format-json']).toBeUndefined();
+    });
+
+    it('buildYamlData includes format-json when formatJson set on apex', () => {
+      const svc = makeService();
+      const data = (svc as any).buildYamlData({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script: 'System.debug();',
+        folder: 'cat',
+        formatJson: true,
+      });
+      expect(data['format-json']).toBe(true);
+    });
+
+    it('buildYamlData does not include flags for non-apex type', () => {
+      const svc = makeService();
+      const data = (svc as any).buildYamlData({
+        name: 'S',
+        description: '',
+        type: 'command',
+        script: 'echo hi',
+        folder: 'cat',
+        filterUserDebug: true,
+        formatJson: true,
+      });
+      expect(data['filter-user-debug']).toBeUndefined();
+      expect(data['format-json']).toBeUndefined();
+    });
+
+    it('saveScript return includes filterUserDebug and formatJson', () => {
+      const userDir = path.join(tmpDir, 'user');
+      const svc = makeService({ userPath: userDir });
+      const saved = svc.saveScript({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script: 'System.debug();',
+        folder: 'cat',
+        filterUserDebug: true,
+        formatJson: true,
+        inputs: [],
+      });
+      expect(saved.filterUserDebug).toBe(true);
+      expect(saved.formatJson).toBe(true);
+    });
+  });
 });
