@@ -270,7 +270,7 @@
           .map((f) => f.slice(value.length + 1));
         const uniqueSubs = [...new Set(subFolders)].sort();
         if (uniqueSubs.length > 0) {
-          buildSubPills(value, uniqueSubs);
+          buildSubPills(uniqueSubs);
         }
       }
 
@@ -320,11 +320,8 @@
     buildPills(folders);
   }
 
-  /**
-   * @param {string} parentFolder
-   * @param {string[]} subFolders
-   */
-  function buildSubPills(parentFolder, subFolders) {
+  /** @param {string[]} subFolders */
+  function buildSubPills(subFolders) {
     subPillsEl.innerHTML = '';
     subPillsEl.classList.add('visible');
 
@@ -469,7 +466,10 @@
     card.draggable = true;
 
     card.addEventListener('dragstart', (e) => {
-      if (grid.querySelector('.monitoring-edit-form')) return;
+      if (grid.querySelector('.monitoring-edit-form')) {
+        e.preventDefault();
+        return;
+      }
       dragSrcId = cfg.id;
       card.classList.add('monitoring-card--dragging');
       /** @type {DataTransfer} */ (e.dataTransfer).effectAllowed = 'move';
