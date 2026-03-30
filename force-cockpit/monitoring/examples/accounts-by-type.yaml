@@ -9,6 +9,5 @@ labelField: Type
 valueFields:
   - field: Total
     label: Accounts
-    threshold: 0
 chartType: bar
 refreshInterval: 0
