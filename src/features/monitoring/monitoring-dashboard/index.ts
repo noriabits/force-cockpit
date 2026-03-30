@@ -71,6 +71,23 @@ function checkThresholds(
   return breaches;
 }
 
+function pruneCooldowns(
+  configId: string,
+  valueFields: MonitoringValueField[],
+  workspaceState: vscode.Memento,
+): void {
+  let changed = false;
+  for (const [key] of notificationCooldowns) {
+    if (!key.startsWith(configId + ':')) continue;
+    const idx = parseInt(key.split(':')[1], 10);
+    if (isNaN(idx) || idx >= valueFields.length || valueFields[idx]?.threshold == null) {
+      notificationCooldowns.delete(key);
+      changed = true;
+    }
+  }
+  if (changed) persistSnoozes(workspaceState);
+}
+
 function fireBreachNotifications(
   breaches: Array<{ message: string; cooldownKey: string }>,
   workspaceState: vscode.Memento,
@@ -172,6 +189,7 @@ export function createMonitoringDashboardFeature(paths: {
               msg.config as MonitoringConfig,
               msg.isPrivate as boolean,
             );
+            pruneCooldowns(saved.id, saved.valueFields, paths.workspaceState);
             return { config: saved };
           },
           successType: 'saveMonitoringConfigResult',

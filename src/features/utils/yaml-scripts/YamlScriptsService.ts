@@ -17,6 +17,8 @@ type ParsedYamlDoc = {
   'command-file'?: string;
   'js-file'?: string;
   inputs?: unknown[];
+  'filter-user-debug'?: boolean;
+  'format-json'?: boolean;
 };
 
 export interface ScriptInput {
@@ -38,6 +40,8 @@ export interface YamlScript {
   scriptFile?: string; // relative path (to workspaceRoot) when using apex-file/js-file/command-file
   source: 'builtin' | 'user' | 'private';
   inputs?: ScriptInput[];
+  filterUserDebug?: boolean; // apex only: pre-check "Show only USER_DEBUG lines"
+  formatJson?: boolean; // apex only: pre-check "Format JSON"
   invalid?: true; // present only when the file has a structural problem
   error?: string; // human-readable description of the problem
 }
@@ -59,6 +63,8 @@ export interface SaveScriptInput {
   script: string;
   scriptFile?: string; // when set, write apex-file/js-file/command-file instead of inline
   inputs?: ScriptInput[];
+  filterUserDebug?: boolean; // apex only
+  formatJson?: boolean; // apex only
 }
 
 export class YamlScriptsService {
@@ -317,6 +323,8 @@ export class YamlScriptsService {
       ...(input.scriptFile ? { scriptFile: input.scriptFile } : {}),
       source: isPrivate ? 'private' : 'user',
       ...(input.inputs?.length ? { inputs: input.inputs } : {}),
+      ...(input.filterUserDebug ? { filterUserDebug: true } : {}),
+      ...(input.formatJson ? { formatJson: true } : {}),
     };
   }
 
@@ -399,6 +407,8 @@ export class YamlScriptsService {
       ...(input.scriptFile ? { scriptFile: input.scriptFile } : {}),
       source: isPrivate ? 'private' : 'user',
       ...(input.inputs?.length ? { inputs: input.inputs } : {}),
+      ...(input.filterUserDebug ? { filterUserDebug: true } : {}),
+      ...(input.formatJson ? { formatJson: true } : {}),
     };
   }
 
@@ -442,6 +452,8 @@ export class YamlScriptsService {
       else if (input.type === 'js') data.js = input.script;
       else data.command = input.script;
     }
+    if (input.type === 'apex' && input.filterUserDebug) data['filter-user-debug'] = true;
+    if (input.type === 'apex' && input.formatJson) data['format-json'] = true;
     return data;
   }
 
@@ -558,6 +570,12 @@ export class YamlScriptsService {
       ...(scriptFile ? { scriptFile } : {}),
       source,
       ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
+      ...(type === 'apex' && (parseResult as ParsedYamlDoc)['filter-user-debug']
+        ? { filterUserDebug: true }
+        : {}),
+      ...(type === 'apex' && (parseResult as ParsedYamlDoc)['format-json']
+        ? { formatJson: true }
+        : {}),
     };
   }
 

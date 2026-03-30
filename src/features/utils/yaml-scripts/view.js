@@ -62,6 +62,17 @@
     document.getElementById('yaml-form-delete-btn')
   );
 
+  // ── Apex default output settings refs ────────────────────────────────────
+  const formApexDefaultsRow = /** @type {HTMLElement} */ (
+    document.getElementById('yaml-form-apex-defaults-row')
+  );
+  const formFilterUserDebug = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-filter-user-debug')
+  );
+  const formFormatJson = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-format-json')
+  );
+
   // ── Inputs form refs ──────────────────────────────────────────────────────
   const formInputsList = /** @type {HTMLElement} */ (
     document.getElementById('yaml-form-inputs-list')
@@ -214,6 +225,12 @@
   formFilePath.placeholder = L.placeholderFilePath;
   formBrowseBtn.textContent = L.btnBrowse;
   if (formPrivateLabel) formPrivateLabel.textContent = L.labelPrivate;
+  const apexDefaultsLabel = document.getElementById('yaml-form-apex-defaults-label');
+  const filterUserDebugLabel = document.getElementById('yaml-form-filter-user-debug-label');
+  const formatJsonLabel = document.getElementById('yaml-form-format-json-label');
+  if (apexDefaultsLabel) apexDefaultsLabel.textContent = L.labelDefaultOutputSettings;
+  if (filterUserDebugLabel) filterUserDebugLabel.textContent = L.labelDefaultFilterUserDebug;
+  if (formatJsonLabel) formatJsonLabel.textContent = L.labelDefaultFormatJson;
 
   // ── Visibility filter ──────────────────────────────────────────────────────
 
@@ -457,6 +474,17 @@
     formSaveBtn.disabled = formFolder.value.trim() === '';
   }
 
+  function updateApexDefaultsVisibility() {
+    if (formApexDefaultsRow) {
+      formApexDefaultsRow.style.display = formType.value === 'apex' ? '' : 'none';
+    }
+    // Reset checkboxes when switching away from apex to avoid stale state
+    if (formType.value !== 'apex') {
+      if (formFilterUserDebug) formFilterUserDebug.checked = false;
+      if (formFormatJson) formFormatJson.checked = false;
+    }
+  }
+
   function resetForm() {
     formName.value = '';
     formDescription.value = '';
@@ -472,6 +500,9 @@
     setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
     updateSourceMode();
     updateSaveBtn();
+    if (formFilterUserDebug) formFilterUserDebug.checked = false;
+    if (formFormatJson) formFormatJson.checked = false;
+    updateApexDefaultsVisibility();
   }
 
   function refreshDropdown() {
@@ -559,6 +590,9 @@
     updateContentPlaceholder();
     updateSourceMode();
     updateSaveBtn();
+    if (formFilterUserDebug) formFilterUserDebug.checked = script.filterUserDebug ?? false;
+    if (formFormatJson) formFormatJson.checked = script.formatJson ?? false;
+    updateApexDefaultsVisibility();
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
     refreshDropdown();
@@ -578,6 +612,7 @@
   formType.addEventListener('change', () => {
     updateContentPlaceholder();
     setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+    updateApexDefaultsVisibility();
   });
   formSource.addEventListener('change', updateSourceMode);
   formFolder.addEventListener('input', updateSaveBtn);
@@ -667,6 +702,10 @@
       script: isFile ? '' : contentVal,
       ...(isFile ? { scriptFile: filePathVal } : {}),
       inputs: cleanedInputs,
+      ...(formType.value === 'apex' && formFilterUserDebug?.checked
+        ? { filterUserDebug: true }
+        : {}),
+      ...(formType.value === 'apex' && formFormatJson?.checked ? { formatJson: true } : {}),
     };
 
     const isPrivate = formPrivate.checked;
@@ -1220,6 +1259,7 @@
       const filterCheckbox = document.createElement('input');
       filterCheckbox.type = 'checkbox';
       filterCheckbox.className = 'yaml-log-filter-checkbox';
+      filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
       const filterLabel = document.createElement('label');
       filterLabel.className = 'yaml-log-filter-label';
       filterLabel.appendChild(filterCheckbox);
@@ -1228,6 +1268,7 @@
       const jsonCheckbox = document.createElement('input');
       jsonCheckbox.type = 'checkbox';
       jsonCheckbox.className = 'yaml-log-json-checkbox';
+      jsonCheckbox.checked = script.formatJson ?? false;
       const jsonLabel = document.createElement('label');
       jsonLabel.className = 'yaml-log-filter-label';
       jsonLabel.appendChild(jsonCheckbox);
@@ -1316,7 +1357,12 @@
         const filterCheckbox = /** @type {HTMLInputElement | null} */ (
           section.querySelector('.yaml-log-filter-checkbox')
         );
-        if (filterCheckbox) filterCheckbox.checked = false;
+        if (filterCheckbox)
+          filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
+        const jsonCb = /** @type {HTMLInputElement | null} */ (
+          section.querySelector('.yaml-log-json-checkbox')
+        );
+        if (jsonCb) jsonCb.checked = script.formatJson ?? false;
 
         section.classList.add('open');
         _scriptOpId = win.__startAction(executeBtn, () => {

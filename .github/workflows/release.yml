@@ -69,11 +69,20 @@ jobs:
         run: npm version ${{ steps.version.outputs.new_version }} --no-git-tag-version
 
       - name: Update CHANGELOG.md
-        run: |
-          VERSION=${{ steps.version.outputs.new_version }}
-          DATE=$(date -u '+%Y-%m-%d')
-          # Replace "## [Unreleased]" with the versioned heading and re-add [Unreleased] above it
-          sed -i "s/^## \[Unreleased\]/## [Unreleased]\n\n## [${VERSION}] - ${DATE}/" CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ steps.version.outputs.new_version }}
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Extract release notes from CHANGELOG
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag v${{ steps.version.outputs.new_version }} --unreleased --strip all
+        env:
+          OUTPUT: /tmp/release-notes.md
 
       - name: Configure git identity
         run: |
@@ -102,16 +111,6 @@ jobs:
           VSIX_PATH=$(ls *.vsix | head -n 1)
           echo "path=$VSIX_PATH" >> "$GITHUB_OUTPUT"
           echo "VSIX: $VSIX_PATH"
-
-      - name: Extract release notes from CHANGELOG
-        id: notes
-        run: |
-          VERSION=${{ steps.version.outputs.new_version }}
-          # Extract content between this version's heading and the next ## [ heading
-          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          # Write to a temp file to safely pass multiline content to gh
-          echo "$NOTES" > /tmp/release-notes.md
-          cat /tmp/release-notes.md
 
       - name: Create GitHub Release
         run: |

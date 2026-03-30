@@ -74,4 +74,8 @@ window.YamlScriptsLabels = {
   placeholderFilePath: 'path/to/script.cls (relative to workspace)',
   btnBrowse: '📁 Browse',
   errorFilePathRequired: 'File path is required.',
+  // Apex default output settings
+  labelDefaultOutputSettings: 'Default output settings',
+  labelDefaultFilterUserDebug: 'Show only USER_DEBUG lines by default',
+  labelDefaultFormatJson: 'Format JSON by default',
 };
