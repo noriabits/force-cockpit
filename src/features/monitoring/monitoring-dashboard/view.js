@@ -469,6 +469,7 @@
     card.draggable = true;
 
     card.addEventListener('dragstart', (e) => {
+      if (grid.querySelector('.monitoring-edit-form')) return;
       dragSrcId = cfg.id;
       card.classList.add('monitoring-card--dragging');
       /** @type {DataTransfer} */ (e.dataTransfer).effectAllowed = 'move';
