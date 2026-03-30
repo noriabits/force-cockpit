@@ -1259,7 +1259,7 @@
       const filterCheckbox = document.createElement('input');
       filterCheckbox.type = 'checkbox';
       filterCheckbox.className = 'yaml-log-filter-checkbox';
-      filterCheckbox.checked = script.filterUserDebug ?? false;
+      filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
       const filterLabel = document.createElement('label');
       filterLabel.className = 'yaml-log-filter-label';
       filterLabel.appendChild(filterCheckbox);
@@ -1357,7 +1357,8 @@
         const filterCheckbox = /** @type {HTMLInputElement | null} */ (
           section.querySelector('.yaml-log-filter-checkbox')
         );
-        if (filterCheckbox) filterCheckbox.checked = script.filterUserDebug ?? false;
+        if (filterCheckbox)
+          filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
         const jsonCb = /** @type {HTMLInputElement | null} */ (
           section.querySelector('.yaml-log-json-checkbox')
         );
