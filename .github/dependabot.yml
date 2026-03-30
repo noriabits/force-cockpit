@@ -12,5 +12,8 @@ updates:
         patterns:
           - "@salesforce/*"
           - "jsforce"
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     reviewers:
       - "noriabits"
