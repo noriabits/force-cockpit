@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
+import xmlFormat from 'xml-formatter';
 import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import { assertApexSuccess, filterUserDebugLines } from '../../apexUtils';
@@ -195,6 +195,14 @@ export class YamlScriptsService {
     }
   }
 
+  private xmlEscape(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   private async executeJs(
     script: YamlScript,
     signal?: AbortSignal,
@@ -223,8 +231,8 @@ export class YamlScriptsService {
         fs,
         path,
         yaml,
-        DOMParser,
-        XMLSerializer,
+        xmlFormat,
+        xmlEscape: this.xmlEscape,
         setTimeout,
         clearTimeout,
         Promise,
