@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import { assertApexSuccess, filterUserDebugLines } from '../../apexUtils';
@@ -222,6 +223,8 @@ export class YamlScriptsService {
         fs,
         path,
         yaml,
+        DOMParser,
+        XMLSerializer,
         setTimeout,
         clearTimeout,
         Promise,
