@@ -187,7 +187,7 @@
   let editingScriptId = null;
   /** @type {string | null} */
   let editingScriptSource = null;
-  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
+  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; filterUserDebug?: boolean; formatJson?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
   let currentScripts = [];
 
   /** @type {Map<string, () => void>} */
@@ -561,7 +561,7 @@
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
@@ -1101,8 +1101,11 @@
           ta.addEventListener('input', updateExecuteState);
           ta.addEventListener('paste', (e) => {
             e.preventDefault();
-            const text = e.clipboardData?.getData('text') ?? '';
-            ta.value = text.trim();
+            const text = (e.clipboardData?.getData('text') ?? '').trim();
+            const start = ta.selectionStart ?? ta.value.length;
+            const end = ta.selectionEnd ?? ta.value.length;
+            ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+            ta.selectionStart = ta.selectionEnd = start + text.length;
             updateExecuteState();
           });
           inputFields.set(inp.name, ta);
@@ -1134,8 +1137,11 @@
           input.addEventListener('input', updateExecuteState);
           input.addEventListener('paste', (e) => {
             e.preventDefault();
-            const text = e.clipboardData?.getData('text') ?? '';
-            input.value = text.trim();
+            const text = (e.clipboardData?.getData('text') ?? '').trim();
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            input.value = input.value.slice(0, start) + text + input.value.slice(end);
+            input.selectionStart = input.selectionEnd = start + text.length;
             updateExecuteState();
           });
           inputFields.set(inp.name, input);
@@ -1179,11 +1185,10 @@
    */
 
   /**
-   * @param {HTMLElement} section
    * @param {HTMLPreElement} logOutput
    * @returns {HTMLButtonElement}
    */
-  function buildOpenInEditorButton(section, logOutput) {
+  function buildOpenInEditorButton(logOutput) {
     const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     btn.className = 'yaml-open-editor-btn';
     btn.textContent = 'Open in editor';
@@ -1196,11 +1201,10 @@
   }
 
   /**
-   * @param {HTMLElement} section
    * @param {HTMLPreElement} logOutput
    * @returns {HTMLButtonElement}
    */
-  function buildCopyToClipboardButton(section, logOutput) {
+  function buildCopyToClipboardButton(logOutput) {
     const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     btn.className = 'yaml-copy-output-btn';
     btn.textContent = 'Copy to clipboard';
@@ -1222,10 +1226,9 @@
 
   /**
    * @param {any} script
-   * @param {HTMLElement} section
    * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
    */
-  function buildLogViewer(script, section) {
+  function buildLogViewer(script) {
     const fragment = document.createDocumentFragment();
     const isApex = script.type !== 'command' && script.type !== 'js';
 
@@ -1298,10 +1301,10 @@
 
     logViewer.appendChild(logOutput);
 
-    const openInEditorBtn = buildOpenInEditorButton(section, logOutput);
+    const openInEditorBtn = buildOpenInEditorButton(logOutput);
     logViewer.appendChild(openInEditorBtn);
 
-    const copyToClipboardBtn = buildCopyToClipboardButton(section, logOutput);
+    const copyToClipboardBtn = buildCopyToClipboardButton(logOutput);
     logViewer.appendChild(copyToClipboardBtn);
 
     fragment.appendChild(statusHint);
@@ -1445,7 +1448,7 @@
     }
 
     // Log viewer
-    const { fragment, refs } = buildLogViewer(script, section);
+    const { fragment, refs } = buildLogViewer(script);
     body.appendChild(fragment);
 
     section.appendChild(header);
