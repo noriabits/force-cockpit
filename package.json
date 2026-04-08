@@ -2,7 +2,7 @@
   "name": "force-cockpit",
   "displayName": "Force Cockpit",
   "description": "Salesforce utilities cockpit for VSCode",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "license": "MIT",
   "author": {
     "name": "Pablo Fernández Posadas",
