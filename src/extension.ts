@@ -151,6 +151,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarView = vscode.window.createTreeView('forceCockpit.panel', {
     treeDataProvider: emptyProvider,
   });
+  sidebarView.title = ` v${context.extension.packageJSON.version}`;
   sidebarView.onDidChangeVisibility(({ visible }) => {
     if (visible)
       MainPanel.createOrShow(context, connectionManager, allFeatures, cockpitConfig, outputChannel);
