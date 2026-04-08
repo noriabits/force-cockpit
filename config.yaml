@@ -7,8 +7,3 @@ apiVersion: "65.0"
 # Sandbox org names that require confirmation before destructive actions
 protectedSandboxes: []
 
-# Display title shown in the panel header and tab
-panelTitle: "Force Cockpit"
-
-# Path to a logo image file relative to the workspace root (empty = default logo)
-logoPath: ""

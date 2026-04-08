@@ -26,63 +26,45 @@ describe('loadConfig', () => {
     expect(config).toEqual({
       apiVersion: '65.0',
       protectedSandboxes: [],
-      panelTitle: 'Force Cockpit',
-      logoPath: '',
     });
   });
 
   it('reads bundled config.yaml', () => {
-    fs.writeFileSync(
-      path.join(extensionDir, 'config.yaml'),
-      'apiVersion: "60.0"\npanelTitle: "Bundled Title"',
-    );
+    fs.writeFileSync(path.join(extensionDir, 'config.yaml'), 'apiVersion: "60.0"');
     const config = loadConfig(extensionDir, userDir);
     expect(config.apiVersion).toBe('60.0');
-    expect(config.panelTitle).toBe('Bundled Title');
     expect(config.protectedSandboxes).toEqual([]);
-    expect(config.logoPath).toBe('');
   });
 
   it('user config overrides bundled config', () => {
-    fs.writeFileSync(
-      path.join(extensionDir, 'config.yaml'),
-      'apiVersion: "60.0"\npanelTitle: "Bundled"',
-    );
+    fs.writeFileSync(path.join(extensionDir, 'config.yaml'), 'apiVersion: "60.0"');
     fs.writeFileSync(path.join(userDir, 'config.yaml'), 'apiVersion: "62.0"');
     const config = loadConfig(extensionDir, userDir);
     expect(config.apiVersion).toBe('62.0');
-    expect(config.panelTitle).toBe('Bundled');
   });
 
   it('partial user config only overrides specified keys', () => {
-    fs.writeFileSync(
-      path.join(extensionDir, 'config.yaml'),
-      'apiVersion: "60.0"\npanelTitle: "Bundled"\nlogoPath: "logo.png"',
-    );
-    fs.writeFileSync(path.join(userDir, 'config.yaml'), 'panelTitle: "My Team"');
+    fs.writeFileSync(path.join(extensionDir, 'config.yaml'), 'apiVersion: "60.0"');
+    fs.writeFileSync(path.join(userDir, 'config.yaml'), 'protectedSandboxes:\n  - staging');
     const config = loadConfig(extensionDir, userDir);
     expect(config.apiVersion).toBe('60.0');
-    expect(config.panelTitle).toBe('My Team');
-    expect(config.logoPath).toBe('logo.png');
+    expect(config.protectedSandboxes).toEqual(['staging']);
   });
 
   it('returns defaults for malformed YAML', () => {
     fs.writeFileSync(path.join(userDir, 'config.yaml'), ': : invalid yaml {{[');
     const config = loadConfig(extensionDir, userDir);
     expect(config.apiVersion).toBe('65.0');
-    expect(config.panelTitle).toBe('Force Cockpit');
   });
 
   it('ignores invalid field types', () => {
     fs.writeFileSync(
       path.join(userDir, 'config.yaml'),
-      'apiVersion: 123\npanelTitle: true\nprotectedSandboxes: "not-array"\nlogoPath: 42',
+      'apiVersion: 123\nprotectedSandboxes: "not-array"',
     );
     const config = loadConfig(extensionDir, userDir);
     expect(config.apiVersion).toBe('65.0');
-    expect(config.panelTitle).toBe('Force Cockpit');
     expect(config.protectedSandboxes).toEqual([]);
-    expect(config.logoPath).toBe('');
   });
 
   it('filters non-string entries from protectedSandboxes', () => {

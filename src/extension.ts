@@ -153,28 +153,14 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   sidebarView.onDidChangeVisibility(({ visible }) => {
     if (visible)
-      MainPanel.createOrShow(
-        context,
-        connectionManager,
-        allFeatures,
-        workspaceRoot,
-        cockpitConfig,
-        outputChannel,
-      );
+      MainPanel.createOrShow(context, connectionManager, allFeatures, cockpitConfig, outputChannel);
   });
   context.subscriptions.push(sidebarView);
 
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(
-        context,
-        connectionManager,
-        allFeatures,
-        workspaceRoot,
-        cockpitConfig,
-        outputChannel,
-      );
+      MainPanel.createOrShow(context, connectionManager, allFeatures, cockpitConfig, outputChannel);
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {

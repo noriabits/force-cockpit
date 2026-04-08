@@ -54,7 +54,7 @@ export class MainPanel {
 
   updateConfig(config: CockpitConfig): void {
     this.config = config;
-    this._panel.title = config.panelTitle;
+    this._panel.title = 'Force Cockpit';
     void this._sendOrgInfo();
   }
 
@@ -62,7 +62,6 @@ export class MainPanel {
     context: vscode.ExtensionContext,
     connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
-    workspaceRoot: string = '',
     config: CockpitConfig,
     outputChannel?: vscode.OutputChannel,
   ): MainPanel {
@@ -87,7 +86,6 @@ export class MainPanel {
           vscode.Uri.file(path.join(context.extensionPath, 'webviews')),
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'features')),
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'vendor')),
-          vscode.Uri.file(workspaceRoot),
         ],
       },
     );
@@ -97,7 +95,6 @@ export class MainPanel {
       context,
       connectionManager,
       featureFactories,
-      workspaceRoot,
       config,
       outputChannel,
     );
@@ -109,7 +106,6 @@ export class MainPanel {
     private readonly context: vscode.ExtensionContext,
     private readonly connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
-    private readonly workspaceRoot: string = '',
     private config: CockpitConfig,
     private readonly outputChannel?: vscode.OutputChannel,
   ) {
@@ -317,17 +313,16 @@ export class MainPanel {
   }
 
   private async _update(): Promise<void> {
-    this._panel.title = this.config.panelTitle;
+    this._panel.title = 'Force Cockpit';
     this._panel.webview.html = await this._getHtml();
     // Org info is delivered in response to the webview's 'ready' message,
     // which fires after all scripts have initialized their message listeners.
   }
 
   private _resolveLogoUri(webview: vscode.Webview): vscode.Uri {
-    const resolvedLogoPath = this.config.logoPath
-      ? path.join(this.workspaceRoot, this.config.logoPath)
-      : path.join(this.context.extensionPath, 'media', 'fc-logo.png');
-    return webview.asWebviewUri(vscode.Uri.file(resolvedLogoPath));
+    return webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'fc-logo.png')),
+    );
   }
 
   private async _collectFeatureAssets(
@@ -389,7 +384,6 @@ export class MainPanel {
       ),
     );
     const logoUri = this._resolveLogoUri(webview);
-    const panelTitle = this.config.panelTitle;
 
     // Read main template and all feature HTML files in parallel
     const [mainHtml, { tabFragments, linkTags, scriptTags }] = await Promise.all([
@@ -406,7 +400,7 @@ export class MainPanel {
       .replace(/\$\{highlightJsUri\}/g, highlightJsUri.toString())
       .replace(/\$\{cspSource\}/g, webview.cspSource)
       .replace(/\$\{logoUri\}/g, logoUri.toString())
-      .replace(/\$\{panelTitle\}/g, panelTitle);
+      .replace(/\$\{panelTitle\}/g, 'Force Cockpit');
 
     // Inject feature HTML into tab container placeholders
     for (const [tab, fragments] of Object.entries(tabFragments)) {

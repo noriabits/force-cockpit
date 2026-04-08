@@ -357,8 +357,6 @@ Only keys present in a layer override the previous layer — omitted keys keep t
 |-----|------|---------|-------------|
 | `apiVersion` | string | `"65.0"` | Salesforce API version for all API calls |
 | `protectedSandboxes` | string[] | `[]` | Sandbox org names that require confirmation before destructive actions |
-| `panelTitle` | string | `"Force Cockpit"` | Display title shown in the panel header and tab |
-| `logoPath` | string | `""` | Path to a logo image relative to the workspace root (empty = default logo) |
 
 ### Example `force-cockpit/config.yaml`
 
@@ -367,8 +365,6 @@ apiVersion: "65.0"
 protectedSandboxes:
   - staging
   - uat
-panelTitle: "My Team Cockpit"
-logoPath: "assets/logo.png"
 ```
 
 ### VSCode setting
