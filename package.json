@@ -119,18 +119,18 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.5.0",
-    "@types/vscode": "^1.96.0",
-    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "@types/node": "^25.5.2",
+    "@types/vscode": "^1.115.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.57.2",
     "@vscode/vsce": "^3.0.0",
-    "esbuild": "^0.27.4",
+    "esbuild": "^0.28.0",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.1",
     "typescript": "^5.3.0",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.3"
   }
 }
