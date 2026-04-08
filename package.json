@@ -107,13 +107,13 @@
     "eslint": "^10.0.0"
   },
   "dependencies": {
-    "@salesforce/core": "^8.27.1",
+    "@salesforce/core": "8.27.1",
     "@xmldom/xmldom": "0.9.9",
-    "chart.js": "^4.5.1",
-    "highlight.js": "^11.11.1",
-    "highlightjs-apex": "^1.5.0",
-    "js-yaml": "^4.1.0",
-    "jsforce": "^3.4.0",
+    "chart.js": "4.5.1",
+    "highlight.js": "11.11.1",
+    "highlightjs-apex": "1.5.0",
+    "js-yaml": "4.1.0",
+    "jsforce": "3.4.0",
     "xml-formatter": "3.7.0"
   },
   "devDependencies": {
