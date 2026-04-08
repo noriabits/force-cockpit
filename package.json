@@ -9,7 +9,7 @@
     "email": "pablo@noriabits.com"
   },
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.115.0"
   },
   "publisher": "noriabits",
   "icon": "media/fc-logo.png",
