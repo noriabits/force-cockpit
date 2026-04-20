@@ -8,6 +8,7 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import { assertApexSuccess, filterUserDebugLines } from '../../apexUtils';
 import { runTerminalCommand } from '../../../utils/terminalCommand';
 import { loadYamlItems, type YamlSource } from '../../../utils/yaml-loader';
+import { xml, input } from './scriptHelpers';
 
 type ParsedYamlDoc = {
   name?: string;
@@ -235,6 +236,8 @@ export class YamlScriptsService {
         xmlFormat,
         DOMParser,
         XMLSerializer,
+        xml,
+        input,
         xmlEscape: this.xmlEscape,
         setTimeout,
         clearTimeout,
