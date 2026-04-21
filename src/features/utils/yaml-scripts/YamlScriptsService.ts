@@ -82,7 +82,7 @@ export class YamlScriptsService {
   ) {}
 
   async loadScripts(): Promise<YamlScript[]> {
-    return loadYamlItems(this.paths, (filePath, id, folder, source) =>
+    return await loadYamlItems(this.paths, (filePath, id, folder, source) =>
       this.parseScript(filePath, id, folder, source),
     );
   }

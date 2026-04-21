@@ -33,6 +33,9 @@ export class MainPanel {
   // Set of opIds currently active in the webview — drift-safe vs a counter
   private _activeWebviewOps = new Set<string>();
 
+  // Limits cache (reuse within 60 seconds)
+  private _limitsCache: { data: unknown; ts: number } | null = null;
+
   get hasActiveOperations(): boolean {
     return this._activeWebviewOps.size > 0;
   }
@@ -134,6 +137,11 @@ export class MainPanel {
         if (this._panel.visible) {
           void this._sendOrgInfo();
         }
+        // Notify all features about panel visibility (used by monitoring to pause auto-refresh)
+        this._panel.webview.postMessage({
+          type: 'panelVisibilityChanged',
+          data: { visible: this._panel.visible },
+        });
       },
       null,
       this._disposables,
@@ -250,6 +258,7 @@ export class MainPanel {
   private _setupConnectionListeners(): void {
     // Forward connection changes to webview
     const onChanged = (event: ConnectionChangedEvent) => {
+      this._limitsCache = null; // Invalidate limits cache on org change
       if (event.connected) {
         void this._sendOrgInfo();
       } else {
@@ -304,8 +313,15 @@ export class MainPanel {
   }
 
   private async _sendStorageLimits(): Promise<void> {
+    const now = Date.now();
+    // Reuse cache if younger than 60 seconds
+    if (this._limitsCache && now - this._limitsCache.ts < 60_000) {
+      this._panel.webview.postMessage({ type: 'storageLimits', data: this._limitsCache.data });
+      return;
+    }
     try {
       const limits = await this.connectionManager.getLimits();
+      this._limitsCache = { data: limits, ts: now };
       this._panel.webview.postMessage({ type: 'storageLimits', data: limits });
     } catch (err) {
       this.outputChannel?.appendLine(`[Warn] Storage limits unavailable: ${String(err)}`);

@@ -14,6 +14,8 @@
 
   /** @type {Map<string, string>} Maps opId → scriptId for in-flight executions */
   const opIdToScriptId = new Map();
+  /** @type {Map<string, string>} Maps opId → accumulated log text (memory-based, not DOM) */
+  const scriptLogContent = new Map();
   const noResults = /** @type {HTMLElement} */ (document.getElementById('yaml-no-results'));
   const loadError = /** @type {HTMLElement} */ (document.getElementById('yaml-load-error'));
 
@@ -105,21 +107,30 @@
     }
   }
 
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let highlightDebounce = null;
+
   function syncHighlight() {
     const text = formContent.value;
-    // Update line numbers
+    // Update line numbers synchronously (cheap)
     const lineCount = text ? text.split('\n').length : 1;
     const nums = [];
     for (let i = 1; i <= lineCount; i++) nums.push(i);
     gutter.textContent = nums.join('\n');
 
-    if (!text) {
-      highlightCode.innerHTML = '';
-      return;
+    // Debounce expensive highlight.js pass
+    if (highlightDebounce !== null) {
+      clearTimeout(highlightDebounce);
     }
-    // Use highlight() API — returns { value: string } with highlighted HTML
-    const result = hljs.highlight(text + '\n', { language: currentLang });
-    highlightCode.innerHTML = result.value;
+    highlightDebounce = setTimeout(() => {
+      if (!text) {
+        highlightCode.innerHTML = '';
+        return;
+      }
+      // Use highlight() API — returns { value: string } with highlighted HTML
+      const result = hljs.highlight(text + '\n', { language: currentLang });
+      highlightCode.innerHTML = result.value;
+    }, 150);
   }
 
   formContent.addEventListener('input', syncHighlight);
@@ -1704,7 +1715,10 @@
     );
 
     // __endAction re-enables the button; then re-evaluate state (e.g. org may have disconnected)
-    if (data.opId) opIdToScriptId.delete(data.opId);
+    if (data.opId) {
+      opIdToScriptId.delete(data.opId);
+      scriptLogContent.delete(data.opId);
+    }
     win.__endAction(data.opId);
     const updater = executeStateUpdaters.get(data.scriptId);
     if (updater) updater();
@@ -1797,9 +1811,10 @@
           );
           if (!chunkViewer || !chunkOutput) break;
           chunkViewer.style.display = 'block';
-          const prev = chunkOutput.getAttribute('data-raw-log') || '';
+          // Store log text in memory (not DOM) to avoid O(n²) string copying
+          const prev = scriptLogContent.get(opId) || '';
           const next = prev + chunk;
-          chunkOutput.setAttribute('data-raw-log', next);
+          scriptLogContent.set(opId, next);
           chunkOutput.textContent = next;
           break;
         }

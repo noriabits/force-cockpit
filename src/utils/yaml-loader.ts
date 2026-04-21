@@ -26,14 +26,17 @@ export type YamlParseCallback<T> = (
  * Walks each base path for `{category}/{file}.yaml` and
  * `{category}/{sub-category}/{file}.yaml` entries, calls `parse` for each
  * file, merges results by `id` (later sources win), and returns sorted by name.
+ * Uses async file operations to avoid blocking the event loop.
  */
-export function loadYamlItems<T extends { id: string; name: string }>(
+export async function loadYamlItems<T extends { id: string; name: string }>(
   paths: YamlLoaderPaths,
   parse: YamlParseCallback<T>,
-): T[] {
-  const builtIn = loadFromPath(paths.builtInPath, 'builtin', parse);
-  const user = loadFromPath(paths.userPath, 'user', parse);
-  const priv = loadFromPath(paths.privatePath, 'private', parse);
+): Promise<T[]> {
+  const [builtIn, user, priv] = await Promise.all([
+    loadFromPath(paths.builtInPath, 'builtin', parse),
+    loadFromPath(paths.userPath, 'user', parse),
+    loadFromPath(paths.privatePath, 'private', parse),
+  ]);
 
   const map = new Map<string, T>();
   for (const item of builtIn) map.set(item.id, item);
@@ -43,21 +46,22 @@ export function loadYamlItems<T extends { id: string; name: string }>(
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function loadFromPath<T extends { id: string; name: string }>(
+async function loadFromPath<T extends { id: string; name: string }>(
   basePath: string,
   source: YamlSource,
   parse: YamlParseCallback<T>,
-): T[] {
-  if (!basePath || !fs.existsSync(basePath)) return [];
+): Promise<T[]> {
+  if (!basePath) return [];
 
   let entries: fs.Dirent[];
   try {
-    entries = fs.readdirSync(basePath, { withFileTypes: true });
+    entries = await fs.promises.readdir(basePath, { withFileTypes: true });
   } catch {
     return [];
   }
 
   const results: T[] = [];
+  const folderTasks: Promise<void>[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -65,37 +69,49 @@ function loadFromPath<T extends { id: string; name: string }>(
     const parentFolder = entry.name;
     const folderPath = path.join(basePath, parentFolder);
 
-    let folderEntries: fs.Dirent[];
-    try {
-      folderEntries = fs.readdirSync(folderPath, { withFileTypes: true });
-    } catch {
-      continue;
-    }
+    // Process this folder and its subfolders concurrently
+    folderTasks.push(
+      (async () => {
+        let folderEntries: fs.Dirent[];
+        try {
+          folderEntries = await fs.promises.readdir(folderPath, { withFileTypes: true });
+        } catch {
+          return;
+        }
 
-    loadYamlFilesFromDir(folderPath, parentFolder, source, results, parse);
+        // Load YAML files from parent folder
+        await loadYamlFilesFromDir(folderPath, parentFolder, source, results, parse);
 
-    // One level of sub-folder nesting supported
-    for (const subEntry of folderEntries) {
-      if (!subEntry.isDirectory()) continue;
-      const subFolder = `${parentFolder}/${subEntry.name}`;
-      const subFolderPath = path.join(folderPath, subEntry.name);
-      loadYamlFilesFromDir(subFolderPath, subFolder, source, results, parse);
-    }
+        // One level of sub-folder nesting supported
+        const subfolderTasks: Promise<void>[] = [];
+        for (const subEntry of folderEntries) {
+          if (!subEntry.isDirectory()) continue;
+          const subFolder = `${parentFolder}/${subEntry.name}`;
+          const subFolderPath = path.join(folderPath, subEntry.name);
+          subfolderTasks.push(
+            loadYamlFilesFromDir(subFolderPath, subFolder, source, results, parse),
+          );
+        }
+        await Promise.all(subfolderTasks);
+      })(),
+    );
   }
 
+  await Promise.all(folderTasks);
   return results;
 }
 
-function loadYamlFilesFromDir<T extends { id: string; name: string }>(
+async function loadYamlFilesFromDir<T extends { id: string; name: string }>(
   dirPath: string,
   folder: string,
   source: YamlSource,
   results: T[],
   parse: YamlParseCallback<T>,
-): void {
+): Promise<void> {
   let files: string[];
   try {
-    files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
+    files = await fs.promises.readdir(dirPath);
+    files = files.filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
   } catch {
     return;
   }

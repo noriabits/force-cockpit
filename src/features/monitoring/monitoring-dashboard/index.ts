@@ -197,7 +197,7 @@ export function createMonitoringDashboardFeature(paths: {
         },
         saveMonitoringPositions: {
           handler: async (msg) => {
-            service.savePositions(
+            await service.savePositions(
               msg.positions as Array<{ id: string; position: number; source: string }>,
             );
             return {};

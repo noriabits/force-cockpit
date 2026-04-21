@@ -61,7 +61,7 @@ export class MonitoringDashboardService {
   ) {}
 
   async loadConfigs(): Promise<MonitoringConfig[]> {
-    return loadYamlItems(this.paths, (filePath, id, folder, source) =>
+    return await loadYamlItems(this.paths, (filePath, id, folder, source) =>
       this.parseMonitoringFile(filePath, id, folder, source),
     );
   }
@@ -162,7 +162,8 @@ export class MonitoringDashboardService {
         return entry;
       }),
       chartType: config.chartType,
-      refreshInterval: config.refreshInterval ?? 0,
+      // Enforce minimum refresh interval of 10 seconds to prevent API rate limit exhaustion
+      refreshInterval: Math.max(config.refreshInterval ?? 0, 10),
     };
 
     if (config.stacked) {
@@ -279,29 +280,42 @@ export class MonitoringDashboardService {
     };
   }
 
-  savePositions(positions: Array<{ id: string; position: number; source: string }>): void {
-    for (const entry of positions) {
+  async savePositions(
+    positions: Array<{ id: string; position: number; source: string }>,
+  ): Promise<void> {
+    const updates = positions.map(async (entry) => {
       const basePath = entry.source === 'private' ? this.paths.privatePath : this.paths.userPath;
-      if (!basePath) continue;
+      if (!basePath) return;
       const parts = entry.id.split('/');
       const folder = parts[0];
       const filename = parts.slice(1).join('/');
-      if (!filename) continue;
+      if (!filename) return;
+
       let filePath = path.join(basePath, folder, `${filename}.yaml`);
-      if (!fs.existsSync(filePath)) {
-        filePath = path.join(basePath, folder, `${filename}.yml`);
-        if (!fs.existsSync(filePath)) continue;
-      }
       try {
-        const content = fs.readFileSync(filePath, 'utf8');
+        await fs.promises.access(filePath);
+      } catch {
+        // Try .yml extension
+        filePath = path.join(basePath, folder, `${filename}.yml`);
+        try {
+          await fs.promises.access(filePath);
+        } catch {
+          return; // File not found
+        }
+      }
+
+      try {
+        const content = await fs.promises.readFile(filePath, 'utf8');
         const doc = yaml.load(content) as Record<string, unknown>;
-        if (!doc || typeof doc !== 'object') continue;
+        if (!doc || typeof doc !== 'object') return;
         doc.position = entry.position;
-        fs.writeFileSync(filePath, yaml.dump(doc), 'utf8');
+        await fs.promises.writeFile(filePath, yaml.dump(doc), 'utf8');
       } catch {
         // Skip files that can't be updated
       }
-    }
+    });
+
+    await Promise.all(updates);
   }
 
   private toSlug(name: string): string {

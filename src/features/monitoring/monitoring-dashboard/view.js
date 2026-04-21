@@ -24,6 +24,7 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   let connected = false;
+  let isVisible = true; // Track panel visibility to pause auto-refresh when hidden
   let configs = /** @type {any[]} */ ([]);
   let activeFolder = 'all';
   let activeSubFolder = /** @type {string | null} */ (null);
@@ -144,6 +145,17 @@
           break;
         case 'saveMonitoringConfigError':
           onSaveError(message.data.message);
+          break;
+        case 'panelVisibilityChanged':
+          isVisible = message.data.visible || false;
+          // If panel became visible, resume refresh timers by re-triggering queries
+          if (isVisible && connected) {
+            for (const cfg of configs) {
+              if (cfg.refreshInterval > 0) {
+                triggerQuery(cfg.id, cfg.soql, cfg.labelField, cfg.valueFields);
+              }
+            }
+          }
           break;
       }
     },
@@ -715,6 +727,8 @@
   function buildEditForm(cfg, card, configId) {
     const form = document.createElement('div');
     form.className = 'monitoring-edit-form';
+    /** @type {Array<() => void>} */
+    const cleanups = []; // Track cleanup functions for form teardown
 
     // Name
     form.appendChild(
@@ -725,7 +739,9 @@
     );
 
     // Category
-    form.appendChild(makeFormRow(L.labelCategory, makeFolderCombobox(cfg.folder)));
+    const { element: folderCombobox, cleanup: folderCleanup } = makeFolderCombobox(cfg.folder);
+    cleanups.push(folderCleanup);
+    form.appendChild(makeFormRow(L.labelCategory, folderCombobox));
 
     // Description
     form.appendChild(
@@ -1037,6 +1053,8 @@
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
       card.__pendingSaveResolve = (/** @type {any} */ savedCfg) => {
+        const savedCleanups = card.__pendingSaveResolveCleanups || [];
+        savedCleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
         configs = configs.filter((/** @type {any} */ c) => c.id !== cfg.id);
         configs.push(savedCfg);
         const newCard = buildViewCard(savedCfg);
@@ -1051,6 +1069,9 @@
         errorBox.textContent = errMsg;
         errorBox.style.display = '';
       };
+      // On successful save, the __pendingSaveResolve callback will replace the card and trigger cleanup
+      // Set a flag so cleanup is called after the card is replaced
+      card.__pendingSaveResolveCleanups = /** @type {Array<() => void>} */ (cleanups);
       const isPrivate =
         /** @type {HTMLInputElement | null} */ (form.querySelector('#monitoring-edit-private'))
           ?.checked || false;
@@ -1058,6 +1079,7 @@
     });
 
     cancelBtn.addEventListener('click', () => {
+      cleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
       if (configId) {
         // Revert to view mode with original config
         const originalCfg = configs.find((/** @type {any} */ c) => c.id === configId) || cfg;
@@ -1108,7 +1130,7 @@
   /**
    * Build a combobox for the Category field (text input + dropdown of existing folders).
    * @param {string} currentValue
-   * @returns {HTMLDivElement}
+   * @returns {{ element: HTMLDivElement, cleanup: () => void }}
    */
   function makeFolderCombobox(currentValue) {
     const wrapper = document.createElement('div');
@@ -1159,14 +1181,18 @@
       input.focus();
     });
 
-    // Click-outside close
-    document.addEventListener('click', (e) => {
+    // Click-outside close — track listener for cleanup
+    const clickHandler = (/** @type {MouseEvent} */ e) => {
       if (!wrapper.contains(/** @type {Node} */ (e.target))) {
         dropdown.classList.remove('open');
       }
-    });
+    };
+    document.addEventListener('click', clickHandler);
 
-    return wrapper;
+    return {
+      element: wrapper,
+      cleanup: () => document.removeEventListener('click', clickHandler),
+    };
   }
 
   /** @param {string} currentFormat @returns {HTMLSelectElement} */
@@ -1703,13 +1729,19 @@
   }
 
   // ── Auto-refresh ───────────────────────────────────────────────────────────
+  /** Minimum auto-refresh interval in seconds to prevent API overload */
+  const MIN_REFRESH_INTERVAL = 10;
+
   /** @param {any} cfg */
   function setupAutoRefresh(cfg) {
     clearAutoRefresh(cfg.id);
     if (cfg.refreshInterval > 0) {
+      // Enforce minimum interval: at least 10 seconds to prevent API rate limit issues
+      const intervalMs = Math.max(cfg.refreshInterval * 1000, MIN_REFRESH_INTERVAL * 1000);
       const id = setInterval(() => {
-        if (connected) triggerQuery(cfg.id, cfg.soql, cfg.labelField, cfg.valueFields);
-      }, cfg.refreshInterval * 1000);
+        // Only trigger query if panel is visible and still connected
+        if (connected && isVisible) triggerQuery(cfg.id, cfg.soql, cfg.labelField, cfg.valueFields);
+      }, intervalMs);
       refreshTimers.set(cfg.id, id);
     }
   }
