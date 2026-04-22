@@ -565,6 +565,9 @@
     formDeleteBtn.style.display = 'none';
     formPrivate.checked = false;
     resetForm();
+    if (activeFolderFilter !== 'all') {
+      formFolder.value = activeSubFolder ?? activeFolderFilter;
+    }
     refreshDropdown();
     newForm.style.display = '';
     newBtn.disabled = true;
@@ -1624,6 +1627,10 @@
    * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
+    const prevVisibility = activeVisibility;
+    const prevFolder = activeFolderFilter;
+    const prevSubFolder = activeSubFolder;
+
     currentScripts = scripts;
     executeStateUpdaters.clear();
     scriptsList.innerHTML = '';
@@ -1637,14 +1644,52 @@
 
     noResults.style.display = 'none';
 
-    // Build visibility filter (All / Shared / Private)
-    activeVisibility = 'all';
+    // Build visibility filter — restore previous selection instead of always defaulting to 'all'
+    activeVisibility = prevVisibility;
     buildVisibilityFilter();
 
     // Collect unique folders from currently-visible scripts
     const visibleForPills = getVisibleScripts(scripts);
     const folders = [...new Set(visibleForPills.map((s) => s.folder))].sort();
-    buildPills(folders);
+    buildPills(folders); // resets activeFolderFilter → 'all', activeSubFolder → null
+
+    // Restore folder filter if the pill still exists after the rebuild
+    if (prevFolder !== 'all') {
+      const restoredPill = /** @type {HTMLButtonElement | undefined} */ (
+        Array.from(pillsContainer.querySelectorAll('.category-pill')).find(
+          (p) => p.textContent === prevFolder,
+        )
+      );
+      if (restoredPill) {
+        pillsContainer
+          .querySelectorAll('.category-pill')
+          .forEach((p) => p.classList.remove('active'));
+        restoredPill.classList.add('active');
+        activeFolderFilter = prevFolder;
+        // Rebuild sub-pills for this folder and restore active sub-folder if applicable
+        const subFolders = folders
+          .filter((f) => f.startsWith(prevFolder + '/'))
+          .map((f) => f.slice(prevFolder.length + 1));
+        if (subFolders.length > 0) {
+          buildSubPills(prevFolder, subFolders);
+          if (prevSubFolder !== null) {
+            const subName = prevSubFolder.slice(prevFolder.length + 1);
+            const restoredSubPill = /** @type {HTMLButtonElement | undefined} */ (
+              Array.from(subPillsEl.querySelectorAll('.category-pill')).find(
+                (p) => p.textContent === subName,
+              )
+            );
+            if (restoredSubPill) {
+              subPillsEl
+                .querySelectorAll('.category-pill')
+                .forEach((p) => p.classList.remove('active'));
+              restoredSubPill.classList.add('active');
+              activeSubFolder = prevSubFolder;
+            }
+          }
+        }
+      }
+    }
 
     // Populate folder dropdown for the new-script form
     refreshDropdown();
@@ -1822,20 +1867,48 @@
           // Unexpected throw from service — end the action and show error
           win.__endAction(message.data?.opId);
           break;
-        case 'saveYamlScriptResult':
-          lastSavedScriptId = message.data?.script?.id ?? null;
+        case 'saveYamlScriptResult': {
+          const savedScript = message.data?.script;
+          lastSavedScriptId = savedScript?.id ?? null;
           hideNewForm();
+          if (savedScript?.folder) {
+            const top = savedScript.folder.split('/')[0];
+            activeFolderFilter = top;
+            activeSubFolder = savedScript.folder !== top ? savedScript.folder : null;
+          }
+          const afterSave = savedScript
+            ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript].sort((a, b) =>
+                a.name.localeCompare(b.name),
+              )
+            : currentScripts;
+          renderScripts(afterSave);
           win.__vscode.postMessage({ type: 'loadYamlScripts' });
           break;
+        }
         case 'saveYamlScriptError':
           formSaveBtn.disabled = false;
           formError.textContent = message.data?.message ?? 'Failed to save script.';
           break;
-        case 'updateYamlScriptResult':
-          lastSavedScriptId = message.data?.script?.id ?? null;
+        case 'updateYamlScriptResult': {
+          const updatedScript = message.data?.script;
+          const oldScriptId = message.data?.oldScriptId;
+          lastSavedScriptId = updatedScript?.id ?? null;
           hideNewForm();
+          if (updatedScript?.folder) {
+            const top = updatedScript.folder.split('/')[0];
+            activeFolderFilter = top;
+            activeSubFolder = updatedScript.folder !== top ? updatedScript.folder : null;
+          }
+          const afterUpdate = updatedScript
+            ? [
+                ...currentScripts.filter((s) => s.id !== oldScriptId && s.id !== updatedScript.id),
+                updatedScript,
+              ].sort((a, b) => a.name.localeCompare(b.name))
+            : currentScripts;
+          renderScripts(afterUpdate);
           win.__vscode.postMessage({ type: 'loadYamlScripts' });
           break;
+        }
         case 'updateYamlScriptError':
           formSaveBtn.disabled = false;
           formError.textContent = message.data?.message ?? 'Failed to update script.';
