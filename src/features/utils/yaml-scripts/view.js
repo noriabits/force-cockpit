@@ -107,8 +107,8 @@
     }
   }
 
-  /** @type {ReturnType<typeof setTimeout> | null} */
-  let highlightDebounce = null;
+  /** @type {number | null} */
+  let highlightRaf = null;
 
   function syncHighlight() {
     const text = formContent.value;
@@ -118,11 +118,11 @@
     for (let i = 1; i <= lineCount; i++) nums.push(i);
     gutter.textContent = nums.join('\n');
 
-    // Debounce expensive highlight.js pass
-    if (highlightDebounce !== null) {
-      clearTimeout(highlightDebounce);
+    if (highlightRaf !== null) {
+      cancelAnimationFrame(highlightRaf);
     }
-    highlightDebounce = setTimeout(() => {
+    highlightRaf = requestAnimationFrame(() => {
+      highlightRaf = null;
       if (!text) {
         highlightCode.innerHTML = '';
         return;
@@ -130,7 +130,7 @@
       // Use highlight() API — returns { value: string } with highlighted HTML
       const result = hljs.highlight(text + '\n', { language: currentLang });
       highlightCode.innerHTML = result.value;
-    }, 150);
+    });
   }
 
   formContent.addEventListener('input', syncHighlight);
