@@ -1913,13 +1913,22 @@
           formSaveBtn.disabled = false;
           formError.textContent = message.data?.message ?? 'Failed to update script.';
           break;
-        case 'deleteYamlScriptResult':
-          if (message.data?.deleted) {
-            hideNewForm();
-            win.__vscode.postMessage({ type: 'loadYamlScripts' });
+        case 'deleteYamlScriptResult': {
+          if (!message.data?.deleted) break;
+          const deletedId = message.data.scriptId;
+          const el = scriptsList.querySelector(`[data-script-id="${CSS.escape(deletedId)}"]`);
+          el?.remove();
+          executeStateUpdaters.delete(deletedId);
+          currentScripts = currentScripts.filter((s) => s.id !== deletedId);
+          hideNewForm();
+          if (currentScripts.length === 0) {
+            noResults.textContent = L.noScripts;
+            noResults.style.display = 'block';
+          } else {
+            applyFilters();
           }
-          // deleted === false means user cancelled the dialog — do nothing
           break;
+        }
         case 'deleteYamlScriptError':
           formError.textContent = message.data?.message ?? 'Failed to delete script.';
           break;
