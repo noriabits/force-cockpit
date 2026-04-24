@@ -567,6 +567,7 @@
     resetForm();
     if (activeFolderFilter !== 'all') {
       formFolder.value = activeSubFolder ?? activeFolderFilter;
+      updateSaveBtn();
     }
     refreshDropdown();
     newForm.style.display = '';

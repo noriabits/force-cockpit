@@ -94,7 +94,8 @@
       "eslint --fix"
     ],
     "src/features/**/*.{js,css,html}": [
-      "prettier --write"
+      "prettier --write",
+      "eslint --fix"
     ],
     "media/**/*.{js,css}": [
       "prettier --write"
