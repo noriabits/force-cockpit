@@ -1,49 +1,32 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
-import * as crypto from 'crypto';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
-import type {
-  FeatureModule,
-  FeatureModuleFactory,
-  RouteDescriptor,
-} from '../features/FeatureModule';
-import { buildRecordUrl } from '../utils/salesforceUrl';
+import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
 import type { CockpitConfig } from '../utils/config';
-
-function getNonce(): string {
-  return crypto.randomBytes(16).toString('hex');
-}
+import { WebviewAssets } from './WebviewAssets';
+import { OperationRegistry } from './OperationRegistry';
+import { MessageRouter } from './MessageRouter';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
+
   private readonly _panel: vscode.WebviewPanel;
+  private readonly _features: FeatureModule[];
+  private readonly _operations = new OperationRegistry();
+  private readonly _assets: WebviewAssets;
+  private readonly _router: MessageRouter;
   private _disposables: vscode.Disposable[] = [];
-
-  // Core services
-  private readonly queryService: QueryService;
-  // Feature modules (loaded from registry)
-  private readonly features: FeatureModule[];
-  // Flat map of message type → route descriptor for O(1) dispatch
-  private readonly _routeMap = new Map<string, RouteDescriptor>();
-
-  // Generic operation tracking
-  private _activeTerminalOps = new Map<string, AbortController>();
-  // Set of opIds currently active in the webview — drift-safe vs a counter
-  private _activeWebviewOps = new Set<string>();
 
   // Limits cache (reuse within 60 seconds)
   private _limitsCache: { data: unknown; ts: number } | null = null;
 
   get hasActiveOperations(): boolean {
-    return this._activeWebviewOps.size > 0;
+    return this._operations.hasActive;
   }
 
   cancelAllOps(): void {
-    for (const ac of this._activeTerminalOps.values()) ac.abort();
-    this._activeTerminalOps.clear();
-    this._activeWebviewOps.clear();
+    this._operations.cancelAll();
     this._panel.webview.postMessage({ type: 'cancelAllOperations' });
   }
 
@@ -113,20 +96,23 @@ export class MainPanel {
     private readonly outputChannel?: vscode.OutputChannel,
   ) {
     this._panel = panel;
-    this.queryService = new QueryService(connectionManager);
-    this.features = featureFactories.map((factory) => factory(connectionManager));
-    for (const feature of this.features) {
-      for (const [type, route] of Object.entries(feature.routes)) {
-        this._routeMap.set(type, route);
-      }
-    }
+    this._features = featureFactories.map((factory) => factory(connectionManager));
+    this._assets = new WebviewAssets(context, panel.webview, this._features);
+    this._router = new MessageRouter({
+      webview: panel.webview,
+      connectionManager,
+      queryService: new QueryService(connectionManager),
+      features: this._features,
+      operations: this._operations,
+      onReady: () => this._sendOrgInfo(),
+    });
 
     void this._update().catch((err: unknown) => {
       this.outputChannel?.appendLine(`[Error] Panel init failed: ${String(err)}`);
     });
     this._setupLifecycleListeners();
-    this._setupMessageHandlers();
-    this._setupConnectionListeners();
+    this._setupMessageListener();
+    this._setupConnectionListener();
   }
 
   private _setupLifecycleListeners(): void {
@@ -137,7 +123,7 @@ export class MainPanel {
         if (this._panel.visible) {
           void this._sendOrgInfo();
         }
-        // Notify all features about panel visibility (used by monitoring to pause auto-refresh)
+        // Notify features about panel visibility (used by monitoring to pause auto-refresh)
         this._panel.webview.postMessage({
           type: 'panelVisibilityChanged',
           data: { visible: this._panel.visible },
@@ -148,117 +134,17 @@ export class MainPanel {
     );
   }
 
-  private _setupMessageHandlers(): void {
-    // Route messages from webview to services
+  private _setupMessageListener(): void {
     this._panel.webview.onDidReceiveMessage(
-      async (message: { type: string; [key: string]: unknown }) => {
-        switch (message.type) {
-          case 'ready':
-            // Webview is fully initialized — safe to deliver current org state
-            await this._sendOrgInfo();
-            break;
-          case 'query':
-            await this._route(
-              () => this.queryService.runQuery(message.soql as string),
-              'queryResult',
-              'queryError',
-            );
-            break;
-          case 'operationStarted': {
-            const opId = message.opId as string | undefined;
-            if (opId) this._activeWebviewOps.add(opId);
-            break;
-          }
-          case 'operationEnded': {
-            const opId = message.opId as string | undefined;
-            if (opId) {
-              this._activeWebviewOps.delete(opId);
-            } else {
-              // Bulk clear sent by cancelAllOperations handler in the webview
-              this._activeWebviewOps.clear();
-            }
-            break;
-          }
-          case 'cancelOperation': {
-            const opId = message.opId as string;
-            const ac = this._activeTerminalOps.get(opId);
-            if (ac) {
-              ac.abort();
-              this._activeTerminalOps.delete(opId);
-            }
-            break;
-          }
-          case 'openRecord': {
-            const org = this.connectionManager.getCurrentOrg();
-            if (org) {
-              const url = buildRecordUrl(org, message.recordId as string);
-              await vscode.env.openExternal(vscode.Uri.parse(url));
-            }
-            return;
-          }
-          case 'openExternalUrl': {
-            const url = message.url as string;
-            if (url && /^https?:\/\//i.test(url)) {
-              await vscode.env.openExternal(vscode.Uri.parse(url));
-            }
-            return;
-          }
-          case 'openInBrowser':
-            try {
-              await vscode.commands.executeCommand('forceCockpit.openInBrowser');
-            } finally {
-              this._panel.webview.postMessage({ type: 'openInBrowserDone' });
-            }
-            return;
-          case 'confirmAction': {
-            const answer = await vscode.window.showWarningMessage(
-              message.prompt as string,
-              { modal: true },
-              'Execute',
-            );
-            this._panel.webview.postMessage({
-              type: 'confirmActionResult',
-              data: { confirmed: answer === 'Execute', requestId: message.requestId },
-            });
-            return;
-          }
-          default: {
-            const route = this._routeMap.get(message.type);
-            if (route) {
-              const opId = message.opId as string | undefined;
-              const ac = new AbortController();
-              if (opId) this._activeTerminalOps.set(opId, ac);
-
-              const postChunk = opId
-                ? (chunk: string) =>
-                    this._panel.webview.postMessage({
-                      type: 'scriptLogChunk',
-                      data: { opId, chunk },
-                    })
-                : undefined;
-
-              await this._route(
-                () => route.handler(message, opId ? ac.signal : undefined, postChunk),
-                route.successType,
-                route.errorType,
-                message as Record<string, unknown>, // includes opId — echoed in result
-              );
-
-              if (opId) this._activeTerminalOps.delete(opId);
-            }
-            break;
-          }
-        }
-      },
+      (message: { type: string; [key: string]: unknown }) => this._router.handle(message),
       null,
       this._disposables,
     );
   }
 
-  private _setupConnectionListeners(): void {
-    // Forward connection changes to webview
+  private _setupConnectionListener(): void {
     const onChanged = (event: ConnectionChangedEvent) => {
-      this._limitsCache = null; // Invalidate limits cache on org change
+      this._limitsCache = null; // Invalidate on org change
       if (event.connected) {
         void this._sendOrgInfo();
       } else {
@@ -271,50 +157,26 @@ export class MainPanel {
     });
   }
 
-  /** Route a service call: on success post successType, on error post errorType.
-   *  context is merged into BOTH the success and error payloads (so opId echoes back). */
-  private async _route<T>(
-    action: () => Promise<T>,
-    successType: string,
-    errorType: string,
-    context: Record<string, unknown> = {},
-  ): Promise<void> {
-    try {
-      const data = await action();
-      const dataObj =
-        typeof data === 'object' && data !== null
-          ? { ...(data as Record<string, unknown>), ...context }
-          : { result: data, ...context };
-      this._panel.webview.postMessage({ type: successType, data: dataObj });
-    } catch (err) {
-      this._panel.webview.postMessage({
-        type: errorType,
-        data: { ...context, message: (err as Error).message },
-      });
-    }
-  }
-
   private async _sendOrgInfo(): Promise<void> {
     const org = this.connectionManager.getCurrentOrg();
-    if (org) {
-      const isProduction = await this.connectionManager.isProductionOrg();
-      const sandboxName = isProduction ? null : this.connectionManager.getSandboxName();
-      const protectedSandboxes = this.config.protectedSandboxes.map((s) => s.toLowerCase());
-      const isProtectedOrg =
-        !isProduction && protectedSandboxes.includes((sandboxName ?? '').toLowerCase());
-      this._panel.webview.postMessage({
-        type: 'orgConnected',
-        data: { ...org, sandboxName, isProtectedOrg },
-      });
-      this._sendStorageLimits();
-    } else {
+    if (!org) {
       this._panel.webview.postMessage({ type: 'orgDisconnected' });
+      return;
     }
+    const isProduction = await this.connectionManager.isProductionOrg();
+    const sandboxName = isProduction ? null : this.connectionManager.getSandboxName();
+    const protectedSandboxes = this.config.protectedSandboxes.map((s) => s.toLowerCase());
+    const isProtectedOrg =
+      !isProduction && protectedSandboxes.includes((sandboxName ?? '').toLowerCase());
+    this._panel.webview.postMessage({
+      type: 'orgConnected',
+      data: { ...org, sandboxName, isProtectedOrg },
+    });
+    void this._sendStorageLimits();
   }
 
   private async _sendStorageLimits(): Promise<void> {
     const now = Date.now();
-    // Reuse cache if younger than 60 seconds
     if (this._limitsCache && now - this._limitsCache.ts < 60_000) {
       this._panel.webview.postMessage({ type: 'storageLimits', data: this._limitsCache.data });
       return;
@@ -330,142 +192,15 @@ export class MainPanel {
 
   private async _update(): Promise<void> {
     this._panel.title = 'Force Cockpit';
-    this._panel.webview.html = await this._getHtml();
+    this._panel.webview.html = await this._assets.getHtml();
     // Org info is delivered in response to the webview's 'ready' message,
     // which fires after all scripts have initialized their message listeners.
-  }
-
-  private _resolveLogoUri(webview: vscode.Webview): vscode.Uri {
-    return webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'fc-logo.png')),
-    );
-  }
-
-  private async _collectFeatureAssets(
-    nonce: string,
-  ): Promise<{ tabFragments: Record<string, string>; linkTags: string[]; scriptTags: string[] }> {
-    const webview = this._panel.webview;
-    const tabFragments: Record<string, string> = {};
-    const linkTags: string[] = [];
-    const scriptTags: string[] = [];
-
-    // Read all feature HTML files in parallel
-    const htmlContents = await Promise.all(
-      this.features.map((f) =>
-        fs.promises.readFile(path.join(this.context.extensionPath, f.htmlPath), 'utf8'),
-      ),
-    );
-
-    for (let i = 0; i < this.features.length; i++) {
-      const feature = this.features[i];
-      const absJs = path.join(this.context.extensionPath, feature.jsPath);
-      const absCss = path.join(this.context.extensionPath, feature.cssPath);
-
-      tabFragments[feature.tab] = (tabFragments[feature.tab] ?? '') + htmlContents[i];
-
-      const cssUri = webview.asWebviewUri(vscode.Uri.file(absCss));
-      linkTags.push(`<link rel="stylesheet" href="${cssUri}">`);
-
-      // Labels script (defer) must come before view script so the global is ready
-      if (feature.labelsPath) {
-        const absLabels = path.join(this.context.extensionPath, feature.labelsPath);
-        const labelsUri = webview.asWebviewUri(vscode.Uri.file(absLabels));
-        scriptTags.push(`<script nonce="${nonce}" src="${labelsUri}" defer></script>`);
-      }
-
-      const featureJsUri = webview.asWebviewUri(vscode.Uri.file(absJs));
-      scriptTags.push(`<script nonce="${nonce}" src="${featureJsUri}" defer></script>`);
-    }
-
-    return { tabFragments, linkTags, scriptTags };
-  }
-
-  // Webview core modules loaded synchronously before main.js. Order matters:
-  // ipc.js sets up the dispatch registry everything else registers with, so it
-  // must come first. main.js (the bootstrap that posts `ready`) runs last.
-  private static readonly WEBVIEW_MODULES = [
-    'ipc.js',
-    'action-tracker.js',
-    'confirmation.js',
-    'org-lifecycle.js',
-    'storage-bars.js',
-    'query-editor.js',
-    'tabs.js',
-    'utils-subtab.js',
-    'accordion.js',
-    'filter.js',
-    'paste-buttons.js',
-  ];
-
-  private _buildWebviewModuleTags(nonce: string): string {
-    const webview = this._panel.webview;
-    return MainPanel.WEBVIEW_MODULES.map((name) => {
-      const uri = webview.asWebviewUri(
-        vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'modules', name)),
-      );
-      return `<script nonce="${nonce}" src="${uri}"></script>`;
-    }).join('\n    ');
-  }
-
-  private async _getHtml(): Promise<string> {
-    const webview = this._panel.webview;
-    const nonce = getNonce();
-
-    const htmlPath = path.join(this.context.extensionPath, 'webviews', 'main.html');
-    const cssUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.css')),
-    );
-    const jsUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'main.js')),
-    );
-    const chartJsUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'dist', 'vendor', 'chart.umd.js')),
-    );
-    const highlightJsUri = webview.asWebviewUri(
-      vscode.Uri.file(
-        path.join(this.context.extensionPath, 'dist', 'vendor', 'highlightjs.bundle.js'),
-      ),
-    );
-    const logoUri = this._resolveLogoUri(webview);
-
-    // Read main template and all feature HTML files in parallel
-    const [mainHtml, { tabFragments, linkTags, scriptTags }] = await Promise.all([
-      fs.promises.readFile(htmlPath, 'utf8'),
-      this._collectFeatureAssets(nonce),
-    ]);
-
-    const webviewModuleTags = this._buildWebviewModuleTags(nonce);
-
-    let html = mainHtml;
-    html = html
-      .replace(/\$\{nonce\}/g, nonce)
-      .replace(/\$\{cssUri\}/g, cssUri.toString())
-      .replace(/\$\{jsUri\}/g, jsUri.toString())
-      .replace(/\$\{chartJsUri\}/g, chartJsUri.toString())
-      .replace(/\$\{highlightJsUri\}/g, highlightJsUri.toString())
-      .replace(/\$\{webviewModules\}/g, webviewModuleTags)
-      .replace(/\$\{cspSource\}/g, webview.cspSource)
-      .replace(/\$\{logoUri\}/g, logoUri.toString())
-      .replace(/\$\{panelTitle\}/g, 'Force Cockpit');
-
-    // Inject feature HTML into tab container placeholders
-    for (const [tab, fragments] of Object.entries(tabFragments)) {
-      html = html.replace(`<!-- features:${tab} -->`, fragments);
-    }
-
-    // Inject feature CSS link tags and JS script tags
-    html = html.replace('</head>', linkTags.join('\n') + '\n</head>');
-    html = html.replace('</body>', scriptTags.join('\n') + '\n</body>');
-
-    return html;
   }
 
   dispose(): void {
     MainPanel.currentPanel = undefined;
     this._panel.dispose();
-    for (const d of this._disposables) {
-      d.dispose();
-    }
+    for (const d of this._disposables) d.dispose();
     this._disposables = [];
   }
 }

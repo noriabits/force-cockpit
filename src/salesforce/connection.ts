@@ -1,24 +1,20 @@
 import * as jsforce from 'jsforce';
-import * as https from 'https';
-import * as http from 'http';
-import { URL } from 'url';
 import { EventEmitter } from 'events';
 import type { OrgDetails } from '../utils/sfCli';
+import { buildExecuteAnonymousEnvelope } from './soap/SoapEnvelope';
+import { postSoapRequest } from './soap/SoapClient';
+import {
+  parseExecuteAnonymousResponse,
+  type ExecuteAnonymousSoapResult,
+} from './soap/SoapResponseParser';
 
 export interface ConnectionChangedEvent {
   connected: boolean;
   org?: OrgDetails;
 }
 
-export type ApexLogLevel =
-  | 'NONE'
-  | 'ERROR'
-  | 'WARN'
-  | 'INFO'
-  | 'DEBUG'
-  | 'FINE'
-  | 'FINER'
-  | 'FINEST';
+export type { ApexLogLevel } from './soap/SoapEnvelope';
+import type { ApexLogLevel } from './soap/SoapEnvelope';
 
 export interface DebuggingOptions {
   logLevels?: {
@@ -165,19 +161,12 @@ export class ConnectionManager extends EventEmitter {
   async executeAnonymousWithDebugLog(
     apexBody: string,
     options?: DebuggingOptions,
-  ): Promise<{
-    compiled: boolean;
-    success: boolean;
-    compileProblem: string | null;
-    exceptionMessage: string | null;
-    exceptionStackTrace: string | null;
-    debugLog: string;
-  }> {
+  ): Promise<ExecuteAnonymousSoapResult> {
     if (!this._connection) {
       throw new Error(NOT_CONNECTED);
     }
 
-    // Set default log levels (all NONE except Apex_code: DEBUG)
+    // Defaults: all NONE except Apex_code: DEBUG
     const logLevels = {
       Db: 'NONE' as ApexLogLevel,
       Workflow: 'NONE' as ApexLogLevel,
@@ -190,124 +179,17 @@ export class ConnectionManager extends EventEmitter {
       ...options?.logLevels,
     };
 
-    // Build SOAP envelope with DebuggingHeader
-    const soapEnvelope = this.buildSoapEnvelope(apexBody, logLevels);
-
-    // Send SOAP request — use raw HTTP to get the XML string back (jsforce.request parses XML into objects)
-    const response = await this.makeSoapRequest(soapEnvelope);
-
-    // Parse SOAP response
-    return this.parseSoapResponse(response);
-  }
-
-  private buildSoapEnvelope(apexBody: string, logLevels: Record<string, ApexLogLevel>): string {
-    // Escape Apex code for XML (CDATA handles most cases, but still escape for safety)
-    const escapedApex = apexBody.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // Build categories XML
-    const categories = Object.entries(logLevels)
-      .filter(([_, level]) => level !== 'NONE')
-      .map(
-        ([category, level]) => `
-        <apex:categories>
-          <apex:category>${category}</apex:category>
-          <apex:level>${level}</apex:level>
-        </apex:categories>`,
-      )
-      .join('');
-
-    return `<?xml version="1.0" encoding="utf-8"?>
-      <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:apex="http://soap.sforce.com/2006/08/apex">
-        <soapenv:Header>
-          <apex:DebuggingHeader>${categories}
-          </apex:DebuggingHeader>
-          <apex:SessionHeader>
-            <apex:sessionId>${this._connection!.accessToken}</apex:sessionId>
-          </apex:SessionHeader>
-        </soapenv:Header>
-        <soapenv:Body>
-          <apex:executeAnonymous>
-            <apex:String>${escapedApex}</apex:String>
-          </apex:executeAnonymous>
-        </soapenv:Body>
-      </soapenv:Envelope>`;
-  }
-
-  private makeSoapRequest(soapEnvelope: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const instanceUrl = this._connection!.instanceUrl;
-      const url = new URL(`/services/Soap/s/${this._connection!.version}`, instanceUrl);
-      const body = Buffer.from(soapEnvelope, 'utf-8');
-      const options = {
-        hostname: url.hostname,
-        port: url.port ? parseInt(url.port, 10) : url.protocol === 'https:' ? 443 : 80,
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          SOAPAction: '""',
-          'Content-Length': body.length,
-          'Accept-Encoding': 'identity', // prevent gzip — we read raw bytes as UTF-8 string
-        },
-      };
-      const transport = url.protocol === 'https:' ? https : http;
-      const req = transport.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk: Buffer) => {
-          data += chunk.toString();
-        });
-        res.on('end', () => {
-          resolve(data);
-        });
-      });
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    });
-  }
-
-  private parseSoapResponse(xmlResponse: string): {
-    compiled: boolean;
-    success: boolean;
-    compileProblem: string | null;
-    exceptionMessage: string | null;
-    exceptionStackTrace: string | null;
-    debugLog: string;
-  } {
-    // Extract execution result from SOAP Body
-    const compiled = this.extractXmlValue(xmlResponse, 'compiled') === 'true';
-    const success = this.extractXmlValue(xmlResponse, 'success') === 'true';
-    const compileProblem = this.extractXmlValue(xmlResponse, 'compileProblem') || null;
-    const exceptionMessage = this.extractXmlValue(xmlResponse, 'exceptionMessage') || null;
-    const exceptionStackTrace = this.extractXmlValue(xmlResponse, 'exceptionStackTrace') || null;
-
-    // Extract debug log from SOAP Header (plain text inside XML — never base64-encoded)
-    const debugLog = this.extractXmlValue(xmlResponse, 'debugLog') || '';
-
-    return {
-      compiled,
-      success,
-      compileProblem,
-      exceptionMessage,
-      exceptionStackTrace,
-      debugLog,
-    };
-  }
-
-  private extractXmlValue(xml: string, tagName: string): string {
-    // Simple regex-based XML extraction (avoids heavy XML parser dependency)
-    const regex = new RegExp(`<[^:]*:?${tagName}[^>]*>([\\s\\S]*?)<\\/[^:]*:?${tagName}>`, 'i');
-    const match = xml.match(regex);
-    if (!match) return '';
-    return match[1]
-      .trim()
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-      .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&');
+    const envelope = buildExecuteAnonymousEnvelope(
+      apexBody,
+      this._connection.accessToken ?? '',
+      logLevels,
+    );
+    const xml = await postSoapRequest(
+      this._connection.instanceUrl,
+      this._connection.version,
+      envelope,
+    );
+    return parseExecuteAnonymousResponse(xml);
   }
 
   async toolingQuery<T extends Record<string, unknown> = Record<string, unknown>>(
