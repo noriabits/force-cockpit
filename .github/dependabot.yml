@@ -10,7 +10,7 @@ updates:
         patterns:
           - "@salesforce/*"
           - "jsforce"
-    ignore:
-      - dependency-type: "development"
+    allow:
+      - dependency-type: "production"
     reviewers:
       - "noriabits"
