@@ -23,6 +23,7 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
         IntersectionObserver: 'readonly',
         HTMLInputElement: 'readonly',
         HTMLSelectElement: 'readonly',
