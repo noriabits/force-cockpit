@@ -380,6 +380,33 @@ export class MainPanel {
     return { tabFragments, linkTags, scriptTags };
   }
 
+  // Webview core modules loaded synchronously before main.js. Order matters:
+  // ipc.js sets up the dispatch registry everything else registers with, so it
+  // must come first. main.js (the bootstrap that posts `ready`) runs last.
+  private static readonly WEBVIEW_MODULES = [
+    'ipc.js',
+    'action-tracker.js',
+    'confirmation.js',
+    'org-lifecycle.js',
+    'storage-bars.js',
+    'query-editor.js',
+    'tabs.js',
+    'utils-subtab.js',
+    'accordion.js',
+    'filter.js',
+    'paste-buttons.js',
+  ];
+
+  private _buildWebviewModuleTags(nonce: string): string {
+    const webview = this._panel.webview;
+    return MainPanel.WEBVIEW_MODULES.map((name) => {
+      const uri = webview.asWebviewUri(
+        vscode.Uri.file(path.join(this.context.extensionPath, 'media', 'modules', name)),
+      );
+      return `<script nonce="${nonce}" src="${uri}"></script>`;
+    }).join('\n    ');
+  }
+
   private async _getHtml(): Promise<string> {
     const webview = this._panel.webview;
     const nonce = getNonce();
@@ -407,6 +434,8 @@ export class MainPanel {
       this._collectFeatureAssets(nonce),
     ]);
 
+    const webviewModuleTags = this._buildWebviewModuleTags(nonce);
+
     let html = mainHtml;
     html = html
       .replace(/\$\{nonce\}/g, nonce)
@@ -414,6 +443,7 @@ export class MainPanel {
       .replace(/\$\{jsUri\}/g, jsUri.toString())
       .replace(/\$\{chartJsUri\}/g, chartJsUri.toString())
       .replace(/\$\{highlightJsUri\}/g, highlightJsUri.toString())
+      .replace(/\$\{webviewModules\}/g, webviewModuleTags)
       .replace(/\$\{cspSource\}/g, webview.cspSource)
       .replace(/\$\{logoUri\}/g, logoUri.toString())
       .replace(/\$\{panelTitle\}/g, 'Force Cockpit');
