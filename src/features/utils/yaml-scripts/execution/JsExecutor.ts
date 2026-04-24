@@ -5,7 +5,8 @@ import xmlFormat from 'xml-formatter';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../../salesforce/connection';
-import { xml, input } from '../scriptHelpers';
+import { xml } from './XmlHelper';
+import { input } from './InputHelper';
 import type { ExecuteScriptResult, YamlScript } from '../types';
 
 function xmlEscape(s: string): string {
