@@ -1,3 +1,8 @@
+.yaml-form-label--required::after {
+  content: ' *';
+  color: var(--vscode-errorForeground);
+}
+
 .yaml-scripts-filter {
   display: flex;
   align-items: center;

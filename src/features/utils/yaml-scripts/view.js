@@ -482,7 +482,10 @@
   }
 
   function updateSaveBtn() {
-    formSaveBtn.disabled = formFolder.value.trim() === '';
+    const isFile = formSource.value === 'file';
+    const hasContent = isFile ? formFilePath.value.trim() !== '' : getEditorContent().trim() !== '';
+    formSaveBtn.disabled =
+      formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent;
   }
 
   function updateApexDefaultsVisibility() {
@@ -630,7 +633,11 @@
     updateApexDefaultsVisibility();
   });
   formSource.addEventListener('change', updateSourceMode);
+  formSource.addEventListener('change', updateSaveBtn);
+  formName.addEventListener('input', updateSaveBtn);
   formFolder.addEventListener('input', updateSaveBtn);
+  formContent.addEventListener('input', updateSaveBtn);
+  formFilePath.addEventListener('input', updateSaveBtn);
   formBrowseBtn.addEventListener('click', () => {
     win.__vscode.postMessage({ type: 'browseForScriptFile' });
   });
@@ -1942,6 +1949,7 @@
         case 'browseForScriptFileResult':
           if (!message.data?.cancelled) {
             formFilePath.value = message.data?.filePath ?? '';
+            updateSaveBtn();
           }
           break;
       }
