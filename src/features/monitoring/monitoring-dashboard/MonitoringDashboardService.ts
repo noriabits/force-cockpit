@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { ConnectionManager } from '../../../salesforce/connection';
+import { toSlug } from '../../../utils/slug';
 import { loadYamlItems, type YamlSource } from '../../../utils/yaml-loader';
 
 export interface MonitoringValueField {
@@ -122,7 +123,7 @@ export class MonitoringDashboardService {
 
   saveConfig(config: MonitoringConfig, isPrivate = false): MonitoringConfig {
     const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
-    const slug = this.toSlug(config.name);
+    const slug = toSlug(config.name, 'chart');
     const folder = config.folder || 'general';
     const id = config.id || `${folder}/${slug}`;
 
@@ -316,14 +317,5 @@ export class MonitoringDashboardService {
     });
 
     await Promise.all(updates);
-  }
-
-  private toSlug(name: string): string {
-    return (
-      name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'chart'
-    );
   }
 }
