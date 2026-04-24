@@ -1777,8 +1777,8 @@
     if (updater) updater();
 
     if (data.cancelled) {
-      statusHint.textContent = '';
-      return; // killed mid-run — no output to show
+      statusHint.textContent = L.statusCancelled;
+      return;
     }
 
     statusHint.textContent = '';

@@ -3,6 +3,7 @@ window.YamlScriptsLabels = {
   pillAll: 'All',
   btnExecute: 'Execute',
   statusExecuting: 'Executing...',
+  statusCancelled: 'Cancelled.',
   noResults: 'No matching scripts found.',
   noScripts: 'No scripts found in force-cockpit/scripts folder.',
   errorNotConnected: 'Connect to an org to execute scripts.',
