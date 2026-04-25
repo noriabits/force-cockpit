@@ -1816,6 +1816,124 @@
     }
   }
 
+  // ── Message handlers ─────────────────────────────────────────────────────
+
+  /** @param {{ opId: string; chunk: string }} data */
+  function handleScriptLogChunk(data) {
+    const { opId, chunk } = data;
+    const scriptId = opIdToScriptId.get(opId);
+    if (!scriptId) return;
+    const accordion = /** @type {HTMLElement | null} */ (
+      scriptsList.querySelector(`[data-script-id="${CSS.escape(scriptId)}"]`)
+    );
+    if (!accordion) return;
+    const viewer = /** @type {HTMLElement | null} */ (accordion.querySelector('.yaml-log-viewer'));
+    const output = /** @type {HTMLElement | null} */ (accordion.querySelector('.yaml-log-output'));
+    if (!viewer || !output) return;
+    viewer.style.display = 'block';
+    // Store log text in memory (not DOM) to avoid O(n²) string copying
+    const next = (scriptLogContent.get(opId) || '') + chunk;
+    scriptLogContent.set(opId, next);
+    output.textContent = next;
+  }
+
+  /** @param {any} data */
+  function handleSaveResult(data) {
+    const savedScript = data?.script;
+    lastSavedScriptId = savedScript?.id ?? null;
+    hideNewForm();
+    if (savedScript?.folder) {
+      const top = savedScript.folder.split('/')[0];
+      activeFolderFilter = top;
+      activeSubFolder = savedScript.folder !== top ? savedScript.folder : null;
+    }
+    const after = savedScript
+      ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        )
+      : currentScripts;
+    renderScripts(after);
+    win.__vscode.postMessage({ type: 'loadYamlScripts' });
+  }
+
+  /** @param {any} data */
+  function handleUpdateResult(data) {
+    const updatedScript = data?.script;
+    const oldScriptId = data?.oldScriptId;
+    lastSavedScriptId = updatedScript?.id ?? null;
+    hideNewForm();
+    if (updatedScript?.folder) {
+      const top = updatedScript.folder.split('/')[0];
+      activeFolderFilter = top;
+      activeSubFolder = updatedScript.folder !== top ? updatedScript.folder : null;
+    }
+    const after = updatedScript
+      ? [
+          ...currentScripts.filter((s) => s.id !== oldScriptId && s.id !== updatedScript.id),
+          updatedScript,
+        ].sort((a, b) => a.name.localeCompare(b.name))
+      : currentScripts;
+    renderScripts(after);
+    win.__vscode.postMessage({ type: 'loadYamlScripts' });
+  }
+
+  /** @param {any} data */
+  function handleDeleteResult(data) {
+    if (!data?.deleted) return;
+    const deletedId = data.scriptId;
+    const el = scriptsList.querySelector(`[data-script-id="${CSS.escape(deletedId)}"]`);
+    el?.remove();
+    executeStateUpdaters.delete(deletedId);
+    currentScripts = currentScripts.filter((s) => s.id !== deletedId);
+    hideNewForm();
+    if (currentScripts.length === 0) {
+      noResults.textContent = L.noScripts;
+      noResults.style.display = 'block';
+    } else {
+      applyFilters();
+    }
+  }
+
+  /** @param {any} data */
+  function handleFavorites(data) {
+    favoriteIds = new Set(data?.favorites ?? []);
+    updateFavoriteStars();
+    applyFilters();
+  }
+
+  /** @type {Record<string, (data: any) => void>} */
+  const messageHandlers = {
+    loadYamlScriptsResult: (data) => renderScripts(data.scripts ?? []),
+    loadYamlScriptsError: (data) => {
+      loadError.textContent = data?.message ?? 'Failed to load scripts.';
+    },
+    executeYamlScriptResult: (data) => handleExecuteResult(data),
+    scriptLogChunk: handleScriptLogChunk,
+    executeYamlScriptError: (data) => win.__endAction(data?.opId),
+    saveYamlScriptResult: handleSaveResult,
+    saveYamlScriptError: (data) => {
+      formSaveBtn.disabled = false;
+      formError.textContent = data?.message ?? 'Failed to save script.';
+    },
+    updateYamlScriptResult: handleUpdateResult,
+    updateYamlScriptError: (data) => {
+      formSaveBtn.disabled = false;
+      formError.textContent = data?.message ?? 'Failed to update script.';
+    },
+    deleteYamlScriptResult: handleDeleteResult,
+    deleteYamlScriptError: (data) => {
+      formError.textContent = data?.message ?? 'Failed to delete script.';
+    },
+    loadFavoritesResult: handleFavorites,
+    toggleFavoriteResult: handleFavorites,
+    browseForScriptFileResult: (data) => {
+      if (!data?.cancelled) {
+        formFilePath.value = data?.filePath ?? '';
+        updateSaveBtn();
+      }
+    },
+  };
+
   // ── Feature registration ──────────────────────────────────────────────────
 
   win.__registerFeature('yaml-scripts', {
@@ -1838,121 +1956,8 @@
     },
     /** @param {{ type: string; data: any }} message */
     onMessage: (message) => {
-      switch (message.type) {
-        case 'loadYamlScriptsResult':
-          renderScripts(message.data.scripts ?? []);
-          break;
-        case 'loadYamlScriptsError':
-          loadError.textContent = message.data?.message ?? 'Failed to load scripts.';
-          break;
-        case 'executeYamlScriptResult':
-          handleExecuteResult(message.data);
-          break;
-        case 'scriptLogChunk': {
-          const { opId, chunk } = message.data;
-          const scriptId = opIdToScriptId.get(opId);
-          if (!scriptId) break;
-          const chunkAccordion = /** @type {HTMLElement | null} */ (
-            scriptsList.querySelector(`[data-script-id="${CSS.escape(scriptId)}"]`)
-          );
-          if (!chunkAccordion) break;
-          const chunkViewer = /** @type {HTMLElement | null} */ (
-            chunkAccordion.querySelector('.yaml-log-viewer')
-          );
-          const chunkOutput = /** @type {HTMLElement | null} */ (
-            chunkAccordion.querySelector('.yaml-log-output')
-          );
-          if (!chunkViewer || !chunkOutput) break;
-          chunkViewer.style.display = 'block';
-          // Store log text in memory (not DOM) to avoid O(n²) string copying
-          const prev = scriptLogContent.get(opId) || '';
-          const next = prev + chunk;
-          scriptLogContent.set(opId, next);
-          chunkOutput.textContent = next;
-          break;
-        }
-        case 'executeYamlScriptError':
-          // Unexpected throw from service — end the action and show error
-          win.__endAction(message.data?.opId);
-          break;
-        case 'saveYamlScriptResult': {
-          const savedScript = message.data?.script;
-          lastSavedScriptId = savedScript?.id ?? null;
-          hideNewForm();
-          if (savedScript?.folder) {
-            const top = savedScript.folder.split('/')[0];
-            activeFolderFilter = top;
-            activeSubFolder = savedScript.folder !== top ? savedScript.folder : null;
-          }
-          const afterSave = savedScript
-            ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript].sort((a, b) =>
-                a.name.localeCompare(b.name),
-              )
-            : currentScripts;
-          renderScripts(afterSave);
-          win.__vscode.postMessage({ type: 'loadYamlScripts' });
-          break;
-        }
-        case 'saveYamlScriptError':
-          formSaveBtn.disabled = false;
-          formError.textContent = message.data?.message ?? 'Failed to save script.';
-          break;
-        case 'updateYamlScriptResult': {
-          const updatedScript = message.data?.script;
-          const oldScriptId = message.data?.oldScriptId;
-          lastSavedScriptId = updatedScript?.id ?? null;
-          hideNewForm();
-          if (updatedScript?.folder) {
-            const top = updatedScript.folder.split('/')[0];
-            activeFolderFilter = top;
-            activeSubFolder = updatedScript.folder !== top ? updatedScript.folder : null;
-          }
-          const afterUpdate = updatedScript
-            ? [
-                ...currentScripts.filter((s) => s.id !== oldScriptId && s.id !== updatedScript.id),
-                updatedScript,
-              ].sort((a, b) => a.name.localeCompare(b.name))
-            : currentScripts;
-          renderScripts(afterUpdate);
-          win.__vscode.postMessage({ type: 'loadYamlScripts' });
-          break;
-        }
-        case 'updateYamlScriptError':
-          formSaveBtn.disabled = false;
-          formError.textContent = message.data?.message ?? 'Failed to update script.';
-          break;
-        case 'deleteYamlScriptResult': {
-          if (!message.data?.deleted) break;
-          const deletedId = message.data.scriptId;
-          const el = scriptsList.querySelector(`[data-script-id="${CSS.escape(deletedId)}"]`);
-          el?.remove();
-          executeStateUpdaters.delete(deletedId);
-          currentScripts = currentScripts.filter((s) => s.id !== deletedId);
-          hideNewForm();
-          if (currentScripts.length === 0) {
-            noResults.textContent = L.noScripts;
-            noResults.style.display = 'block';
-          } else {
-            applyFilters();
-          }
-          break;
-        }
-        case 'deleteYamlScriptError':
-          formError.textContent = message.data?.message ?? 'Failed to delete script.';
-          break;
-        case 'loadFavoritesResult':
-        case 'toggleFavoriteResult':
-          favoriteIds = new Set(message.data?.favorites ?? []);
-          updateFavoriteStars();
-          applyFilters();
-          break;
-        case 'browseForScriptFileResult':
-          if (!message.data?.cancelled) {
-            formFilePath.value = message.data?.filePath ?? '';
-            updateSaveBtn();
-          }
-          break;
-      }
+      const handler = messageHandlers[message.type];
+      if (handler) handler(message.data);
     },
   });
 })();
