@@ -403,8 +403,7 @@
       cardEl.style.display = visible ? '' : 'none';
       if (visible) visibleCount++;
 
-      // Enable/disable drag based on filter state
-      /** @type {any} */ (cardEl).draggable = !filtered;
+      // Hide drag handle when filtered (drag itself is gated on the handle's mousedown)
       const handle = cardEl.querySelector('.monitoring-drag-handle');
       if (handle) /** @type {HTMLElement} */ (handle).style.display = filtered ? 'none' : '';
     }
@@ -475,7 +474,9 @@
     card.setAttribute('data-folder', cfg.folder);
     card.setAttribute('data-source', cfg.source || '');
     card.setAttribute('data-search-text', cfg.name + ' ' + cfg.description + ' ' + cfg.folder);
-    card.draggable = true;
+    // Drag is gated by the drag handle (see buildCardHeader). Keeping draggable=false
+    // by default lets users select and copy text inside the card (e.g. table cells).
+    card.draggable = false;
 
     card.addEventListener('dragstart', (e) => {
       if (grid.querySelector('.monitoring-edit-form')) {
@@ -488,6 +489,7 @@
     });
 
     card.addEventListener('dragend', () => {
+      card.draggable = false;
       card.classList.remove('monitoring-card--dragging');
       dragSrcId = null;
       grid
@@ -577,6 +579,21 @@
     dragHandle.className = 'monitoring-drag-handle';
     dragHandle.textContent = '⠿';
     dragHandle.title = 'Drag to reorder';
+    dragHandle.addEventListener('mousedown', () => {
+      const card = /** @type {HTMLElement | null} */ (header.parentElement);
+      if (!card) return;
+      card.draggable = true;
+      // Reset draggable once the press ends, so text selection works elsewhere on the card.
+      // mouseup fires on a click without drag; dragend fires after a real drag (mouseup is
+      // suppressed by the browser during a drag operation, hence both listeners).
+      const reset = () => {
+        card.draggable = false;
+        document.removeEventListener('mouseup', reset);
+        document.removeEventListener('dragend', reset);
+      };
+      document.addEventListener('mouseup', reset);
+      document.addEventListener('dragend', reset);
+    });
     header.appendChild(dragHandle);
 
     const title = document.createElement('span');
