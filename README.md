@@ -211,6 +211,10 @@ Monitoring configs support two levels of nesting: `{category}/{sub-category}/*.y
 
 3. **Reload the Monitoring tab** — your chart appears automatically. No rebuild or restart needed.
 
+### Deleting a chart
+
+Click **Edit** on the card → click the red **Delete** button in the form → confirm in the modal. User and private charts are removed from disk. Built-in (bundled) charts cannot be deleted from disk, so they are hidden in your workspace instead — a "Restore hidden built-ins (N)" link appears in the top toolbar so you can bring them back.
+
 ### YAML schema
 
 ```yaml

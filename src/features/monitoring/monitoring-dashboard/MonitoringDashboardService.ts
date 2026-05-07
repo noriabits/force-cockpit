@@ -61,10 +61,28 @@ export class MonitoringDashboardService {
     private readonly paths: { builtInPath: string; userPath: string; privatePath: string },
   ) {}
 
-  async loadConfigs(): Promise<MonitoringConfig[]> {
-    return await loadYamlItems(this.paths, (filePath, id, folder, source) =>
+  async loadConfigs(hiddenBuiltinIds?: Set<string>): Promise<MonitoringConfig[]> {
+    const items = await loadYamlItems(this.paths, (filePath, id, folder, source) =>
       this.parseMonitoringFile(filePath, id, folder, source),
     );
+    if (!hiddenBuiltinIds || hiddenBuiltinIds.size === 0) return items;
+    return items.filter((cfg) => !(cfg.source === 'builtin' && hiddenBuiltinIds.has(cfg.id)));
+  }
+
+  deleteConfig(id: string, isPrivate: boolean): void {
+    const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
+    const parts = id.split('/');
+    const folder = parts.slice(0, -1).join('/');
+    const basename = parts[parts.length - 1];
+    const yamlPath = path.join(basePath, folder, `${basename}.yaml`);
+    const ymlPath = path.join(basePath, folder, `${basename}.yml`);
+    let target: string | null = null;
+    if (fs.existsSync(yamlPath)) target = yamlPath;
+    else if (fs.existsSync(ymlPath)) target = ymlPath;
+    if (!target) {
+      throw new Error('Cannot delete: config not found.');
+    }
+    fs.unlinkSync(target);
   }
 
   async runQuery(

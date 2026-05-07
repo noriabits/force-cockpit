@@ -174,6 +174,42 @@
   margin-top: 4px;
 }
 
+/* ── Delete button in form — destructive, pushed to far right ── */
+.monitoring-form-delete-btn {
+  margin-left: auto;
+  color: var(--vscode-inputValidation-errorBorder, #be1100);
+  border-color: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 40%,
+    transparent
+  );
+}
+
+.monitoring-form-delete-btn:hover {
+  background: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-errorBorder, #be1100) 15%,
+    transparent
+  );
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+/* ── Restore hidden built-ins link ── */
+.monitoring-restore-hidden {
+  margin-right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.monitoring-restore-hidden:hover {
+  text-decoration: underline;
+  color: var(--vscode-textLink-activeForeground);
+}
+
 /* ── Category combobox ── */
 .monitoring-folder-combobox {
   position: relative;

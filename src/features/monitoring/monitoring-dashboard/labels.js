@@ -57,4 +57,6 @@ window.MonitoringLabels = {
   filterPrivate: 'Private',
   pillSubAll: 'All',
   errorDuplicateId: 'A config with the same category and name already exists in the other folder.',
+  btnDelete: 'Delete',
+  btnRestoreHidden: (n) => `Restore hidden built-in${n === 1 ? '' : 's'} (${n})`,
 };

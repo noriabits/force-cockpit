@@ -10,6 +10,27 @@ const notificationCooldowns = new Map<string, number>();
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
 const STORAGE_KEY = 'monitoring.notificationCooldowns';
+const HIDDEN_BUILTINS_KEY = 'monitoring.hiddenBuiltins';
+
+function loadHiddenBuiltins(workspaceState: vscode.Memento): Set<string> {
+  const persisted: string[] = workspaceState.get(HIDDEN_BUILTINS_KEY, []);
+  return new Set(persisted);
+}
+
+function persistHiddenBuiltins(workspaceState: vscode.Memento, ids: Set<string>): Thenable<void> {
+  return workspaceState.update(HIDDEN_BUILTINS_KEY, Array.from(ids));
+}
+
+function clearAllCooldownsFor(configId: string, workspaceState: vscode.Memento): void {
+  let changed = false;
+  for (const [key] of notificationCooldowns) {
+    if (key.startsWith(configId + ':')) {
+      notificationCooldowns.delete(key);
+      changed = true;
+    }
+  }
+  if (changed) persistSnoozes(workspaceState);
+}
 
 function loadPersistedSnoozes(workspaceState: vscode.Memento): void {
   const persisted: Record<string, number> = workspaceState.get(STORAGE_KEY, {});
@@ -126,7 +147,11 @@ export function createMonitoringDashboardFeature(paths: {
       labelsPath: path.join(base, 'labels.js'),
       routes: {
         loadMonitoringConfigs: {
-          handler: async () => ({ configs: await service.loadConfigs() }),
+          handler: async () => {
+            const hidden = loadHiddenBuiltins(paths.workspaceState);
+            const configs = await service.loadConfigs(hidden);
+            return { configs, hiddenCount: hidden.size };
+          },
           successType: 'loadMonitoringConfigsResult',
           errorType: 'loadMonitoringConfigsError',
         },
@@ -204,6 +229,39 @@ export function createMonitoringDashboardFeature(paths: {
           },
           successType: 'saveMonitoringPositionsResult',
           errorType: 'saveMonitoringPositionsError',
+        },
+        deleteMonitoringConfig: {
+          handler: async (msg) => {
+            const configId = msg.configId as string;
+            const configName = (msg.configName as string) || configId;
+            const source = msg.source as 'builtin' | 'user' | 'private';
+            const isPrivate = msg.isPrivate as boolean;
+            const confirmed = await vscode.window.showWarningMessage(
+              `Delete "${configName}"? This cannot be undone.`,
+              { modal: true },
+              'Delete',
+            );
+            if (confirmed !== 'Delete') return { deleted: false };
+            if (source === 'builtin') {
+              const hidden = loadHiddenBuiltins(paths.workspaceState);
+              hidden.add(configId);
+              await persistHiddenBuiltins(paths.workspaceState, hidden);
+            } else {
+              service.deleteConfig(configId, isPrivate);
+            }
+            clearAllCooldownsFor(configId, paths.workspaceState);
+            return { deleted: true };
+          },
+          successType: 'deleteMonitoringConfigResult',
+          errorType: 'deleteMonitoringConfigError',
+        },
+        restoreHiddenBuiltins: {
+          handler: async () => {
+            await persistHiddenBuiltins(paths.workspaceState, new Set());
+            return { restored: true };
+          },
+          successType: 'restoreHiddenBuiltinsResult',
+          errorType: 'restoreHiddenBuiltinsError',
         },
       },
     };

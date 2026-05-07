@@ -125,7 +125,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     onMessage: function (/** @type {any} */ message) {
       switch (message.type) {
         case 'loadMonitoringConfigsResult':
-          onConfigsLoaded(message.data.configs);
+          onConfigsLoaded(message.data.configs, message.data.hiddenCount || 0);
           break;
         case 'loadMonitoringConfigsError':
           showLoadError(message.data.message);
@@ -148,6 +148,15 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         case 'saveMonitoringConfigError':
           onSaveError(message.data.message);
           break;
+        case 'deleteMonitoringConfigResult':
+          onDeleteResult(message.data);
+          break;
+        case 'deleteMonitoringConfigError':
+          onDeleteError(message.data.message);
+          break;
+        case 'restoreHiddenBuiltinsResult':
+          loadConfigs();
+          break;
         case 'panelVisibilityChanged':
           isVisible = message.data.visible || false;
           // If panel became visible, resume refresh timers by re-triggering queries
@@ -169,8 +178,11 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     vscode.postMessage({ type: 'loadMonitoringConfigs' });
   }
 
-  /** @param {any[]} newConfigs */
-  function onConfigsLoaded(newConfigs) {
+  /**
+   * @param {any[]} newConfigs
+   * @param {number} hiddenCount
+   */
+  function onConfigsLoaded(newConfigs, hiddenCount) {
     configs = newConfigs.slice().sort((a, b) => {
       const pa = a.position ?? Infinity;
       const pb = b.position ?? Infinity;
@@ -178,6 +190,43 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
     renderAll(configs);
+    renderRestoreHiddenLink(hiddenCount);
+  }
+
+  /** @param {number} hiddenCount */
+  function renderRestoreHiddenLink(hiddenCount) {
+    const existing = document.getElementById('monitoring-restore-hidden');
+    if (existing) existing.remove();
+    if (hiddenCount <= 0) return;
+    const toolbarTop = monitoringPanel.querySelector('.monitoring-toolbar-top');
+    if (!toolbarTop) return;
+    const btn = document.createElement('button');
+    btn.id = 'monitoring-restore-hidden';
+    btn.className = 'btn btn-link monitoring-restore-hidden';
+    btn.textContent =
+      typeof L.btnRestoreHidden === 'function'
+        ? L.btnRestoreHidden(hiddenCount)
+        : `Restore hidden built-ins (${hiddenCount})`;
+    btn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'restoreHiddenBuiltins' });
+    });
+    toolbarTop.insertBefore(btn, toolbarTop.firstChild);
+  }
+
+  /** @param {any} data */
+  function onDeleteResult(data) {
+    if (!data || data.deleted === false) return;
+    loadConfigs();
+  }
+
+  /** @param {string} errMsg */
+  function onDeleteError(errMsg) {
+    const card = /** @type {any} */ (grid.querySelector('.card:has(.monitoring-edit-form)'));
+    if (card && card.__pendingSaveError) {
+      card.__pendingSaveError(errMsg);
+    } else {
+      showLoadError(errMsg);
+    }
   }
 
   /** @param {string} msg */
@@ -906,6 +955,24 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     actionsRow.appendChild(previewBtn);
     actionsRow.appendChild(saveBtn);
     actionsRow.appendChild(cancelBtn);
+
+    // Delete button — only when editing an existing config
+    if (configId) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn monitoring-form-delete-btn';
+      deleteBtn.textContent = L.btnDelete;
+      deleteBtn.addEventListener('click', () => {
+        vscode.postMessage({
+          type: 'deleteMonitoringConfig',
+          configId,
+          configName: cfg.name,
+          source: cfg.source,
+          isPrivate: cfg.source === 'private',
+        });
+      });
+      actionsRow.appendChild(deleteBtn);
+    }
+
     form.appendChild(actionsRow);
 
     // ── Visibility helpers ──

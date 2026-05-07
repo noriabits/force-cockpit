@@ -362,4 +362,81 @@ chartType: bar`,
       );
     });
   });
+
+  describe('deleteConfig', () => {
+    it('removes the YAML file from userPath', () => {
+      const userPath = path.join(tmpDir, 'user');
+      writeConfig(userPath, 'orders', 'by-status.yaml', VALID_YAML);
+
+      const service = makeService({ userPath });
+      service.deleteConfig('orders/by-status', false);
+
+      expect(fs.existsSync(path.join(userPath, 'orders', 'by-status.yaml'))).toBe(false);
+    });
+
+    it('removes the YAML file from privatePath when isPrivate=true', () => {
+      const privatePath = path.join(tmpDir, 'private');
+      writeConfig(privatePath, 'orders', 'chart.yaml', VALID_YAML);
+
+      const service = makeService({ privatePath });
+      service.deleteConfig('orders/chart', true);
+
+      expect(fs.existsSync(path.join(privatePath, 'orders', 'chart.yaml'))).toBe(false);
+    });
+
+    it('also handles .yml extension', () => {
+      const userPath = path.join(tmpDir, 'user');
+      writeConfig(userPath, 'orders', 'legacy.yml', VALID_YAML);
+
+      const service = makeService({ userPath });
+      service.deleteConfig('orders/legacy', false);
+
+      expect(fs.existsSync(path.join(userPath, 'orders', 'legacy.yml'))).toBe(false);
+    });
+
+    it('throws when the config file does not exist', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      expect(() => service.deleteConfig('orders/missing', false)).toThrow(
+        /Cannot delete: config not found/,
+      );
+    });
+  });
+
+  describe('loadConfigs with hidden builtins', () => {
+    it('filters out builtin configs whose ids are in the hidden set', async () => {
+      const builtIn = path.join(tmpDir, 'builtin');
+      writeConfig(builtIn, 'orders', 'a.yaml', VALID_YAML);
+      writeConfig(builtIn, 'orders', 'b.yaml', VALID_YAML.replace('Test Chart', 'B'));
+
+      const service = makeService({ builtInPath: builtIn });
+      const configs = await service.loadConfigs(new Set(['orders/a']));
+
+      expect(configs).toHaveLength(1);
+      expect(configs[0].id).toBe('orders/b');
+    });
+
+    it('does not filter user/private configs whose ids match the hidden set', async () => {
+      const user = path.join(tmpDir, 'user');
+      writeConfig(user, 'orders', 'a.yaml', VALID_YAML);
+
+      const service = makeService({ userPath: user });
+      const configs = await service.loadConfigs(new Set(['orders/a']));
+
+      expect(configs).toHaveLength(1);
+      expect(configs[0].source).toBe('user');
+    });
+
+    it('returns all configs when hidden set is empty', async () => {
+      const builtIn = path.join(tmpDir, 'builtin');
+      writeConfig(builtIn, 'orders', 'a.yaml', VALID_YAML);
+
+      const service = makeService({ builtInPath: builtIn });
+      const configs = await service.loadConfigs(new Set());
+
+      expect(configs).toHaveLength(1);
+    });
+  });
 });
