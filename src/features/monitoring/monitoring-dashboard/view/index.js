@@ -1,4 +1,6 @@
 // @ts-check
+import { isSalesforceRecordId } from '../../../../utils/salesforce';
+
 (function () {
   const win = /** @type {any} */ (window);
   const L = win.MonitoringLabels;
@@ -1534,13 +1536,6 @@
     if (!wrapper) return;
     renderTableInEl(wrapper, data);
     setCardStatus(configId, L.statusRows(data.totalRows));
-  }
-
-  /**
-   * @param {string} value
-   */
-  function isSalesforceRecordId(value) {
-    return typeof value === 'string' && /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(value);
   }
 
   /**
