@@ -339,6 +339,69 @@ chartType: bar`,
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
+    it('writes notifyOnIncrease: true when set', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      service.saveConfig({
+        id: '',
+        folder: 'errors',
+        name: 'Errors',
+        description: '',
+        soql: 'SELECT Id FROM Error__c',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'table',
+        refreshInterval: 30,
+        notifyOnIncrease: true,
+      });
+
+      const written = fs.readFileSync(path.join(userPath, 'errors', 'errors.yaml'), 'utf8');
+      expect(written).toMatch(/notifyOnIncrease: true/);
+    });
+
+    it('omits notifyOnIncrease when false/undefined', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      service.saveConfig({
+        id: '',
+        folder: 'errors',
+        name: 'Errors',
+        description: '',
+        soql: 'SELECT Id FROM Error__c',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'table',
+        refreshInterval: 30,
+      });
+
+      const written = fs.readFileSync(path.join(userPath, 'errors', 'errors.yaml'), 'utf8');
+      expect(written).not.toMatch(/notifyOnIncrease/);
+    });
+
+    it('parses notifyOnIncrease from YAML round-trip', async () => {
+      const builtIn = path.join(tmpDir, 'builtin');
+      writeConfig(builtIn, 'errors', 'errors.yaml', VALID_YAML + '\nnotifyOnIncrease: true\n');
+
+      const service = makeService({ builtInPath: builtIn });
+      const configs = await service.loadConfigs();
+
+      expect(configs[0].notifyOnIncrease).toBe(true);
+    });
+
+    it('defaults notifyOnIncrease to false when missing', async () => {
+      const builtIn = path.join(tmpDir, 'builtin');
+      writeConfig(builtIn, 'errors', 'errors.yaml', VALID_YAML);
+
+      const service = makeService({ builtInPath: builtIn });
+      const configs = await service.loadConfigs();
+
+      expect(configs[0].notifyOnIncrease).toBe(false);
+    });
+
     it('preserves refreshInterval = 0 (auto-refresh disabled)', () => {
       const userPath = path.join(tmpDir, 'user');
       fs.mkdirSync(userPath, { recursive: true });

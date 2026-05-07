@@ -236,6 +236,7 @@ valueFields:              # One or more datasets to plot
 
 chartType: bar            # bar | line | pie | doughnut | metric | table
 stacked: false            # true = stacked bars/lines (bar and line only)
+notifyOnIncrease: false   # true = fire a notification when totalRows grows between two refreshes
 refreshInterval: 0        # Auto-refresh in seconds. 0 = manual refresh only
 ```
 
@@ -253,6 +254,7 @@ refreshInterval: 0        # Auto-refresh in seconds. 0 = manual refresh only
 | `valueFields[].format` | No | `currency` \| `percent` | Number formatting on axes, tooltips, and table cells |
 | `chartType` | No | `bar` \| `line` \| `pie` \| `doughnut` \| `metric` \| `table` | Default chart type (user can override for chart types) |
 | `stacked` | No | `true` \| `false` | Stack bars or lines (bar and line only) |
+| `notifyOnIncrease` | No | `true` \| `false` | Fire a VSCode warning whenever the row count grows between two auto-refreshes (e.g. new error records appearing). Snoozable for 1 hour or for the day. |
 | `refreshInterval` | No | integer (seconds) | `0` disables auto-refresh |
 
 ### Multiple datasets (grouped charts)

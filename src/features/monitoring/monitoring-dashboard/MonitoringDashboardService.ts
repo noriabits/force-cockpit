@@ -24,6 +24,7 @@ export interface MonitoringConfig {
   chartType: 'bar' | 'line' | 'pie' | 'doughnut' | 'metric' | 'table';
   refreshInterval: number; // seconds, 0 = manual
   stacked?: boolean;
+  notifyOnIncrease?: boolean;
   source?: 'builtin' | 'user' | 'private';
   position?: number;
 }
@@ -52,6 +53,7 @@ interface MonitoringRawDoc {
   chartType?: string;
   refreshInterval?: number;
   stacked?: boolean;
+  notifyOnIncrease?: boolean;
   position?: number;
 }
 
@@ -192,6 +194,10 @@ export class MonitoringDashboardService {
       data.stacked = true;
     }
 
+    if (config.notifyOnIncrease) {
+      data.notifyOnIncrease = true;
+    }
+
     if (typeof config.position === 'number') {
       data.position = config.position;
     }
@@ -297,6 +303,7 @@ export class MonitoringDashboardService {
       chartType,
       refreshInterval: Number(parsed.refreshInterval ?? 0),
       stacked: Boolean(parsed.stacked),
+      notifyOnIncrease: Boolean(parsed.notifyOnIncrease),
       source,
       ...(typeof parsed.position === 'number' ? { position: parsed.position } : {}),
     };

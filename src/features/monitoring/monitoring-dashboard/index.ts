@@ -7,6 +7,8 @@ import type { MonitoringValueField, MonitoringConfig } from './MonitoringDashboa
 
 /** Maps cooldownKey → "silence until" timestamp */
 const notificationCooldowns = new Map<string, number>();
+/** Maps configId → most recent totalRows seen, for "notify on increase" detection */
+const previousRowCounts = new Map<string, number>();
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
 const STORAGE_KEY = 'monitoring.notificationCooldowns';
@@ -92,6 +94,25 @@ function checkThresholds(
   return breaches;
 }
 
+function checkRowCountIncrease(
+  configId: string,
+  configName: string,
+  totalRows: number,
+  notifyOnIncrease: boolean,
+): string[] {
+  const prev = previousRowCounts.get(configId);
+  previousRowCounts.set(configId, totalRows);
+  if (!notifyOnIncrease || prev === undefined || totalRows <= prev) return [];
+  const delta = totalRows - prev;
+  return [`[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`];
+}
+
+function fireRowCountNotifications(messages: string[]): void {
+  for (const message of messages) {
+    void vscode.window.showWarningMessage(message);
+  }
+}
+
 function pruneCooldowns(
   configId: string,
   valueFields: MonitoringValueField[],
@@ -163,18 +184,28 @@ export function createMonitoringDashboardFeature(paths: {
               msg.labelField as string,
               msg.valueFields as MonitoringValueField[],
             );
+            let rowCountIncreased = false;
             if (!(msg.configId as string).startsWith('__preview__')) {
+              const configName = (msg.configName as string) ?? (msg.configId as string);
               fireBreachNotifications(
                 checkThresholds(
                   msg.configId as string,
-                  (msg.configName as string) ?? (msg.configId as string),
+                  configName,
                   result.datasets,
                   msg.valueFields as MonitoringValueField[],
                 ),
                 paths.workspaceState,
               );
+              const rowCountMessages = checkRowCountIncrease(
+                msg.configId as string,
+                configName,
+                result.totalRows,
+                Boolean(msg.notifyOnIncrease),
+              );
+              fireRowCountNotifications(rowCountMessages);
+              rowCountIncreased = rowCountMessages.length > 0;
             }
-            return result;
+            return { ...result, rowCountIncreased };
           },
           successType: 'runMonitoringQueryResult',
           errorType: 'runMonitoringQueryError',
@@ -187,23 +218,28 @@ export function createMonitoringDashboardFeature(paths: {
               msg.labelField as string,
               msg.valueFields as MonitoringValueField[],
             );
+            let rowCountIncreased = false;
             if (!(msg.configId as string).startsWith('__preview__')) {
               const valueFields = msg.valueFields as MonitoringValueField[];
               const offset = (msg.labelField as string) ? 1 : 0;
               const datasets = valueFields.map((_, i) => ({
                 data: result.rows.map((row) => Number(row[offset + i]) || 0),
               }));
+              const configName = (msg.configName as string) ?? (msg.configId as string);
               fireBreachNotifications(
-                checkThresholds(
-                  msg.configId as string,
-                  (msg.configName as string) ?? (msg.configId as string),
-                  datasets,
-                  valueFields,
-                ),
+                checkThresholds(msg.configId as string, configName, datasets, valueFields),
                 paths.workspaceState,
               );
+              const rowCountMessages = checkRowCountIncrease(
+                msg.configId as string,
+                configName,
+                result.totalRows,
+                Boolean(msg.notifyOnIncrease),
+              );
+              fireRowCountNotifications(rowCountMessages);
+              rowCountIncreased = rowCountMessages.length > 0;
             }
-            return result;
+            return { ...result, rowCountIncreased };
           },
           successType: 'runMonitoringTableQueryResult',
           errorType: 'runMonitoringTableQueryError',
@@ -215,6 +251,7 @@ export function createMonitoringDashboardFeature(paths: {
               msg.isPrivate as boolean,
             );
             pruneCooldowns(saved.id, saved.valueFields, paths.workspaceState);
+            previousRowCounts.delete(saved.id);
             return { config: saved };
           },
           successType: 'saveMonitoringConfigResult',
@@ -250,6 +287,7 @@ export function createMonitoringDashboardFeature(paths: {
               service.deleteConfig(configId, isPrivate);
             }
             clearAllCooldownsFor(configId, paths.workspaceState);
+            previousRowCounts.delete(configId);
 
             // Re-pack remaining positions so user/private YAMLs stay 0..N-1 (no gaps)
             const remaining = await service.loadConfigs(loadHiddenBuiltins(paths.workspaceState));

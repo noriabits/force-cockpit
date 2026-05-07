@@ -892,6 +892,15 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     stackedRow.classList.add('monitoring-form-row--inline');
     form.appendChild(stackedRow);
 
+    // Notify on record count increase — applies to all chart types
+    const notifyCheckbox = document.createElement('input');
+    notifyCheckbox.type = 'checkbox';
+    notifyCheckbox.id = 'monitoring-edit-notify-increase';
+    notifyCheckbox.checked = cfg.notifyOnIncrease || false;
+    const notifyRow = makeFormRow(L.labelNotifyOnIncrease, notifyCheckbox);
+    notifyRow.classList.add('monitoring-form-row--inline');
+    form.appendChild(notifyRow);
+
     // Refresh interval
     const intervalInput = makeInput(
       'number',
@@ -1021,7 +1030,19 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       const stackedVal =
         /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-stacked'))?.checked ||
         false;
-      return { nameVal, folderVal, descVal, soqlVal, labelFieldVal, intervalVal, stackedVal };
+      const notifyOnIncreaseVal =
+        /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-notify-increase'))
+          ?.checked || false;
+      return {
+        nameVal,
+        folderVal,
+        descVal,
+        soqlVal,
+        labelFieldVal,
+        intervalVal,
+        stackedVal,
+        notifyOnIncreaseVal,
+      };
     }
 
     function readValueFields() {
@@ -1056,8 +1077,16 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     }
 
     function readFormConfig() {
-      const { nameVal, folderVal, descVal, soqlVal, labelFieldVal, intervalVal, stackedVal } =
-        readScalarFormFields();
+      const {
+        nameVal,
+        folderVal,
+        descVal,
+        soqlVal,
+        labelFieldVal,
+        intervalVal,
+        stackedVal,
+        notifyOnIncreaseVal,
+      } = readScalarFormFields();
       const valueFields = readValueFields();
       const position = configId ? cfg.position : nextAvailablePosition();
       return {
@@ -1071,6 +1100,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         chartType: chartTypeSelect.value,
         refreshInterval: intervalVal,
         stacked: stackedVal,
+        notifyOnIncrease: notifyOnIncreaseVal,
         ...(typeof position === 'number' ? { position } : {}),
       };
     }
@@ -1401,6 +1431,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         soql,
         labelField,
         valueFields,
+        notifyOnIncrease: cfg?.notifyOnIncrease ?? false,
       });
     } else {
       vscode.postMessage({
@@ -1410,6 +1441,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         soql,
         labelField,
         valueFields,
+        notifyOnIncrease: cfg?.notifyOnIncrease ?? false,
       });
     }
   }
@@ -1465,6 +1497,8 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       handlePreviewResult(data);
       return;
     }
+
+    if (data.rowCountIncreased) playNotificationPing();
 
     // Check if this config is a metric type
     const cfg = configs.find((/** @type {any} */ c) => c.id === data.configId);
@@ -1538,7 +1572,36 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       return;
     }
 
+    if (data.rowCountIncreased) playNotificationPing();
+
     renderTable(data.configId, data);
+  }
+
+  /**
+   * Play a short synthesized "ping" via the Web Audio API. Used when a
+   * `notifyOnIncrease` dashboard's row count grows between refreshes.
+   */
+  let audioCtx = /** @type {AudioContext | null} */ (null);
+  function playNotificationPing() {
+    try {
+      const w = /** @type {any} */ (window);
+      if (!audioCtx) audioCtx = new (w.AudioContext || w.webkitAudioContext)();
+      const ctx = /** @type {AudioContext} */ (audioCtx);
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch {
+      // Best-effort; silently ignore if audio is blocked or unavailable
+    }
   }
 
   // ── Save handlers ──────────────────────────────────────────────────────────
