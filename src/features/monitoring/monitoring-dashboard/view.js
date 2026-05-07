@@ -1520,6 +1520,13 @@
   }
 
   /**
+   * @param {string} value
+   */
+  function isSalesforceRecordId(value) {
+    return typeof value === 'string' && /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(value);
+  }
+
+  /**
    * @param {HTMLElement} wrapper
    * @param {any} data
    */
@@ -1533,6 +1540,20 @@
       empty.textContent = L.statusNoData;
       wrapper.appendChild(empty);
       return;
+    }
+
+    if (!wrapper.dataset.recordLinkHandlerAttached) {
+      wrapper.addEventListener('click', (event) => {
+        const target = /** @type {HTMLElement} */ (event.target);
+        if (target.tagName === 'A' && target.classList.contains('monitoring-record-link')) {
+          event.preventDefault();
+          const recordId = target.getAttribute('data-record-id');
+          if (recordId) {
+            vscode.postMessage({ type: 'openRecord', recordId });
+          }
+        }
+      });
+      wrapper.dataset.recordLinkHandlerAttached = '1';
     }
 
     const table = document.createElement('table');
@@ -1595,7 +1616,16 @@
       for (const cell of row) {
         const td = document.createElement('td');
         td.className = 'monitoring-table-td';
-        td.textContent = cell;
+        if (isSalesforceRecordId(cell)) {
+          const a = document.createElement('a');
+          a.className = 'monitoring-record-link';
+          a.href = '#';
+          a.dataset.recordId = cell;
+          a.textContent = cell;
+          td.appendChild(a);
+        } else {
+          td.textContent = cell;
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
