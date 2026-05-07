@@ -339,6 +339,49 @@ chartType: bar`,
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
+    it('preserves refreshInterval = 0 (auto-refresh disabled)', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      const saved = service.saveConfig({
+        id: '',
+        folder: 'test',
+        name: 'Off',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar',
+        refreshInterval: 0,
+      });
+
+      const written = fs.readFileSync(path.join(userPath, 'test', 'off.yaml'), 'utf8');
+      expect(written).toMatch(/refreshInterval: 0/);
+      expect(saved.refreshInterval).toBe(0);
+    });
+
+    it('floors non-zero refreshInterval values below 10 to 10', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      service.saveConfig({
+        id: '',
+        folder: 'test',
+        name: 'Fast',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar',
+        refreshInterval: 3,
+      });
+
+      const written = fs.readFileSync(path.join(userPath, 'test', 'fast.yaml'), 'utf8');
+      expect(written).toMatch(/refreshInterval: 10/);
+    });
+
     it('throws when same id exists in the other location', () => {
       const userPath = path.join(tmpDir, 'user');
       const privatePath = path.join(tmpDir, 'private');

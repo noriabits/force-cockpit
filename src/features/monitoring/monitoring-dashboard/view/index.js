@@ -468,6 +468,14 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
   }
 
   // ── Card ordering ───────────────────────────────────────────────────────────
+  function nextAvailablePosition() {
+    let max = -1;
+    for (const c of configs) {
+      if (typeof c.position === 'number' && c.position > max) max = c.position;
+    }
+    return max + 1;
+  }
+
   function saveCardOrder() {
     const allCards = Array.from(grid.querySelectorAll('.card[data-config-id]'));
     const positions = allCards.map((card, idx) => ({
@@ -1051,6 +1059,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       const { nameVal, folderVal, descVal, soqlVal, labelFieldVal, intervalVal, stackedVal } =
         readScalarFormFields();
       const valueFields = readValueFields();
+      const position = configId ? cfg.position : nextAvailablePosition();
       return {
         id: configId || '',
         folder: folderVal,
@@ -1062,6 +1071,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         chartType: chartTypeSelect.value,
         refreshInterval: intervalVal,
         stacked: stackedVal,
+        ...(typeof position === 'number' ? { position } : {}),
       };
     }
 
@@ -1144,7 +1154,13 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         configs = configs.filter((/** @type {any} */ c) => c.id !== cfg.id);
         configs.push(savedCfg);
         const newCard = buildViewCard(savedCfg);
-        card.replaceWith(newCard);
+        if (configId) {
+          card.replaceWith(newCard);
+        } else {
+          // New card: drop the placeholder and append to the end
+          card.remove();
+          grid.appendChild(newCard);
+        }
         triggerQuery(savedCfg.id, savedCfg.soql, savedCfg.labelField, savedCfg.valueFields);
         rebuildPillsForCurrentVisibility();
         applyFilters();

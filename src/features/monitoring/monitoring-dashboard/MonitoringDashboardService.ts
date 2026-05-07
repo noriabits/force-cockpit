@@ -181,8 +181,11 @@ export class MonitoringDashboardService {
         return entry;
       }),
       chartType: config.chartType,
-      // Enforce minimum refresh interval of 10 seconds to prevent API rate limit exhaustion
-      refreshInterval: Math.max(config.refreshInterval ?? 0, 10),
+      // 0 = auto-refresh disabled; otherwise enforce a 10-second floor to avoid API rate limit exhaustion
+      refreshInterval:
+        config.refreshInterval && config.refreshInterval > 0
+          ? Math.max(config.refreshInterval, 10)
+          : 0,
     };
 
     if (config.stacked) {
