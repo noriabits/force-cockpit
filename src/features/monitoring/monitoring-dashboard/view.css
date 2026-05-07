@@ -260,10 +260,55 @@
 
 /* ── Table card ── */
 .monitoring-table-wrapper {
-  overflow-y: auto;
-  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 3px;
+  padding: 6px;
+}
+
+.monitoring-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitoring-table-filter {
+  flex: 1;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+.monitoring-table-filter:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+.monitoring-table-filter::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.monitoring-table-match-count {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.monitoring-table-scroll {
+  overflow-y: auto;
+  max-height: 300px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.monitoring-table-no-matches {
+  padding: 12px 8px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
 }
 
 .monitoring-table {

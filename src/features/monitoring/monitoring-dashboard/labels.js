@@ -11,6 +11,9 @@ window.MonitoringLabels = {
   statusLoading: 'Loading...',
   statusNoData: 'No data returned.',
   statusRows: (n) => `${n} row${n === 1 ? '' : 's'}`,
+  placeholderTableFilter: 'Filter rows...',
+  statusFilteredRows: (matches, total) => `${matches} of ${total}`,
+  statusNoMatchingRows: 'No matching rows.',
   noResults: 'No matching charts found.',
   noConfigs:
     'No monitoring configs found. Add YAML files to force-cockpit/monitoring/ or click "+ Add Chart".',

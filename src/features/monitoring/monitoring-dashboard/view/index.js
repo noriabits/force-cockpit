@@ -1543,19 +1543,40 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
    * @param {any} data
    */
   function renderTableInEl(wrapper, data) {
-    wrapper.innerHTML = '';
-    if (!data.rows || data.rows.length === 0) {
-      const empty = document.createElement('span');
-      empty.style.padding = '8px';
-      empty.style.display = 'block';
-      empty.style.color = 'var(--vscode-descriptionForeground)';
-      empty.textContent = L.statusNoData;
-      wrapper.appendChild(empty);
-      return;
-    }
+    const w = /** @type {any} */ (wrapper);
+    let toolbar = /** @type {HTMLElement | null} */ (
+      wrapper.querySelector(':scope > .monitoring-table-toolbar')
+    );
+    let scrollEl = /** @type {HTMLElement | null} */ (
+      wrapper.querySelector(':scope > .monitoring-table-scroll')
+    );
+    let filterInput = /** @type {HTMLInputElement | null} */ (
+      toolbar ? toolbar.querySelector('.monitoring-table-filter') : null
+    );
+    let matchCount = /** @type {HTMLElement | null} */ (
+      toolbar ? toolbar.querySelector('.monitoring-table-match-count') : null
+    );
 
-    if (!wrapper.dataset.recordLinkHandlerAttached) {
-      wrapper.addEventListener('click', (event) => {
+    if (!toolbar || !scrollEl || !filterInput || !matchCount) {
+      wrapper.innerHTML = '';
+      toolbar = document.createElement('div');
+      toolbar.className = 'monitoring-table-toolbar';
+      filterInput = document.createElement('input');
+      filterInput.type = 'text';
+      filterInput.className = 'monitoring-table-filter';
+      filterInput.placeholder = L.placeholderTableFilter;
+      matchCount = document.createElement('span');
+      matchCount.className = 'monitoring-table-match-count';
+      toolbar.appendChild(filterInput);
+      toolbar.appendChild(matchCount);
+      scrollEl = document.createElement('div');
+      scrollEl.className = 'monitoring-table-scroll';
+      wrapper.appendChild(toolbar);
+      wrapper.appendChild(scrollEl);
+
+      filterInput.addEventListener('input', () => applyFilterAndSort(wrapper));
+
+      scrollEl.addEventListener('click', (event) => {
         const target = /** @type {HTMLElement} */ (event.target);
         if (target.tagName === 'A' && target.classList.contains('monitoring-record-link')) {
           event.preventDefault();
@@ -1565,15 +1586,24 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
           }
         }
       });
-      wrapper.dataset.recordLinkHandlerAttached = '1';
     }
 
+    if (!data.rows || data.rows.length === 0) {
+      scrollEl.innerHTML = '';
+      const empty = document.createElement('span');
+      empty.className = 'monitoring-table-no-matches';
+      empty.textContent = L.statusNoData;
+      scrollEl.appendChild(empty);
+      filterInput.disabled = true;
+      matchCount.textContent = '';
+      w._tableState = { data, sortCol: -1, sortAsc: true };
+      return;
+    }
+    filterInput.disabled = false;
+
+    scrollEl.innerHTML = '';
     const table = document.createElement('table');
     table.className = 'monitoring-table';
-
-    let sortCol = -1;
-    let sortAsc = true;
-
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
     data.columnLabels.forEach((/** @type {string} */ lbl, /** @type {number} */ i) => {
@@ -1581,24 +1611,68 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       th.className = 'monitoring-table-th';
       th.textContent = lbl;
       th.addEventListener('click', () => {
-        if (sortCol === i) {
-          sortAsc = !sortAsc;
+        const state = w._tableState;
+        if (!state) return;
+        if (state.sortCol === i) {
+          state.sortAsc = !state.sortAsc;
         } else {
-          sortCol = i;
-          sortAsc = true;
+          state.sortCol = i;
+          state.sortAsc = true;
         }
-        sortAndRenderRows(tbody, data.rows, sortCol, sortAsc);
+        applyFilterAndSort(wrapper);
       });
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
     table.appendChild(thead);
-
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
-    wrapper.appendChild(table);
+    scrollEl.appendChild(table);
 
-    sortAndRenderRows(tbody, data.rows, sortCol, sortAsc);
+    const prev = w._tableState;
+    const keepSort = !!(
+      prev &&
+      prev.data &&
+      prev.data.columnLabels &&
+      prev.data.columnLabels.length === data.columnLabels.length
+    );
+    w._tableState = {
+      data,
+      tbody,
+      sortCol: keepSort ? prev.sortCol : -1,
+      sortAsc: keepSort ? prev.sortAsc : true,
+      matchCount,
+      filterInput,
+    };
+
+    applyFilterAndSort(wrapper);
+  }
+
+  /**
+   * @param {HTMLElement} wrapper
+   */
+  function applyFilterAndSort(wrapper) {
+    const state = /** @type {any} */ (wrapper)._tableState;
+    if (!state || !state.tbody) return;
+    const q = state.filterInput.value.trim().toLowerCase();
+    const filtered = q
+      ? state.data.rows.filter((/** @type {string[]} */ row) =>
+          row.some((/** @type {string} */ c) =>
+            String(c == null ? '' : c)
+              .toLowerCase()
+              .includes(q),
+          ),
+        )
+      : state.data.rows;
+
+    if (filtered.length === 0 && q) {
+      state.tbody.innerHTML = `<tr><td class="monitoring-table-no-matches" colspan="${state.data.columnLabels.length}">${win.__escapeHtml(L.statusNoMatchingRows)}</td></tr>`;
+    } else {
+      sortAndRenderRows(state.tbody, filtered, state.sortCol, state.sortAsc);
+    }
+    state.matchCount.textContent = q
+      ? L.statusFilteredRows(filtered.length, state.data.rows.length)
+      : '';
   }
 
   /**
