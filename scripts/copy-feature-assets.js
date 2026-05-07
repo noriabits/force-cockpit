@@ -10,6 +10,8 @@ const DEST_DIR = path.join(__dirname, '..', 'dist', 'features');
 
 /**
  * Recursively copy non-.ts files from src to dest.
+ * Skips `view/` directories — those are ESM source bundled by esbuild
+ * directly into dist/features/{tab}/{id}/view.js.
  * @param {string} src
  * @param {string} dest
  */
@@ -22,6 +24,7 @@ function copyAssets(src, dest) {
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
+      if (entry.name === 'view') continue;
       copyAssets(srcPath, destPath);
     } else if (!entry.name.endsWith('.ts')) {
       fs.mkdirSync(dest, { recursive: true });

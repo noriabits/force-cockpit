@@ -1,4 +1,9 @@
 // @ts-check
+import { renderLogWithLinks, renderLogWithJsonTables } from './log-rendering.js';
+import { createCodeEditor } from './code-editor.js';
+import { createFormInputsEditor } from './form-inputs-editor.js';
+import { createAccordionBuilder } from './accordion-builder.js';
+
 (function () {
   const win = /** @type {any} */ (window);
   const L = win.YamlScriptsLabels;
@@ -92,93 +97,12 @@
   formFileRow.style.display = 'none';
 
   // ── Textarea + highlight.js editor ──────────────────────────────────────
-  const hljs = win.hljs;
-  let currentLang = 'apex';
-
-  /** @param {'apex' | 'command' | 'js'} type */
-  function langForType(type) {
-    switch (type) {
-      case 'js':
-        return 'javascript';
-      case 'command':
-        return 'bash';
-      default:
-        return 'apex';
-    }
-  }
-
-  /** @type {number | null} */
-  let highlightRaf = null;
-
-  function syncHighlight() {
-    const text = formContent.value;
-    // Update line numbers synchronously (cheap)
-    const lineCount = text ? text.split('\n').length : 1;
-    const nums = [];
-    for (let i = 1; i <= lineCount; i++) nums.push(i);
-    gutter.textContent = nums.join('\n');
-
-    if (highlightRaf !== null) {
-      cancelAnimationFrame(highlightRaf);
-    }
-    highlightRaf = requestAnimationFrame(() => {
-      highlightRaf = null;
-      if (!text) {
-        highlightCode.innerHTML = '';
-        return;
-      }
-      // Use highlight() API — returns { value: string } with highlighted HTML
-      const result = hljs.highlight(text + '\n', { language: currentLang });
-      highlightCode.innerHTML = result.value;
-    });
-  }
-
-  formContent.addEventListener('input', syncHighlight);
-  formContent.addEventListener('scroll', () => {
-    const pre = highlightCode.parentElement;
-    if (pre) {
-      pre.scrollTop = formContent.scrollTop;
-      pre.scrollLeft = formContent.scrollLeft;
-    }
-    gutter.scrollTop = formContent.scrollTop;
+  const editor = createCodeEditor({
+    textarea: formContent,
+    codeEl: highlightCode,
+    gutter,
+    hljs: win.hljs,
   });
-
-  // Tab key: insert 2 spaces (preserves native undo)
-  formContent.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const start = formContent.selectionStart;
-      const end = formContent.selectionEnd;
-      const val = formContent.value;
-      formContent.value = val.substring(0, start) + '  ' + val.substring(end);
-      formContent.selectionStart = formContent.selectionEnd = start + 2;
-      syncHighlight();
-    }
-  });
-
-  function getEditorContent() {
-    return formContent.value;
-  }
-
-  /** @param {string} text */
-  function setEditorContent(text) {
-    formContent.value = text || '';
-    syncHighlight();
-  }
-
-  /** @param {'apex' | 'command' | 'js'} type */
-  function setEditorLanguage(type) {
-    currentLang = langForType(type);
-    syncHighlight();
-  }
-
-  /** @param {string} text */
-  function setEditorPlaceholder(text) {
-    formContent.placeholder = text || '';
-  }
-
-  /** @type {{ name: string; label: string; type: 'string' | 'picklist' | 'checkbox' | 'textarea'; required: boolean; options: string; checkboxDefault: boolean }[]} */
-  let formInputs = [];
 
   let connected = false;
   /** @type {any} */
@@ -300,164 +224,10 @@
 
   // ── Form inputs management ───────────────────────────────────────────────
 
-  /**
-   * Builds the shared header elements for a form input row.
-   * @param {{ name: string, label: string, type: string, required: boolean, options: string, checkboxDefault: boolean }} inp
-   * @param {number} idx
-   * @returns {{ nameInput: HTMLInputElement, labelInput: HTMLInputElement, typeSelect: HTMLSelectElement, reqLabel: HTMLLabelElement, removeBtn: HTMLButtonElement }}
-   */
-  function buildSharedInputHeader(inp, idx) {
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.className = 'text-input yaml-input-name';
-    nameInput.placeholder = L.placeholderInputName;
-    nameInput.value = inp.name;
-    nameInput.addEventListener('input', () => {
-      formInputs[idx].name = nameInput.value;
-    });
-
-    const labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.className = 'text-input yaml-input-label';
-    labelInput.placeholder = L.placeholderInputLabel;
-    labelInput.value = inp.label;
-    labelInput.addEventListener('input', () => {
-      formInputs[idx].label = labelInput.value;
-    });
-
-    const typeSelect = document.createElement('select');
-    typeSelect.className = 'text-input yaml-input-type-select';
-    const optString = document.createElement('option');
-    optString.value = 'string';
-    optString.textContent = L.typeString;
-    const optPicklist = document.createElement('option');
-    optPicklist.value = 'picklist';
-    optPicklist.textContent = L.typePicklist;
-    const optCheckbox = document.createElement('option');
-    optCheckbox.value = 'checkbox';
-    optCheckbox.textContent = L.typeCheckbox;
-    const optTextarea = document.createElement('option');
-    optTextarea.value = 'textarea';
-    optTextarea.textContent = L.typeTextarea;
-    typeSelect.appendChild(optString);
-    typeSelect.appendChild(optPicklist);
-    typeSelect.appendChild(optCheckbox);
-    typeSelect.appendChild(optTextarea);
-    typeSelect.value = inp.type;
-
-    const reqLabel = document.createElement('label');
-    reqLabel.className = 'yaml-input-required-label';
-    const reqCheck = document.createElement('input');
-    reqCheck.type = 'checkbox';
-    reqCheck.checked = inp.required;
-    reqCheck.addEventListener('change', () => {
-      formInputs[idx].required = reqCheck.checked;
-    });
-    reqLabel.appendChild(reqCheck);
-    reqLabel.appendChild(document.createTextNode(L.labelRequired));
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'btn yaml-input-remove-btn';
-    removeBtn.textContent = L.btnRemoveInput;
-    removeBtn.addEventListener('click', () => {
-      formInputs.splice(idx, 1);
-      renderFormInputs();
-    });
-
-    return { nameInput, labelInput, typeSelect, reqLabel, removeBtn };
-  }
-
-  /**
-   * Builds the picklist-specific options sub-row.
-   * @param {{ options: string, type: string }} inp
-   * @param {number} idx
-   * @returns {HTMLElement}
-   */
-  function buildPicklistSubRow(inp, idx) {
-    const optionsRow = document.createElement('div');
-    optionsRow.className = 'yaml-input-options-row';
-    const optionsInput = document.createElement('input');
-    optionsInput.type = 'text';
-    optionsInput.className = 'text-input';
-    optionsInput.placeholder = L.placeholderOptions;
-    optionsInput.value = inp.options;
-    optionsInput.addEventListener('input', () => {
-      formInputs[idx].options = optionsInput.value;
-    });
-    optionsRow.appendChild(optionsInput);
-    optionsRow.style.display = inp.type === 'picklist' ? '' : 'none';
-    return optionsRow;
-  }
-
-  /**
-   * Builds the checkbox-specific default-checked sub-row.
-   * @param {{ checkboxDefault: boolean, type: string }} inp
-   * @param {number} idx
-   * @returns {HTMLElement}
-   */
-  function buildCheckboxSubRow(inp, idx) {
-    const defaultRow = document.createElement('div');
-    defaultRow.className = 'yaml-input-options-row yaml-input-default-row';
-    const defaultLabel = document.createElement('label');
-    defaultLabel.className = 'yaml-input-required-label';
-    const defaultCheck = document.createElement('input');
-    defaultCheck.type = 'checkbox';
-    defaultCheck.checked = inp.checkboxDefault;
-    defaultCheck.addEventListener('change', () => {
-      formInputs[idx].checkboxDefault = defaultCheck.checked;
-    });
-    defaultLabel.appendChild(defaultCheck);
-    defaultLabel.appendChild(document.createTextNode(L.labelCheckboxDefault));
-    defaultRow.appendChild(defaultLabel);
-    defaultRow.style.display = inp.type === 'checkbox' ? '' : 'none';
-    return defaultRow;
-  }
-
-  function renderFormInputs() {
-    formInputsList.innerHTML = '';
-    formInputs.forEach((inp, idx) => {
-      const { nameInput, labelInput, typeSelect, reqLabel, removeBtn } = buildSharedInputHeader(
-        inp,
-        idx,
-      );
-      const optionsRow = buildPicklistSubRow(inp, idx);
-      const defaultRow = buildCheckboxSubRow(inp, idx);
-
-      const row = document.createElement('div');
-      row.className = 'yaml-input-row';
-      row.appendChild(nameInput);
-      row.appendChild(labelInput);
-      row.appendChild(typeSelect);
-      row.appendChild(reqLabel);
-      row.appendChild(removeBtn);
-      formInputsList.appendChild(row);
-      formInputsList.appendChild(optionsRow);
-      formInputsList.appendChild(defaultRow);
-
-      typeSelect.addEventListener('change', () => {
-        formInputs[idx].type = /** @type {'string' | 'picklist' | 'checkbox'} */ (typeSelect.value);
-        optionsRow.style.display = typeSelect.value === 'picklist' ? '' : 'none';
-        defaultRow.style.display = typeSelect.value === 'checkbox' ? '' : 'none';
-      });
-    });
-  }
-
-  addInputBtn.addEventListener('click', () => {
-    formInputs.push({
-      name: '',
-      label: '',
-      type: 'string',
-      required: false,
-      options: '',
-      checkboxDefault: false,
-    });
-    renderFormInputs();
-    // Focus the last name input
-    const lastNameInput = /** @type {HTMLInputElement | null} */ (
-      formInputsList.querySelector('.yaml-input-row:last-of-type .yaml-input-name')
-    );
-    if (lastNameInput) lastNameInput.focus();
+  const inputsEditor = createFormInputsEditor({
+    listEl: formInputsList,
+    addBtn: addInputBtn,
+    labels: L,
   });
 
   // ── New Script form ────────────────────────────────────────────────────────
@@ -468,7 +238,7 @@
       command: L.placeholderCommandContent,
       js: L.placeholderJsContent,
     };
-    setEditorPlaceholder(
+    editor.setPlaceholder(
       placeholders[/** @type {'apex'|'command'|'js'} */ (formType.value)] ??
         L.placeholderApexContent,
     );
@@ -483,7 +253,9 @@
 
   function updateSaveBtn() {
     const isFile = formSource.value === 'file';
-    const hasContent = isFile ? formFilePath.value.trim() !== '' : getEditorContent().trim() !== '';
+    const hasContent = isFile
+      ? formFilePath.value.trim() !== ''
+      : editor.getContent().trim() !== '';
     formSaveBtn.disabled =
       formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent;
   }
@@ -506,12 +278,11 @@
     formFolder.value = '';
     formSource.value = 'inline';
     formFilePath.value = '';
-    setEditorContent('');
+    editor.setContent('');
     formError.textContent = '';
-    formInputs = [];
-    renderFormInputs();
+    inputsEditor.clear();
     updateContentPlaceholder();
-    setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+    editor.setLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
     updateSourceMode();
     updateSaveBtn();
     if (formFilterUserDebug) formFilterUserDebug.checked = false;
@@ -591,20 +362,22 @@
     formFolder.value = script.folder;
     formSource.value = script.scriptFile ? 'file' : 'inline';
     formFilePath.value = script.scriptFile ?? '';
-    setEditorContent(script.scriptFile ? '' : (script.script ?? ''));
-    setEditorLanguage(script.type);
+    editor.setContent(script.scriptFile ? '' : (script.script ?? ''));
+    editor.setLanguage(script.type);
     formError.textContent = '';
-    formInputs = (script.inputs || []).map((/** @type {any} */ inp) => ({
-      name: inp.name || '',
-      label: inp.label || '',
-      type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (
-        ['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'
-      ),
-      required: !!inp.required,
-      options: inp.type === 'picklist' && Array.isArray(inp.options) ? inp.options.join(', ') : '',
-      checkboxDefault: inp.type === 'checkbox' ? inp.default === true : false,
-    }));
-    renderFormInputs();
+    inputsEditor.setInputs(
+      (script.inputs || []).map((/** @type {any} */ inp) => ({
+        name: inp.name || '',
+        label: inp.label || '',
+        type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (
+          ['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'
+        ),
+        required: !!inp.required,
+        options:
+          inp.type === 'picklist' && Array.isArray(inp.options) ? inp.options.join(', ') : '',
+        checkboxDefault: inp.type === 'checkbox' ? inp.default === true : false,
+      })),
+    );
     updateContentPlaceholder();
     updateSourceMode();
     updateSaveBtn();
@@ -629,7 +402,7 @@
   updateSourceMode();
   formType.addEventListener('change', () => {
     updateContentPlaceholder();
-    setEditorLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+    editor.setLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
     updateApexDefaultsVisibility();
   });
   formSource.addEventListener('change', updateSourceMode);
@@ -652,7 +425,7 @@
     const folderVal = formFolder.value.trim();
     const isFile = formSource.value === 'file';
     const filePathVal = formFilePath.value.trim();
-    const contentVal = getEditorContent().trim();
+    const contentVal = editor.getContent().trim();
     if (!nameVal) {
       formError.textContent = L.errorNameRequired;
       formName.focus();
@@ -674,7 +447,8 @@
       return;
     }
     // Validate inputs
-    const cleanedInputs = formInputs
+    const cleanedInputs = inputsEditor
+      .getInputs()
       .filter((inp) => inp.name.trim())
       .map((inp) => {
         /** @type {{ name: string; label?: string; type?: 'picklist' | 'checkbox' | 'textarea'; required?: boolean; options?: string[]; default?: boolean }} */
@@ -890,744 +664,27 @@
     applyFilters();
   }
 
-  // ── Accordion helpers ────────────────────────────────────────────────────
-
-  /**
-   * @param {any} script
-   * @returns {HTMLButtonElement}
-   */
-  function createFavoriteButton(script) {
-    const isFav = favoriteIds.has(script.id);
-    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    btn.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
-    btn.textContent = isFav ? '\u2605' : '\u2606';
-    btn.title = isFav ? L.unfavorite : L.favorite;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      win.__vscode.postMessage({ type: 'toggleFavorite', scriptId: script.id });
-    });
-    return btn;
-  }
-
-  function updateFavoriteStars() {
-    scriptsList.querySelectorAll('.accordion').forEach((accordion) => {
-      const scriptId = accordion.getAttribute('data-script-id');
-      const starBtn = /** @type {HTMLButtonElement | null} */ (
-        accordion.querySelector('.yaml-star-btn')
-      );
-      if (!starBtn || !scriptId) return;
-      const isFav = favoriteIds.has(scriptId);
-      starBtn.textContent = isFav ? '\u2605' : '\u2606';
-      starBtn.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
-      starBtn.title = isFav ? L.unfavorite : L.favorite;
-    });
-  }
-
-  /**
-   * @param {any} script
-   * @param {string} [extraClasses]
-   * @returns {HTMLElement}
-   */
-  function createAccordionSection(script, extraClasses) {
-    const section = document.createElement('section');
-    section.className = extraClasses ? `accordion ${extraClasses}` : 'accordion';
-    section.setAttribute('data-script-id', script.id);
-    if (script.type) section.setAttribute('data-script-type', script.type);
-    section.setAttribute('data-folder', script.folder);
-    section.setAttribute('data-source', script.source ?? 'user');
-    section.setAttribute('data-search-text', `${script.name} ${script.description}`.toLowerCase());
-    return section;
-  }
-
-  /**
-   * @param {any} script
-   * @param {HTMLElement} section
-   * @returns {HTMLButtonElement}
-   */
-  function createTriggerButton(script, section) {
-    const trigger = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    trigger.className = 'accordion-trigger';
-    trigger.innerHTML = `
-      <span class="accordion-icon">&#9656;</span>
-      <span class="accordion-title">${escapeHtml(script.name)}</span>
-    `;
-    if (script.description || script.scriptFile) {
-      const subtitleSpan = document.createElement('span');
-      subtitleSpan.className = 'accordion-subtitle';
-      if (script.description) {
-        subtitleSpan.appendChild(document.createTextNode(script.description));
-      }
-      if (script.scriptFile) {
-        if (script.description) subtitleSpan.appendChild(document.createTextNode('  '));
-        const fileLink = document.createElement('button');
-        fileLink.type = 'button';
-        fileLink.className = 'yaml-file-link';
-        fileLink.textContent = `📄 ${script.scriptFile}`;
-        fileLink.title = 'Open file in editor';
-        fileLink.addEventListener('click', (e) => {
-          e.stopPropagation();
-          win.__vscode.postMessage({ type: 'openScriptFile', filePath: script.scriptFile });
-        });
-        subtitleSpan.appendChild(fileLink);
-      }
-      trigger.appendChild(subtitleSpan);
-    }
-    trigger.addEventListener('click', () => section.classList.toggle('open'));
-    return trigger;
-  }
-
-  /** @returns {HTMLElement} */
-  function createPrivateBadge() {
-    const badge = document.createElement('span');
-    badge.className = 'private-badge';
-    badge.textContent = L.badgePrivate;
-    badge.title = L.labelPrivate;
-    return badge;
-  }
-
-  /**
-   * @param {any} script
-   * @returns {HTMLButtonElement}
-   */
-  function createEditButton(script) {
-    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    btn.className = 'btn yaml-edit-btn';
-    btn.textContent = L.btnEdit;
-    btn.title = L.tooltipEditScript;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showEditForm(script);
-    });
-    return btn;
-  }
-
-  /**
-   * @param {any} script
-   * @returns {HTMLElement}
-   */
-  function createTypeBadge(script) {
-    const isJs = script.type === 'js';
-    const isCmd = script.type === 'command';
-    const span = document.createElement('span');
-    span.className =
-      'script-type-badge ' +
-      (isJs
-        ? 'script-type-badge--js'
-        : isCmd
-          ? 'script-type-badge--command'
-          : 'script-type-badge--apex');
-    span.textContent = isJs ? L.badgeJs : isCmd ? L.badgeCommand : L.badgeApex;
-    return span;
-  }
-
-  /**
-   * @param {any} script
-   * @returns {HTMLElement}
-   */
-  function buildInvalidAccordion(script) {
-    const section = createAccordionSection(script, 'open yaml-script--invalid');
-    const header = document.createElement('div');
-    header.className = 'yaml-script-header';
-
-    header.appendChild(createTriggerButton(script, section));
-    header.appendChild(createFavoriteButton(script));
-
-    const invalidBadge = document.createElement('span');
-    invalidBadge.className = 'script-invalid-badge';
-    invalidBadge.textContent = L.badgeInvalid;
-    header.appendChild(invalidBadge);
-
-    if (script.source === 'private') header.appendChild(createPrivateBadge());
-    header.appendChild(createEditButton(script));
-
-    const executeBtn = document.createElement('button');
-    executeBtn.className = 'btn yaml-execute-btn';
-    executeBtn.textContent = L.btnExecute;
-    executeBtn.disabled = true;
-    executeBtn.title = L.tooltipInvalidScript;
-    header.appendChild(executeBtn);
-
-    const body = document.createElement('div');
-    body.className = 'accordion-body';
-    const errorBox = document.createElement('div');
-    errorBox.className = 'error-box';
-    errorBox.textContent = script.error ?? L.badgeInvalid;
-    body.appendChild(errorBox);
-
-    section.appendChild(header);
-    section.appendChild(body);
-    return section;
-  }
-
-  /**
-   * @param {any} script
-   * @param {() => void} updateExecuteState
-   * @returns {{ element: HTMLElement | null, inputFields: Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> }}
-   */
-  function buildInputFields(script, updateExecuteState) {
-    /** @type {Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} */
-    const inputFields = new Map();
-    if (!script.inputs || script.inputs.length === 0) {
-      return { element: null, inputFields };
-    }
-
-    const inputsForm = document.createElement('div');
-    inputsForm.className = 'yaml-inputs-form';
-
-    for (const inp of script.inputs) {
-      const fieldDiv = document.createElement('div');
-      fieldDiv.className = 'yaml-input-field';
-
-      if (inp.type === 'checkbox') {
-        const checkboxLabel = document.createElement('label');
-        checkboxLabel.className = 'yaml-input-checkbox-label';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = inp.default === true;
-        cb.addEventListener('change', updateExecuteState);
-        inputFields.set(inp.name, cb);
-        const span = document.createElement('span');
-        span.textContent = inp.label || inp.name;
-        checkboxLabel.appendChild(cb);
-        checkboxLabel.appendChild(span);
-        fieldDiv.appendChild(checkboxLabel);
-      } else {
-        const label = document.createElement('label');
-        label.className = 'form-label';
-        label.textContent = inp.label || inp.name;
-        if (inp.required) {
-          const reqStar = document.createElement('span');
-          reqStar.className = 'yaml-input-required-star';
-          reqStar.textContent = ' *';
-          label.appendChild(reqStar);
-        }
-        fieldDiv.appendChild(label);
-
-        if (inp.type === 'picklist' && inp.options && inp.options.length > 0) {
-          const select = document.createElement('select');
-          select.className = 'text-input';
-          for (const opt of inp.options) {
-            const option = document.createElement('option');
-            option.value = opt;
-            option.textContent = opt;
-            select.appendChild(option);
-          }
-          select.addEventListener('change', updateExecuteState);
-          inputFields.set(inp.name, select);
-          fieldDiv.appendChild(select);
-        } else if (inp.type === 'textarea') {
-          const ta = document.createElement('textarea');
-          ta.className = 'text-input yaml-input-textarea';
-          ta.placeholder = inp.label || inp.name;
-          ta.rows = 4;
-          ta.addEventListener('input', updateExecuteState);
-          ta.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const text = (e.clipboardData?.getData('text') ?? '').trim();
-            const start = ta.selectionStart ?? ta.value.length;
-            const end = ta.selectionEnd ?? ta.value.length;
-            ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
-            ta.selectionStart = ta.selectionEnd = start + text.length;
-            updateExecuteState();
-          });
-          inputFields.set(inp.name, ta);
-          const pasteWrapper = document.createElement('div');
-          pasteWrapper.className = 'input-with-paste input-with-paste--textarea';
-          const pasteBtn = document.createElement('button');
-          pasteBtn.type = 'button';
-          pasteBtn.className = 'paste-btn';
-          pasteBtn.title = 'Paste from clipboard';
-          pasteBtn.textContent = '📋';
-          pasteBtn.tabIndex = -1;
-          pasteBtn.addEventListener('click', () => {
-            navigator.clipboard
-              .readText()
-              .then((text) => {
-                ta.value = text.trim();
-                updateExecuteState();
-              })
-              .catch(() => {});
-          });
-          pasteWrapper.appendChild(ta);
-          pasteWrapper.appendChild(pasteBtn);
-          fieldDiv.appendChild(pasteWrapper);
-        } else {
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.className = 'text-input';
-          input.placeholder = inp.label || inp.name;
-          input.addEventListener('input', updateExecuteState);
-          input.addEventListener('paste', (e) => {
-            e.preventDefault();
-            const text = (e.clipboardData?.getData('text') ?? '').trim();
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? input.value.length;
-            input.value = input.value.slice(0, start) + text + input.value.slice(end);
-            input.selectionStart = input.selectionEnd = start + text.length;
-            updateExecuteState();
-          });
-          inputFields.set(inp.name, input);
-          const pasteWrapper = document.createElement('div');
-          pasteWrapper.className = 'input-with-paste';
-          const pasteBtn = document.createElement('button');
-          pasteBtn.type = 'button';
-          pasteBtn.className = 'paste-btn';
-          pasteBtn.title = 'Paste from clipboard';
-          pasteBtn.textContent = '📋';
-          pasteBtn.tabIndex = -1;
-          pasteBtn.addEventListener('click', () => {
-            navigator.clipboard
-              .readText()
-              .then((text) => {
-                input.value = text.trim();
-                updateExecuteState();
-              })
-              .catch(() => {});
-          });
-          pasteWrapper.appendChild(input);
-          pasteWrapper.appendChild(pasteBtn);
-          fieldDiv.appendChild(pasteWrapper);
-        }
-      }
-
-      inputsForm.appendChild(fieldDiv);
-    }
-
-    return { element: inputsForm, inputFields };
-  }
-
-  /**
-   * @typedef {Object} LogViewerRefs
-   * @property {HTMLElement} statusHint
-   * @property {HTMLElement} errorBox
-   * @property {HTMLElement} logViewer
-   * @property {HTMLPreElement} logOutput
-   * @property {HTMLButtonElement} openInEditorBtn
-   * @property {HTMLButtonElement} copyToClipboardBtn
-   */
-
-  /**
-   * @param {HTMLPreElement} logOutput
-   * @returns {HTMLButtonElement}
-   */
-  function buildOpenInEditorButton(logOutput) {
-    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    btn.className = 'yaml-open-editor-btn';
-    btn.textContent = 'Open in editor';
-    btn.style.display = 'none';
-    btn.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      win.__vscode.postMessage({ type: 'openScriptResult', content });
-    });
-    return btn;
-  }
-
-  /**
-   * @param {HTMLPreElement} logOutput
-   * @returns {HTMLButtonElement}
-   */
-  function buildCopyToClipboardButton(logOutput) {
-    const btn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    btn.className = 'yaml-copy-output-btn';
-    btn.textContent = 'Copy to clipboard';
-    btn.style.display = 'none';
-    btn.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      navigator.clipboard
-        .writeText(content)
-        .then(() => {
-          btn.textContent = 'Copied!';
-          setTimeout(() => {
-            btn.textContent = 'Copy to clipboard';
-          }, 1500);
-        })
-        .catch(() => {});
-    });
-    return btn;
-  }
-
-  /**
-   * @param {any} script
-   * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
-   */
-  function buildLogViewer(script) {
-    const fragment = document.createDocumentFragment();
-    const isApex = script.type !== 'command' && script.type !== 'js';
-
-    const statusHint = document.createElement('span');
-    statusHint.className = 'status-hint yaml-status';
-
-    const errorBox = document.createElement('div');
-    errorBox.className = 'error-box';
-
-    const logViewer = document.createElement('div');
-    logViewer.className = 'yaml-log-viewer';
-    logViewer.style.display = 'none';
-
-    const logOutput = /** @type {HTMLPreElement} */ (document.createElement('pre'));
-    logOutput.className = 'yaml-log-output';
-    logOutput.addEventListener('click', (e) => {
-      const target = /** @type {HTMLElement} */ (e.target);
-      if (target.tagName === 'A' && target.classList.contains('yaml-log-link')) {
-        e.preventDefault();
-        const url = target.getAttribute('data-url');
-        if (url) {
-          win.__vscode.postMessage({ type: 'openExternalUrl', url });
-        }
-      }
-    });
-
-    if (isApex) {
-      const filterBar = document.createElement('div');
-      filterBar.className = 'yaml-log-filter-bar';
-
-      const filterCheckbox = document.createElement('input');
-      filterCheckbox.type = 'checkbox';
-      filterCheckbox.className = 'yaml-log-filter-checkbox';
-      filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
-      const filterLabel = document.createElement('label');
-      filterLabel.className = 'yaml-log-filter-label';
-      filterLabel.appendChild(filterCheckbox);
-      filterLabel.appendChild(document.createTextNode(L.checkboxUserDebugOnly));
-
-      const jsonCheckbox = document.createElement('input');
-      jsonCheckbox.type = 'checkbox';
-      jsonCheckbox.className = 'yaml-log-json-checkbox';
-      jsonCheckbox.checked = script.formatJson ?? false;
-      const jsonLabel = document.createElement('label');
-      jsonLabel.className = 'yaml-log-filter-label';
-      jsonLabel.appendChild(jsonCheckbox);
-      jsonLabel.appendChild(document.createTextNode(L.checkboxPrettyJson));
-
-      function refresh() {
-        const raw = logOutput.getAttribute('data-raw-log') ?? '';
-        const filtered = logOutput.getAttribute('data-filtered-log') ?? '';
-        const text = filterCheckbox.checked && filtered ? filtered : raw;
-        logOutput.innerHTML = jsonCheckbox.checked
-          ? renderLogWithJsonTables(text)
-          : renderLogWithLinks(text);
-      }
-
-      filterCheckbox.addEventListener('change', refresh);
-      jsonCheckbox.addEventListener('change', () => {
-        if (jsonCheckbox.checked && !filterCheckbox.checked) {
-          filterCheckbox.checked = true;
-        }
-        refresh();
-      });
-
-      filterBar.appendChild(filterLabel);
-      filterBar.appendChild(jsonLabel);
-      logViewer.appendChild(filterBar);
-    }
-
-    logViewer.appendChild(logOutput);
-
-    const openInEditorBtn = buildOpenInEditorButton(logOutput);
-    logViewer.appendChild(openInEditorBtn);
-
-    const copyToClipboardBtn = buildCopyToClipboardButton(logOutput);
-    logViewer.appendChild(copyToClipboardBtn);
-
-    fragment.appendChild(statusHint);
-    fragment.appendChild(errorBox);
-    fragment.appendChild(logViewer);
-
-    return {
-      fragment,
-      refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn },
-    };
-  }
-
-  /**
-   * @param {Object} params
-   * @param {any} params.script
-   * @param {HTMLElement} params.section
-   * @param {HTMLButtonElement} params.executeBtn
-   * @param {boolean} params.needsOrg
-   * @param {Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>} params.inputFields
-   * @param {LogViewerRefs} params.refs
-   */
-  function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
-    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } =
-      refs;
-
-    executeBtn.addEventListener('click', () => {
-      if (needsOrg && !connected) return;
-
-      /** @type {Record<string, string>} */
-      const inputValues = {};
-      inputFields.forEach((field, name) => {
-        if (field instanceof HTMLInputElement && field.type === 'checkbox') {
-          inputValues[name] = field.checked ? 'true' : 'false';
-        } else {
-          inputValues[name] = field.value.trim();
-        }
-      });
-
-      /** @type {string | null} */
-      let _scriptOpId = null;
-
-      function doExecute() {
-        statusHint.textContent = L.statusExecuting;
-        errorBox.textContent = '';
-        logViewer.style.display = 'block';
-        logOutput.textContent = '';
-        logOutput.removeAttribute('data-raw-log');
-        logOutput.removeAttribute('data-filtered-log');
-        logOutput.classList.remove('yaml-log-output--success', 'yaml-log-output--error');
-        openInEditorBtn.style.display = 'none';
-        copyToClipboardBtn.style.display = 'none';
-
-        const filterCheckbox = /** @type {HTMLInputElement | null} */ (
-          section.querySelector('.yaml-log-filter-checkbox')
-        );
-        if (filterCheckbox)
-          filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
-        const jsonCb = /** @type {HTMLInputElement | null} */ (
-          section.querySelector('.yaml-log-json-checkbox')
-        );
-        if (jsonCb) jsonCb.checked = script.formatJson ?? false;
-
-        section.classList.add('open');
-        _scriptOpId = win.__startAction(executeBtn, () => {
-          statusHint.textContent = '';
-          win.__vscode.postMessage({ type: 'cancelOperation', opId: _scriptOpId });
-        });
-        if (_scriptOpId) opIdToScriptId.set(_scriptOpId, script.id);
-        win.__vscode.postMessage({
-          type: 'executeYamlScript',
-          scriptId: script.id,
-          inputs: inputValues,
-          opId: _scriptOpId,
-        });
-      }
-
-      win.__confirmIfSensitive(currentOrgData, 'Execute this script?', doExecute, () => {});
-    });
-  }
-
-  // ── Build accordion per script ────────────────────────────────────────────
-
-  /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
-   * @returns {HTMLElement}
-   */
-  function buildAccordion(script) {
-    if (script.invalid) return buildInvalidAccordion(script);
-
-    const isCommand = script.type === 'command';
-    const isJs = script.type === 'js';
-    const needsOrg = !isCommand && !isJs;
-
-    const section = createAccordionSection(script);
-
-    // ── Header ──
-    const header = document.createElement('div');
-    header.className = 'yaml-script-header';
-
-    const executeBtn = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    executeBtn.className = 'btn btn-primary yaml-execute-btn';
-    executeBtn.textContent = L.btnExecute;
-    executeBtn.disabled = needsOrg ? !connected : false;
-
-    header.appendChild(createTriggerButton(script, section));
-    header.appendChild(createFavoriteButton(script));
-    header.appendChild(createTypeBadge(script));
-    if (script.source === 'private') header.appendChild(createPrivateBadge());
-    if (script.source !== 'builtin') header.appendChild(createEditButton(script));
-    header.appendChild(executeBtn);
-
-    // ── Body ──
-    const body = document.createElement('div');
-    body.className = 'accordion-body';
-
-    // Input fields + execute state management
-    const hasInputs = script.inputs && script.inputs.length > 0;
-
-    function updateExecuteState() {
-      const orgOk = needsOrg ? connected : true;
-      if (!hasInputs) {
-        executeBtn.disabled = !orgOk;
-        return;
-      }
-      const allRequiredFilled = (script.inputs || []).every((/** @type {any} */ inp) => {
-        if (!inp.required) return true;
-        const field = inputFields.get(inp.name);
-        if (!field) return false;
-        if (field instanceof HTMLInputElement && field.type === 'checkbox') return true;
-        return field.value.trim() !== '';
-      });
-      executeBtn.disabled = !(orgOk && allRequiredFilled);
-    }
-
-    const { element: inputsEl, inputFields } = buildInputFields(script, updateExecuteState);
-    if (inputsEl) body.appendChild(inputsEl);
-    executeStateUpdaters.set(script.id, updateExecuteState);
-
-    if (hasInputs && (script.inputs || []).some((/** @type {any} */ inp) => inp.required)) {
-      executeBtn.disabled = true;
-    }
-
-    // Log viewer
-    const { fragment, refs } = buildLogViewer(script);
-    body.appendChild(fragment);
-
-    section.appendChild(header);
-    section.appendChild(body);
-
-    attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs });
-
-    return section;
-  }
-
-  /** @param {string} str @returns {string} */
-  function escapeHtml(str) {
-    return win.__escapeHtml(str);
-  }
-
-  /** @param {string} text @returns {string} */
-  function renderLogWithLinks(text) {
-    const URL_RE = /(https?:\/\/[^\s<>"')\]]+)/g;
-    const parts = text.split(URL_RE);
-    let html = '';
-    for (let i = 0; i < parts.length; i++) {
-      if (i % 2 === 1) {
-        const escapedUrl = escapeHtml(parts[i]);
-        html += `<a class="yaml-log-link" href="#" data-url="${escapedUrl}">${escapedUrl}</a>`;
-      } else {
-        html += escapeHtml(parts[i]);
-      }
-    }
-    return html;
-  }
-
-  /** @param {unknown} val @returns {unknown} */
-  function deepParseJson(val) {
-    if (typeof val === 'string') {
-      try {
-        return deepParseJson(JSON.parse(val));
-      } catch {
-        return val;
-      }
-    }
-    if (Array.isArray(val)) return val.map(deepParseJson);
-    if (val !== null && typeof val === 'object') {
-      const out = /** @type {Record<string, unknown>} */ ({});
-      for (const [k, v] of Object.entries(/** @type {object} */ (val))) out[k] = deepParseJson(v);
-      return out;
-    }
-    return val;
-  }
-
-  /** @param {unknown} val @returns {string} */
-  function renderJsonCell(val) {
-    if (val === null) return '<span class="yaml-json-null">null</span>';
-    if (val === undefined) return '';
-    if (typeof val === 'object') return renderJsonAsTable(val);
-    if (typeof val === 'boolean') return `<span class="yaml-json-bool">${val}</span>`;
-    if (typeof val === 'number') return `<span class="yaml-json-num">${val}</span>`;
-    return escapeHtml(String(val));
-  }
-
-  /** @param {unknown} val @returns {string} */
-  function renderJsonAsTable(val) {
-    if (val === null || val === undefined) return escapeHtml(String(val));
-    if (typeof val !== 'object') return escapeHtml(String(val));
-
-    // Array of objects → column-per-key table
-    if (
-      Array.isArray(val) &&
-      val.length > 0 &&
-      val.every((item) => item !== null && typeof item === 'object' && !Array.isArray(item))
-    ) {
-      const keys = [...new Set(val.flatMap((obj) => Object.keys(/** @type {object} */ (obj))))];
-      let h = '<table class="yaml-json-table"><thead><tr>';
-      h += '<th class="yaml-json-th">(index)</th>';
-      for (const k of keys) h += `<th class="yaml-json-th">${escapeHtml(k)}</th>`;
-      h += '</tr></thead><tbody>';
-      val.forEach((row, idx) => {
-        const obj = /** @type {Record<string, unknown>} */ (row);
-        h += `<tr><td class="yaml-json-td yaml-json-td--index">${idx}</td>`;
-        for (const k of keys) h += `<td class="yaml-json-td">${renderJsonCell(obj[k])}</td>`;
-        h += '</tr>';
-      });
-      h += '</tbody></table>';
-      return h;
-    }
-
-    // Array of primitives → (index) | Value
-    if (Array.isArray(val)) {
-      let h = '<table class="yaml-json-table"><thead><tr>';
-      h += '<th class="yaml-json-th">(index)</th><th class="yaml-json-th">Value</th>';
-      h += '</tr></thead><tbody>';
-      val.forEach((item, idx) => {
-        h += `<tr><td class="yaml-json-td yaml-json-td--index">${idx}</td>`;
-        h += `<td class="yaml-json-td">${renderJsonCell(item)}</td></tr>`;
-      });
-      h += '</tbody></table>';
-      return h;
-    }
-
-    // Plain object → Key | Value
-    const entries = Object.entries(val);
-    let h = '<table class="yaml-json-table"><thead><tr>';
-    h += '<th class="yaml-json-th">Key</th><th class="yaml-json-th">Value</th>';
-    h += '</tr></thead><tbody>';
-    for (const [k, v] of entries) {
-      h += `<tr><td class="yaml-json-td yaml-json-td--key">${escapeHtml(k)}</td>`;
-      h += `<td class="yaml-json-td">${renderJsonCell(v)}</td></tr>`;
-    }
-    h += '</tbody></table>';
-    return h;
-  }
-
-  /** @param {string} text @returns {string} */
-  function renderLogWithJsonTables(text) {
-    let html = '';
-    let i = 0;
-    let textStart = 0;
-
-    while (i < text.length) {
-      const ch = text[i];
-      if (ch === '{' || ch === '[') {
-        const close = ch === '{' ? '}' : ']';
-        let depth = 1,
-          j = i + 1,
-          inStr = false,
-          esc = false;
-        while (j < text.length && depth > 0) {
-          const c = text[j];
-          if (esc) {
-            esc = false;
-          } else if (c === '\\' && inStr) {
-            esc = true;
-          } else if (c === '"') {
-            inStr = !inStr;
-          } else if (!inStr) {
-            if (c === ch) depth++;
-            else if (c === close) depth--;
-          }
-          j++;
-        }
-        if (depth === 0) {
-          try {
-            const parsed = JSON.parse(text.slice(i, j));
-            if (i > textStart) html += renderLogWithLinks(text.slice(textStart, i));
-            html += renderJsonAsTable(deepParseJson(parsed));
-            i = j;
-            textStart = i;
-            continue;
-          } catch {
-            /* JSON parse failed — treat as plain text */
-          }
-        }
-      }
-      i++;
-    }
-    if (textStart < text.length) html += renderLogWithLinks(text.slice(textStart));
-    return html;
-  }
+  // ── Accordion builder ─────────────────────────────────────────────────────
+
+  const accordionBuilder = createAccordionBuilder({
+    labels: L,
+    scriptsList,
+    favoriteIds,
+    opIdToScriptId,
+    executeStateUpdaters,
+    getConnected: () => connected,
+    getCurrentOrgData: () => currentOrgData,
+    onEditClick: (script) => showEditForm(script),
+    vscode: win.__vscode,
+    startAction: (btn, onCancel) => win.__startAction(btn, onCancel),
+    confirmIfSensitive: (orgData, prompt, onConfirmed, onCancelled) =>
+      win.__confirmIfSensitive(orgData, prompt, onConfirmed, onCancelled),
+    escapeHtml: win.__escapeHtml,
+    renderLogWithLinks,
+    renderLogWithJsonTables,
+  });
+  const buildAccordion = accordionBuilder.buildAccordion;
+  const updateFavoriteStars = accordionBuilder.updateFavoriteStars;
 
   // ── Render scripts list ───────────────────────────────────────────────────
 

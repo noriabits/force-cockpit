@@ -42,6 +42,13 @@ export default [
     },
   },
   {
+    // ES module sources bundled by esbuild (currently only yaml-scripts/view/)
+    files: ['src/features/**/view/**/*.js'],
+    languageOptions: {
+      sourceType: 'module',
+    },
+  },
+  {
     files: ['src/**/*.ts'],
     languageOptions: {
       parser: tsparser,
