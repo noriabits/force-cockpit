@@ -78,6 +78,59 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     applyFilters();
   });
 
+  // Grid-level live-swap dragover. Per-card dragover with Y-only midpoint logic
+  // doesn't work in a 2-D grid (cards in the same row can't be distinguished).
+  // We instead find the closest visible sibling under the cursor and reorder
+  // continuously as the user drags. The dragged card itself is excluded.
+  grid.addEventListener('dragover', (e) => {
+    if (!dragSrcId) return;
+    const dragCard = /** @type {HTMLElement | null} */ (
+      grid.querySelector(`.card[data-config-id="${dragSrcId}"]`)
+    );
+    if (!dragCard) return;
+    e.preventDefault();
+    const dt = /** @type {DataTransfer | null} */ (/** @type {DragEvent} */ (e).dataTransfer);
+    if (dt) dt.dropEffect = 'move';
+    const target = findClosestCard(dragCard, e.clientX, e.clientY);
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const isAfter = e.clientX > rect.left + rect.width / 2;
+    if (isAfter) {
+      if (target.nextSibling !== dragCard) {
+        grid.insertBefore(dragCard, target.nextSibling);
+      }
+    } else {
+      if (dragCard.nextSibling !== target) {
+        grid.insertBefore(dragCard, target);
+      }
+    }
+  });
+
+  /**
+   * @param {HTMLElement} excluded
+   * @param {number} x
+   * @param {number} y
+   * @returns {HTMLElement | null}
+   */
+  function findClosestCard(excluded, x, y) {
+    const cards = /** @type {HTMLElement[]} */ (
+      Array.from(grid.querySelectorAll('.card[data-config-id]'))
+    ).filter((c) => c !== excluded && c.style.display !== 'none');
+    let best = null;
+    let bestDist = Infinity;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      const dx = x - (rect.left + rect.width / 2);
+      const dy = y - (rect.top + rect.height / 2);
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = card;
+      }
+    }
+    return best;
+  }
+
   // ── Tab visibility observer ────────────────────────────────────────────────
   // Charts rendered inside a display:none container get 0×0 dimensions and show
   // no colours. Defer the initial query run until the panel is actually visible,
@@ -550,62 +603,9 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     card.addEventListener('dragend', () => {
       card.draggable = false;
       card.classList.remove('monitoring-card--dragging');
+      const wasDragging = dragSrcId === cfg.id;
       dragSrcId = null;
-      grid
-        .querySelectorAll('.monitoring-card--drag-over-before, .monitoring-card--drag-over-after')
-        .forEach((el) => {
-          el.classList.remove(
-            'monitoring-card--drag-over-before',
-            'monitoring-card--drag-over-after',
-          );
-        });
-    });
-
-    card.addEventListener('dragover', (e) => {
-      if (!dragSrcId || dragSrcId === cfg.id) return;
-      e.preventDefault();
-      /** @type {DataTransfer} */ (e.dataTransfer).dropEffect = 'move';
-      const rect = card.getBoundingClientRect();
-      const isBefore = /** @type {DragEvent} */ (e).clientY < rect.top + rect.height / 2;
-      grid
-        .querySelectorAll('.monitoring-card--drag-over-before, .monitoring-card--drag-over-after')
-        .forEach((el) => {
-          el.classList.remove(
-            'monitoring-card--drag-over-before',
-            'monitoring-card--drag-over-after',
-          );
-        });
-      card.classList.add(
-        isBefore ? 'monitoring-card--drag-over-before' : 'monitoring-card--drag-over-after',
-      );
-    });
-
-    card.addEventListener('dragleave', () => {
-      card.classList.remove(
-        'monitoring-card--drag-over-before',
-        'monitoring-card--drag-over-after',
-      );
-    });
-
-    card.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (!dragSrcId || dragSrcId === cfg.id) return;
-      const dragCard = /** @type {HTMLElement | null} */ (
-        grid.querySelector(`.card[data-config-id="${dragSrcId}"]`)
-      );
-      if (!dragCard) return;
-      const rect = card.getBoundingClientRect();
-      const isBefore = /** @type {DragEvent} */ (e).clientY < rect.top + rect.height / 2;
-      card.classList.remove(
-        'monitoring-card--drag-over-before',
-        'monitoring-card--drag-over-after',
-      );
-      if (isBefore) {
-        grid.insertBefore(dragCard, card);
-      } else {
-        grid.insertBefore(dragCard, card.nextSibling);
-      }
-      saveCardOrder();
+      if (wasDragging) saveCardOrder();
     });
 
     card.appendChild(buildCardHeader(cfg));

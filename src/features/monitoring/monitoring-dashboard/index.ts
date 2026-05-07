@@ -250,6 +250,22 @@ export function createMonitoringDashboardFeature(paths: {
               service.deleteConfig(configId, isPrivate);
             }
             clearAllCooldownsFor(configId, paths.workspaceState);
+
+            // Re-pack remaining positions so user/private YAMLs stay 0..N-1 (no gaps)
+            const remaining = await service.loadConfigs(loadHiddenBuiltins(paths.workspaceState));
+            const sorted = remaining.slice().sort((a, b) => {
+              const pa = a.position ?? Number.POSITIVE_INFINITY;
+              const pb = b.position ?? Number.POSITIVE_INFINITY;
+              if (pa !== pb) return pa - pb;
+              return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+            });
+            await service.savePositions(
+              sorted.map((c, idx) => ({
+                id: c.id,
+                position: idx,
+                source: c.source ?? 'user',
+              })),
+            );
             return { deleted: true };
           },
           successType: 'deleteMonitoringConfigResult',

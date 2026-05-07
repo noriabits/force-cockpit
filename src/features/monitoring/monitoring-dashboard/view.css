@@ -440,12 +440,3 @@
   opacity: 0.4;
   outline: 2px dashed var(--vscode-focusBorder);
 }
-
-/* Drop target indicator */
-.monitoring-card--drag-over-before {
-  border-top: 2px solid var(--vscode-focusBorder);
-}
-
-.monitoring-card--drag-over-after {
-  border-bottom: 2px solid var(--vscode-focusBorder);
-}
