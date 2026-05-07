@@ -1,5 +1,5 @@
 // Routes incoming webview messages to their handlers:
-//   - Built-in host routes (ready, query, openRecord, openInBrowser,
+//   - Built-in host routes (ready, query, openRecord, openInBrowser, refreshOrg,
 //     confirmAction, openExternalUrl, operationStarted/Ended, cancelOperation)
 //   - Feature routes registered via defineFeature()
 // On success: posts `{ type: successType, data: <result + context> }`.
@@ -90,6 +90,13 @@ export class MessageRouter {
           await vscode.commands.executeCommand('forceCockpit.openInBrowser');
         } finally {
           this.webview.postMessage({ type: 'openInBrowserDone' });
+        }
+        return;
+      case 'refreshOrg':
+        try {
+          await vscode.commands.executeCommand('forceCockpit.refreshOrg');
+        } finally {
+          this.webview.postMessage({ type: 'refreshOrgDone' });
         }
         return;
       case 'confirmAction': {

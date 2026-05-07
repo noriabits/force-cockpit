@@ -210,30 +210,47 @@ export function activate(context: vscode.ExtensionContext): void {
       return true;
     }
 
-    async function connectFromConfig(): Promise<void> {
+    async function connectFromConfig(opts: { force?: boolean } = {}): Promise<void> {
+      const force = opts.force === true;
       const myVersion = ++connectVersion;
       try {
-        const raw = fs.readFileSync(sfConfigPath, 'utf8');
-        const config = JSON.parse(raw) as Record<string, string>;
-        const target = config['target-org'];
+        let target: string | undefined;
+        try {
+          const raw = fs.readFileSync(sfConfigPath, 'utf8');
+          const config = JSON.parse(raw) as Record<string, string>;
+          target = config['target-org'];
+        } catch (err) {
+          if (force) {
+            vscode.window.showWarningMessage(
+              `Force Cockpit: could not read .sf/config.json. ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return;
+          }
+          throw err;
+        }
 
         if (!target) {
           if (connectionManager.isConnected) {
             if (!(await guardBusy('The default org was removed.'))) return;
             if (myVersion !== connectVersion) return;
             connectionManager.disconnect();
+          } else if (force) {
+            vscode.window.showInformationMessage(
+              'Force Cockpit: no default org set in .sf/config.json.',
+            );
           }
           return;
         }
 
-        // Skip if already connected to the same org
+        // Skip if already connected to the same org (unless forcing a refresh)
         const current = connectionManager.getCurrentOrg();
-        if (current?.alias === target || current?.username === target) return;
+        if (!force && (current?.alias === target || current?.username === target)) return;
 
-        if (!(await guardBusy('The default org changed.'))) return;
+        const guardMessage = force ? 'Refreshing the org connection.' : 'The default org changed.';
+        if (!(await guardBusy(guardMessage))) return;
         if (myVersion !== connectVersion) return;
 
-        connectionManager.disconnect();
+        if (connectionManager.isConnected) connectionManager.disconnect();
 
         // Notify the webview that a connection attempt is starting (shows spinner)
         MainPanel.currentPanel?.notifyConnecting(target);
@@ -282,6 +299,12 @@ export function activate(context: vscode.ExtensionContext): void {
       if (connectionManager.isConnected) connectionManager.disconnect();
     });
     context.subscriptions.push(watcher);
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand('forceCockpit.refreshOrg', () =>
+        connectFromConfig({ force: true }),
+      ),
+    );
 
     // Auto-connect on activation — reuses connectFromConfig() with retry and race-guards
     void connectFromConfig();

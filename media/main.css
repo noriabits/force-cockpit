@@ -398,6 +398,16 @@ body {
   border-color: var(--vscode-panel-border);
 }
 
+.btn-icon {
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.empty-state .btn {
+  margin-top: 20px;
+}
+
 /* SOQL editor */
 .query-editor {
   display: flex;

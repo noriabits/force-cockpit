@@ -28,6 +28,12 @@
   const btnOpenBrowser = /** @type {HTMLButtonElement} */ (
     document.getElementById('btn-open-browser')
   );
+  const btnRefreshOrg = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById('btn-refresh-org')
+  );
+  const btnRefreshOrgEmpty = /** @type {HTMLButtonElement | null} */ (
+    document.getElementById('btn-refresh-org-empty')
+  );
   const storageCard = /** @type {HTMLElement} */ (document.getElementById('storage-card'));
 
   // Connection state — mirrored on window for other modules (e.g. query-editor) to read.
@@ -110,5 +116,26 @@
   win.__onMessage('openInBrowserDone', () => {
     btnOpenBrowser.disabled = false;
     btnOpenBrowser.classList.remove('running');
+  });
+
+  // ── Refresh Org buttons (header + empty state) ──────────────────────────
+  /** @type {HTMLButtonElement[]} */
+  const refreshButtons = [btnRefreshOrg, btnRefreshOrgEmpty].filter((/** @type {any} */ b) => b);
+
+  refreshButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      refreshButtons.forEach((b) => {
+        b.disabled = true;
+        b.classList.add('running');
+      });
+      vscode.postMessage({ type: 'refreshOrg' });
+    });
+  });
+
+  win.__onMessage('refreshOrgDone', () => {
+    refreshButtons.forEach((b) => {
+      b.disabled = false;
+      b.classList.remove('running');
+    });
   });
 })();
