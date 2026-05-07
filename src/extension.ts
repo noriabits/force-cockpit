@@ -35,6 +35,17 @@ export function activate(context: vscode.ExtensionContext): void {
   const orgTypeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
   orgTypeItem.tooltip = 'Force Cockpit: org type';
   context.subscriptions.push(orgTypeItem);
+
+  type OrgType = 'production' | 'protected-sandbox' | 'sandbox';
+  async function resolveOrgType(): Promise<OrgType> {
+    if (await connectionManager.isProductionOrg()) return 'production';
+    const sandboxName = (connectionManager.getSandboxName() ?? '').toLowerCase();
+    const isProtected = cockpitConfig.protectedSandboxes
+      .map((s) => s.toLowerCase())
+      .includes(sandboxName);
+    return isProtected ? 'protected-sandbox' : 'sandbox';
+  }
+
   connectionManager.on('connectionChanged', (event: ConnectionChangedEvent) => {
     if (!event.connected) {
       orgTypeItem.hide();
@@ -42,15 +53,23 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     void (async () => {
       try {
-        const isProduction = await connectionManager.isProductionOrg();
-        if (isProduction) {
-          orgTypeItem.text = '$(circle-filled) Production';
-          orgTypeItem.color = new vscode.ThemeColor('errorForeground');
-          orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-        } else {
-          orgTypeItem.text = '$(circle-filled) Sandbox';
-          orgTypeItem.color = new vscode.ThemeColor('testing.iconPassed');
-          orgTypeItem.backgroundColor = undefined;
+        const orgType = await resolveOrgType();
+        switch (orgType) {
+          case 'production':
+            orgTypeItem.text = '$(circle-filled) Production';
+            orgTypeItem.color = new vscode.ThemeColor('errorForeground');
+            orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+            break;
+          case 'protected-sandbox':
+            orgTypeItem.text = '$(circle-filled) Protected Sandbox';
+            orgTypeItem.color = new vscode.ThemeColor('charts.yellow');
+            orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+            break;
+          case 'sandbox':
+            orgTypeItem.text = '$(circle-filled) Sandbox';
+            orgTypeItem.color = new vscode.ThemeColor('testing.iconPassed');
+            orgTypeItem.backgroundColor = undefined;
+            break;
         }
         orgTypeItem.show();
       } catch {
