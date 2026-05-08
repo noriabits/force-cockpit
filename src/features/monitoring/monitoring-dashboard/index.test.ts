@@ -8,10 +8,12 @@ vi.mock('vscode', () => ({
 vi.mock('./MonitoringDashboardService', () => ({
   MonitoringDashboardService: vi.fn().mockImplementation(function () {
     return {
-      loadConfigs: vi.fn(),
+      loadConfigs: vi.fn().mockResolvedValue([]),
       runQuery: vi.fn(),
       runTableQuery: vi.fn(),
       saveConfig: vi.fn(),
+      savePositions: vi.fn().mockResolvedValue(undefined),
+      deleteConfig: vi.fn(),
     };
   }),
 }));
@@ -47,7 +49,7 @@ describe('monitoring snooze persistence', () => {
       'monitoring.notificationCooldowns': { 'chart1:0': futureTime },
     });
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -87,7 +89,7 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -122,7 +124,7 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -167,7 +169,7 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -212,7 +214,7 @@ describe('monitoring snooze persistence', () => {
       'monitoring.notificationCooldowns': { 'chart1:0': futureTime, 'other:0': futureTime },
     });
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -249,7 +251,7 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',
@@ -284,7 +286,7 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const factory = createFeature({
+    const { factory } = createFeature({
       builtInPath: '',
       userPath: '',
       privatePath: '',

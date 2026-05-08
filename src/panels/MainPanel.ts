@@ -38,6 +38,11 @@ export class MainPanel {
     this._panel.webview.postMessage({ type: 'executionLogsChanged' });
   }
 
+  /** Generic post hook used by background features (e.g. monitoring refresher). */
+  postWebviewMessage(message: unknown): void {
+    this._panel.webview.postMessage(message);
+  }
+
   updateConfig(config: CockpitConfig): void {
     this.config = config;
     this._panel.title = 'Force Cockpit';

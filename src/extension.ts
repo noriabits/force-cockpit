@@ -120,6 +120,16 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(configWatcher);
   }
 
+  const monitoringFeature = createMonitoringDashboardFeature({
+    builtInPath: path.join(builtInPath, 'monitoring'),
+    userPath: path.join(userBasePath, 'monitoring'),
+    privatePath: path.join(userBasePath, 'private', 'monitoring'),
+    workspaceState: context.workspaceState,
+    connectionManager,
+    outputChannel,
+    postToWebview: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
+  });
+
   const allFeatures = [
     ...featureRegistry,
     createYamlScriptsFeature({
@@ -129,14 +139,32 @@ export function activate(context: vscode.ExtensionContext): void {
       workspaceRoot,
       workspaceState: context.workspaceState,
     }),
-    createMonitoringDashboardFeature({
-      builtInPath: path.join(builtInPath, 'monitoring'),
-      userPath: path.join(userBasePath, 'monitoring'),
-      privatePath: path.join(userBasePath, 'private', 'monitoring'),
-      workspaceState: context.workspaceState,
-    }),
+    monitoringFeature.factory,
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),
   ];
+
+  // Background auto-refresh: keeps notification-enabled dashboards polling even when
+  // the Force Cockpit panel is closed, so threshold and notifyOnIncrease alerts fire.
+  async function refreshBackgroundMonitoring(): Promise<void> {
+    try {
+      const configs = await monitoringFeature.reloadConfigs();
+      monitoringFeature.refresher.restart(configs);
+    } catch (err) {
+      outputChannel.appendLine(
+        `[Warn] Monitoring refresher failed to load configs: ${String(err)}`,
+      );
+    }
+  }
+
+  connectionManager.on('connectionChanged', (event: ConnectionChangedEvent) => {
+    if (event.connected) {
+      void refreshBackgroundMonitoring();
+    } else {
+      monitoringFeature.refresher.stop();
+    }
+  });
+
+  context.subscriptions.push({ dispose: () => monitoringFeature.refresher.stop() });
 
   // Watch for new/deleted execution logs and notify the webview
   if (path.isAbsolute(userBasePath)) {

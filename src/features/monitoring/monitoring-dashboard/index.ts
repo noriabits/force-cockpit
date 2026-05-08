@@ -4,14 +4,18 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { MonitoringDashboardService } from './MonitoringDashboardService';
 import type { MonitoringValueField, MonitoringConfig } from './MonitoringDashboardService';
+import { BackgroundRefresher } from './BackgroundRefresher';
+import {
+  checkThresholds,
+  fireBreachNotifications,
+  checkRowCountIncrease,
+  fireRowCountNotifications,
+  pruneCooldowns,
+  clearAllCooldownsFor,
+  clearRowCountBaseline,
+  loadPersistedSnoozes,
+} from './notifications';
 
-/** Maps cooldownKey → "silence until" timestamp */
-const notificationCooldowns = new Map<string, number>();
-/** Maps configId → most recent totalRows seen, for "notify on increase" detection */
-const previousRowCounts = new Map<string, number>();
-const COOLDOWN_MS = 60_000;
-const SNOOZE_1H_MS = 60 * 60 * 1000;
-const STORAGE_KEY = 'monitoring.notificationCooldowns';
 const HIDDEN_BUILTINS_KEY = 'monitoring.hiddenBuiltins';
 
 function loadHiddenBuiltins(workspaceState: vscode.Memento): Set<string> {
@@ -23,141 +27,65 @@ function persistHiddenBuiltins(workspaceState: vscode.Memento, ids: Set<string>)
   return workspaceState.update(HIDDEN_BUILTINS_KEY, Array.from(ids));
 }
 
-function clearAllCooldownsFor(configId: string, workspaceState: vscode.Memento): void {
-  let changed = false;
-  for (const [key] of notificationCooldowns) {
-    if (key.startsWith(configId + ':')) {
-      notificationCooldowns.delete(key);
-      changed = true;
-    }
-  }
-  if (changed) persistSnoozes(workspaceState);
+export interface MonitoringFeature {
+  factory: FeatureModuleFactory;
+  /** Background refresher — start/stop driven by extension.ts based on connection state. */
+  refresher: BackgroundRefresher;
+  /** Refresh the in-host config snapshot (used after activate / connectionChanged). */
+  reloadConfigs: () => Promise<MonitoringConfig[]>;
 }
 
-function loadPersistedSnoozes(workspaceState: vscode.Memento): void {
-  const persisted: Record<string, number> = workspaceState.get(STORAGE_KEY, {});
-  const now = Date.now();
-  for (const [key, until] of Object.entries(persisted)) {
-    if (until > now) {
-      notificationCooldowns.set(key, until);
-    }
-  }
-}
-
-function persistSnoozes(workspaceState: vscode.Memento): void {
-  const now = Date.now();
-  const toSave: Record<string, number> = {};
-  for (const [key, until] of notificationCooldowns) {
-    if (until > now && until - now > COOLDOWN_MS) {
-      toSave[key] = until;
-    }
-  }
-  workspaceState.update(STORAGE_KEY, toSave);
-}
-
-function formatValueForNotification(value: number, format?: string): string {
-  if (format === 'currency')
-    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (format === 'percent') return value.toFixed(1) + '%';
-  return value.toLocaleString();
-}
-
-function checkThresholds(
-  configId: string,
-  configName: string,
-  datasets: Array<{ data: number[] }>,
-  valueFields: MonitoringValueField[],
-): Array<{ message: string; cooldownKey: string }> {
-  const now = Date.now();
-  const breaches: Array<{ message: string; cooldownKey: string }> = [];
-  for (let i = 0; i < valueFields.length; i++) {
-    const vf = valueFields[i];
-    if (vf.threshold == null) continue;
-    const condition = vf.thresholdCondition ?? 'above';
-    const data = datasets[i]?.data ?? [];
-    const breached = data.some((v) =>
-      condition === 'above' ? v >= vf.threshold! : v <= vf.threshold!,
-    );
-    if (!breached) continue;
-    const cooldownKey = `${configId}:${i}`;
-    const silenceUntil = notificationCooldowns.get(cooldownKey) ?? 0;
-    if (now < silenceUntil) continue;
-    notificationCooldowns.set(cooldownKey, now + COOLDOWN_MS);
-    const worst = condition === 'above' ? Math.max(...data) : Math.min(...data);
-    const formatted = formatValueForNotification(worst, vf.format);
-    const conditionWord = condition === 'above' ? 'exceeded' : 'fell below';
-    breaches.push({
-      message: `[${configName}] ${vf.label || vf.field} ${conditionWord} threshold of ${vf.threshold} (current: ${formatted})`,
-      cooldownKey,
-    });
-  }
-  return breaches;
-}
-
-function checkRowCountIncrease(
-  configId: string,
-  configName: string,
-  totalRows: number,
-  notifyOnIncrease: boolean,
-): string[] {
-  const prev = previousRowCounts.get(configId);
-  previousRowCounts.set(configId, totalRows);
-  if (!notifyOnIncrease || prev === undefined || totalRows <= prev) return [];
-  const delta = totalRows - prev;
-  return [`[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`];
-}
-
-function fireRowCountNotifications(messages: string[]): void {
-  for (const message of messages) {
-    void vscode.window.showWarningMessage(message);
-  }
-}
-
-function pruneCooldowns(
-  configId: string,
-  valueFields: MonitoringValueField[],
-  workspaceState: vscode.Memento,
-): void {
-  let changed = false;
-  for (const [key] of notificationCooldowns) {
-    if (!key.startsWith(configId + ':')) continue;
-    const idx = parseInt(key.split(':')[1], 10);
-    if (isNaN(idx) || idx >= valueFields.length || valueFields[idx]?.threshold == null) {
-      notificationCooldowns.delete(key);
-      changed = true;
-    }
-  }
-  if (changed) persistSnoozes(workspaceState);
-}
-
-function fireBreachNotifications(
-  breaches: Array<{ message: string; cooldownKey: string }>,
-  workspaceState: vscode.Memento,
-): void {
-  for (const { message, cooldownKey } of breaches) {
-    vscode.window.showWarningMessage(message, 'Snooze 1h', 'Snooze for today').then((selection) => {
-      if (selection === 'Snooze 1h') {
-        notificationCooldowns.set(cooldownKey, Date.now() + SNOOZE_1H_MS);
-        persistSnoozes(workspaceState);
-      } else if (selection === 'Snooze for today') {
-        const midnight = new Date();
-        midnight.setHours(24, 0, 0, 0);
-        notificationCooldowns.set(cooldownKey, midnight.getTime());
-        persistSnoozes(workspaceState);
-      }
-    });
-  }
-}
-
-export function createMonitoringDashboardFeature(paths: {
+export function createMonitoringDashboardFeature(opts: {
   builtInPath: string;
   userPath: string;
   privatePath: string;
   workspaceState: vscode.Memento;
-}): FeatureModuleFactory {
-  loadPersistedSnoozes(paths.workspaceState);
-  return (connectionManager: ConnectionManager): FeatureModule => {
-    const service = new MonitoringDashboardService(connectionManager, paths);
+  /** When provided, the refresher and routes use this CM directly (eager construction). */
+  connectionManager?: ConnectionManager;
+  outputChannel?: vscode.OutputChannel;
+  /** Posts background-refresh results to the webview. No-op when MainPanel is closed. */
+  postToWebview?: (msg: unknown) => void;
+}): MonitoringFeature {
+  loadPersistedSnoozes(opts.workspaceState);
+
+  const paths = {
+    builtInPath: opts.builtInPath,
+    userPath: opts.userPath,
+    privatePath: opts.privatePath,
+  };
+  const postToWebview = opts.postToWebview ?? (() => {});
+
+  // Eagerly construct service + refresher when a CM is provided (production path).
+  // When no CM is provided (legacy test path), we lazily build them inside the factory
+  // using the CM that MainPanel passes in, and the refresher will be a no-op until then.
+  let service: MonitoringDashboardService | null = opts.connectionManager
+    ? new MonitoringDashboardService(opts.connectionManager, paths)
+    : null;
+  let refresher: BackgroundRefresher | null = opts.connectionManager
+    ? new BackgroundRefresher({
+        service: service!,
+        connectionManager: opts.connectionManager,
+        workspaceState: opts.workspaceState,
+        postToWebview,
+        outputChannel: opts.outputChannel,
+      })
+    : null;
+
+  const factory: FeatureModuleFactory = (connectionManager: ConnectionManager): FeatureModule => {
+    if (!service) {
+      service = new MonitoringDashboardService(connectionManager, paths);
+    }
+    if (!refresher) {
+      refresher = new BackgroundRefresher({
+        service,
+        connectionManager,
+        workspaceState: opts.workspaceState,
+        postToWebview,
+        outputChannel: opts.outputChannel,
+      });
+    }
+    const svc = service;
+    const ref = refresher;
     const base = path.join('dist', 'features', 'monitoring', 'monitoring-dashboard');
     return {
       id: 'monitoring-dashboard',
@@ -169,8 +97,10 @@ export function createMonitoringDashboardFeature(paths: {
       routes: {
         loadMonitoringConfigs: {
           handler: async () => {
-            const hidden = loadHiddenBuiltins(paths.workspaceState);
-            const configs = await service.loadConfigs(hidden);
+            const hidden = loadHiddenBuiltins(opts.workspaceState);
+            const configs = await svc.loadConfigs(hidden);
+            // Keep the background refresher in sync with whatever the webview just loaded
+            ref.restart(configs);
             return { configs, hiddenCount: hidden.size };
           },
           successType: 'loadMonitoringConfigsResult',
@@ -178,7 +108,7 @@ export function createMonitoringDashboardFeature(paths: {
         },
         runMonitoringQuery: {
           handler: async (msg) => {
-            const result = await service.runQuery(
+            const result = await svc.runQuery(
               msg.configId as string,
               msg.soql as string,
               msg.labelField as string,
@@ -194,7 +124,7 @@ export function createMonitoringDashboardFeature(paths: {
                   result.datasets,
                   msg.valueFields as MonitoringValueField[],
                 ),
-                paths.workspaceState,
+                opts.workspaceState,
               );
               const rowCountMessages = checkRowCountIncrease(
                 msg.configId as string,
@@ -212,7 +142,7 @@ export function createMonitoringDashboardFeature(paths: {
         },
         runMonitoringTableQuery: {
           handler: async (msg) => {
-            const result = await service.runTableQuery(
+            const result = await svc.runTableQuery(
               msg.configId as string,
               msg.soql as string,
               msg.labelField as string,
@@ -228,7 +158,7 @@ export function createMonitoringDashboardFeature(paths: {
               const configName = (msg.configName as string) ?? (msg.configId as string);
               fireBreachNotifications(
                 checkThresholds(msg.configId as string, configName, datasets, valueFields),
-                paths.workspaceState,
+                opts.workspaceState,
               );
               const rowCountMessages = checkRowCountIncrease(
                 msg.configId as string,
@@ -246,12 +176,12 @@ export function createMonitoringDashboardFeature(paths: {
         },
         saveMonitoringConfig: {
           handler: async (msg) => {
-            const saved = service.saveConfig(
-              msg.config as MonitoringConfig,
-              msg.isPrivate as boolean,
-            );
-            pruneCooldowns(saved.id, saved.valueFields, paths.workspaceState);
-            previousRowCounts.delete(saved.id);
+            const saved = svc.saveConfig(msg.config as MonitoringConfig, msg.isPrivate as boolean);
+            pruneCooldowns(saved.id, saved.valueFields, opts.workspaceState);
+            clearRowCountBaseline(saved.id);
+            const hidden = loadHiddenBuiltins(opts.workspaceState);
+            const configs = await svc.loadConfigs(hidden);
+            ref.restart(configs);
             return { config: saved };
           },
           successType: 'saveMonitoringConfigResult',
@@ -259,7 +189,7 @@ export function createMonitoringDashboardFeature(paths: {
         },
         saveMonitoringPositions: {
           handler: async (msg) => {
-            await service.savePositions(
+            await svc.savePositions(
               msg.positions as Array<{ id: string; position: number; source: string }>,
             );
             return {};
@@ -280,30 +210,30 @@ export function createMonitoringDashboardFeature(paths: {
             );
             if (confirmed !== 'Delete') return { deleted: false };
             if (source === 'builtin') {
-              const hidden = loadHiddenBuiltins(paths.workspaceState);
+              const hidden = loadHiddenBuiltins(opts.workspaceState);
               hidden.add(configId);
-              await persistHiddenBuiltins(paths.workspaceState, hidden);
+              await persistHiddenBuiltins(opts.workspaceState, hidden);
             } else {
-              service.deleteConfig(configId, isPrivate);
+              svc.deleteConfig(configId, isPrivate);
             }
-            clearAllCooldownsFor(configId, paths.workspaceState);
-            previousRowCounts.delete(configId);
+            clearAllCooldownsFor(configId, opts.workspaceState);
+            clearRowCountBaseline(configId);
 
-            // Re-pack remaining positions so user/private YAMLs stay 0..N-1 (no gaps)
-            const remaining = await service.loadConfigs(loadHiddenBuiltins(paths.workspaceState));
+            const remaining = await svc.loadConfigs(loadHiddenBuiltins(opts.workspaceState));
             const sorted = remaining.slice().sort((a, b) => {
               const pa = a.position ?? Number.POSITIVE_INFINITY;
               const pb = b.position ?? Number.POSITIVE_INFINITY;
               if (pa !== pb) return pa - pb;
               return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
             });
-            await service.savePositions(
+            await svc.savePositions(
               sorted.map((c, idx) => ({
                 id: c.id,
                 position: idx,
                 source: c.source ?? 'user',
               })),
             );
+            ref.restart(sorted);
             return { deleted: true };
           },
           successType: 'deleteMonitoringConfigResult',
@@ -311,7 +241,9 @@ export function createMonitoringDashboardFeature(paths: {
         },
         restoreHiddenBuiltins: {
           handler: async () => {
-            await persistHiddenBuiltins(paths.workspaceState, new Set());
+            await persistHiddenBuiltins(opts.workspaceState, new Set());
+            const configs = await svc.loadConfigs(new Set());
+            ref.restart(configs);
             return { restored: true };
           },
           successType: 'restoreHiddenBuiltinsResult',
@@ -320,4 +252,32 @@ export function createMonitoringDashboardFeature(paths: {
       },
     };
   };
+
+  // Lazy proxy: extension.ts may interact with the refresher before MainPanel opens.
+  // When the factory has not yet been invoked, all methods are safe no-ops.
+  const refresherProxy: BackgroundRefresher = {
+    start(configs: MonitoringConfig[]) {
+      refresher?.start(configs);
+    },
+    stop() {
+      refresher?.stop();
+    },
+    restart(configs: MonitoringConfig[]) {
+      refresher?.restart(configs);
+    },
+    get running() {
+      return refresher?.running ?? false;
+    },
+    get scheduledIds() {
+      return refresher?.scheduledIds ?? [];
+    },
+  } as unknown as BackgroundRefresher;
+
+  const reloadConfigs = async (): Promise<MonitoringConfig[]> => {
+    if (!service) return [];
+    const hidden = loadHiddenBuiltins(opts.workspaceState);
+    return service.loadConfigs(hidden);
+  };
+
+  return { factory, refresher: refresherProxy, reloadConfigs };
 }

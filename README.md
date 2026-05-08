@@ -257,6 +257,8 @@ refreshInterval: 0        # Auto-refresh in seconds. 0 = manual refresh only
 | `notifyOnIncrease` | No | `true` \| `false` | Fire a VSCode warning whenever the row count grows between two auto-refreshes (e.g. new error records appearing). Snoozable for 1 hour or for the day. |
 | `refreshInterval` | No | integer (seconds) | `0` disables auto-refresh |
 
+> **Background notifications:** Charts with thresholds or `notifyOnIncrease: true` keep auto-refreshing in the background even when the Force Cockpit panel is closed, so threshold breaches and row-count growth alerts still fire. Charts without these flags only refresh while the panel is open. Disconnect from the org and the background polling stops.
+
 ### Multiple datasets (grouped charts)
 
 You can plot multiple fields from the same query side by side:

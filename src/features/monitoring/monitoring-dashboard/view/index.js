@@ -210,12 +210,23 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
         case 'restoreHiddenBuiltinsResult':
           loadConfigs();
           break;
+        case 'monitoringBackgroundRefreshResult': {
+          const { configId, chartType, result, rowCountIncreased } = message.data || {};
+          if (!configId || !result) break;
+          const payload = { ...result, configId, rowCountIncreased };
+          // Mirror the manual-refresh paths so the same render code runs
+          if (chartType === 'table') onTableQueryResult(payload);
+          else onQueryResult(payload);
+          break;
+        }
         case 'panelVisibilityChanged':
           isVisible = message.data.visible || false;
-          // If panel became visible, resume refresh timers by re-triggering queries
+          // If panel became visible, resume refresh timers by re-triggering queries.
+          // Skip notification-enabled configs — the host's BackgroundRefresher keeps
+          // those fresh, so re-querying here would just double-fire notifications.
           if (isVisible && connected) {
             for (const cfg of configs) {
-              if (cfg.refreshInterval > 0) {
+              if (cfg.refreshInterval > 0 && !hasNotifications(cfg)) {
                 triggerQuery(cfg.id, cfg.soql, cfg.labelField, cfg.valueFields);
               }
             }
@@ -1994,9 +2005,26 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
   /** Minimum auto-refresh interval in seconds to prevent API overload */
   const MIN_REFRESH_INTERVAL = 10;
 
+  /**
+   * Notification-enabled configs (any threshold OR notifyOnIncrease=true) are driven
+   * by the extension host's BackgroundRefresher so they keep firing notifications
+   * even when the panel is closed. Result is pushed back via
+   * `monitoringBackgroundRefreshResult` and rendered through the same path as a
+   * manual refresh — no webview-side timer needed.
+   * @param {any} cfg
+   */
+  function hasNotifications(cfg) {
+    if (cfg.notifyOnIncrease) return true;
+    return (
+      Array.isArray(cfg.valueFields) &&
+      cfg.valueFields.some((/** @type {any} */ vf) => vf.threshold != null)
+    );
+  }
+
   /** @param {any} cfg */
   function setupAutoRefresh(cfg) {
     clearAutoRefresh(cfg.id);
+    if (hasNotifications(cfg)) return; // host owns the timer for notification configs
     if (cfg.refreshInterval > 0) {
       // Enforce minimum interval: at least 10 seconds to prevent API rate limit issues
       const intervalMs = Math.max(cfg.refreshInterval * 1000, MIN_REFRESH_INTERVAL * 1000);
