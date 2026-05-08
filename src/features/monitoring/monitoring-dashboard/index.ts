@@ -132,7 +132,7 @@ export function createMonitoringDashboardFeature(opts: {
                 result.totalRows,
                 Boolean(msg.notifyOnIncrease),
               );
-              fireRowCountNotifications(rowCountMessages);
+              fireRowCountNotifications(rowCountMessages, opts.outputChannel);
               rowCountIncreased = rowCountMessages.length > 0;
             }
             return { ...result, rowCountIncreased };
@@ -166,7 +166,7 @@ export function createMonitoringDashboardFeature(opts: {
                 result.totalRows,
                 Boolean(msg.notifyOnIncrease),
               );
-              fireRowCountNotifications(rowCountMessages);
+              fireRowCountNotifications(rowCountMessages, opts.outputChannel);
               rowCountIncreased = rowCountMessages.length > 0;
             }
             return { ...result, rowCountIncreased };

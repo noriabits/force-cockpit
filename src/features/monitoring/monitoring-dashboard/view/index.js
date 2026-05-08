@@ -1509,8 +1509,6 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       return;
     }
 
-    if (data.rowCountIncreased) playNotificationPing();
-
     // Check if this config is a metric type
     const cfg = configs.find((/** @type {any} */ c) => c.id === data.configId);
     if (cfg?.chartType === 'metric') {
@@ -1583,36 +1581,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       return;
     }
 
-    if (data.rowCountIncreased) playNotificationPing();
-
     renderTable(data.configId, data);
-  }
-
-  /**
-   * Play a short synthesized "ping" via the Web Audio API. Used when a
-   * `notifyOnIncrease` dashboard's row count grows between refreshes.
-   */
-  let audioCtx = /** @type {AudioContext | null} */ (null);
-  function playNotificationPing() {
-    try {
-      const w = /** @type {any} */ (window);
-      if (!audioCtx) audioCtx = new (w.AudioContext || w.webkitAudioContext)();
-      const ctx = /** @type {AudioContext} */ (audioCtx);
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.3);
-    } catch {
-      // Best-effort; silently ignore if audio is blocked or unavailable
-    }
   }
 
   // ── Save handlers ──────────────────────────────────────────────────────────

@@ -5,6 +5,9 @@ vi.mock('vscode', () => ({
   window: { showWarningMessage },
 }));
 
+const playRowCountPing = vi.fn();
+vi.mock('./audio', () => ({ playRowCountPing }));
+
 type BackgroundRefresherModule = typeof import('./BackgroundRefresher');
 type NotificationsModule = typeof import('./notifications');
 type MonitoringConfig = import('./MonitoringDashboardService').MonitoringConfig;
@@ -61,6 +64,7 @@ describe('BackgroundRefresher', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     showWarningMessage.mockReset();
+    playRowCountPing.mockReset();
     const notifications = (await import('./notifications')) as NotificationsModule;
     notifications.__resetNotificationStateForTests();
   });
@@ -188,6 +192,50 @@ describe('BackgroundRefresher', () => {
     await Promise.resolve();
     expect(service.runTableQuery).toHaveBeenCalledOnce();
     expect(showWarningMessage).toHaveBeenCalled();
+    refresher.stop();
+  });
+
+  it('plays the row-count ping when totalRows grows tick-over-tick', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
+    let total = 5;
+    const service = makeService({
+      runQuery: vi.fn().mockImplementation(async () => ({
+        datasets: [{ data: [total] }],
+        totalRows: total,
+      })),
+    });
+    const { refresher } = await makeRefresher({ service });
+    refresher.start([baseConfig({ id: 'cat/g', notifyOnIncrease: true, refreshInterval: 30 })]);
+
+    // Tick 1: establishes the baseline (5). No previous → no message → no ping.
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(playRowCountPing).not.toHaveBeenCalled();
+
+    // Tick 2: total grows → row-count message fires → ping plays once.
+    total = 9;
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(playRowCountPing).toHaveBeenCalledTimes(1);
+    refresher.stop();
+  });
+
+  it('does not ping when row count is unchanged', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
+    const service = makeService({
+      runQuery: vi.fn().mockResolvedValue({ datasets: [{ data: [5] }], totalRows: 5 }),
+    });
+    const { refresher } = await makeRefresher({ service });
+    refresher.start([baseConfig({ id: 'cat/g', notifyOnIncrease: true, refreshInterval: 30 })]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(playRowCountPing).not.toHaveBeenCalled();
     refresher.stop();
   });
 

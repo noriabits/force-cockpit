@@ -103,7 +103,7 @@ export class BackgroundRefresher {
       result.totalRows,
       Boolean(cfg.notifyOnIncrease),
     );
-    fireRowCountNotifications(rowCountMessages);
+    fireRowCountNotifications(rowCountMessages, this.opts.outputChannel);
     this.opts.postToWebview({
       type: 'monitoringBackgroundRefreshResult',
       data: {
@@ -136,7 +136,7 @@ export class BackgroundRefresher {
       result.totalRows,
       Boolean(cfg.notifyOnIncrease),
     );
-    fireRowCountNotifications(rowCountMessages);
+    fireRowCountNotifications(rowCountMessages, this.opts.outputChannel);
     this.opts.postToWebview({
       type: 'monitoringBackgroundRefreshResult',
       data: {

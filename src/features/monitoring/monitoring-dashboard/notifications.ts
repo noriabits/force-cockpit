@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { MonitoringValueField } from './MonitoringDashboardService';
+import { playRowCountPing } from './audio';
 
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
@@ -135,7 +136,12 @@ export function checkRowCountIncrease(
   return [`[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`];
 }
 
-export function fireRowCountNotifications(messages: string[]): void {
+export function fireRowCountNotifications(
+  messages: string[],
+  outputChannel?: vscode.OutputChannel,
+): void {
+  if (messages.length === 0) return;
+  playRowCountPing(outputChannel);
   for (const message of messages) {
     void vscode.window.showWarningMessage(message);
   }

@@ -5,6 +5,9 @@ vi.mock('vscode', () => ({
   window: { showWarningMessage },
 }));
 
+const playRowCountPing = vi.fn();
+vi.mock('./audio', () => ({ playRowCountPing }));
+
 vi.mock('./MonitoringDashboardService', () => ({
   MonitoringDashboardService: vi.fn().mockImplementation(function () {
     return {
@@ -36,6 +39,7 @@ describe('monitoring snooze persistence', () => {
   beforeEach(() => {
     vi.resetModules();
     showWarningMessage.mockReset();
+    playRowCountPing.mockReset();
   });
 
   async function loadFactory() {
@@ -313,5 +317,55 @@ describe('monitoring snooze persistence', () => {
 
     // The default cooldown is set in the Map but should NOT be persisted
     expect(memento.update).not.toHaveBeenCalled();
+  });
+
+  it('plays the audio ping when a row-count growth message fires', async () => {
+    showWarningMessage.mockResolvedValue(undefined);
+    const memento = makeMemento();
+    const createFeature = await loadFactory();
+    const { factory } = createFeature({
+      builtInPath: '',
+      userPath: '',
+      privatePath: '',
+      workspaceState: memento as any,
+    });
+    const cm = { query: vi.fn() } as any;
+    const feature = factory(cm);
+
+    const handler = feature.routes['runMonitoringQuery'].handler;
+    const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
+
+    // Tick 1: establishes baseline (5 rows). No previous → no ping.
+    serviceInstance.runQuery.mockResolvedValue({
+      labels: ['A'],
+      datasets: [{ data: [5] }],
+      totalRows: 5,
+    });
+    await handler({
+      configId: 'chart1',
+      configName: 'Chart 1',
+      soql: 'SELECT ...',
+      labelField: 'Field',
+      valueFields: [{ field: 'Cnt', label: 'Count' }],
+      notifyOnIncrease: true,
+    });
+    expect(playRowCountPing).not.toHaveBeenCalled();
+
+    // Tick 2: total grows → row-count message fires → ping plays once.
+    serviceInstance.runQuery.mockResolvedValue({
+      labels: ['A'],
+      datasets: [{ data: [9] }],
+      totalRows: 9,
+    });
+    await handler({
+      configId: 'chart1',
+      configName: 'Chart 1',
+      soql: 'SELECT ...',
+      labelField: 'Field',
+      valueFields: [{ field: 'Cnt', label: 'Count' }],
+      notifyOnIncrease: true,
+    });
+    expect(playRowCountPing).toHaveBeenCalledTimes(1);
   });
 });
