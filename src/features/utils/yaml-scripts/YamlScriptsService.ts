@@ -40,7 +40,7 @@ export class YamlScriptsService {
     });
     this.apex = new ApexExecutor(connectionManager);
     this.command = new CommandExecutor(paths.workspaceRoot);
-    this.js = new JsExecutor(connectionManager);
+    this.js = new JsExecutor(connectionManager, paths.workspaceRoot);
   }
 
   async loadScripts(): Promise<YamlScript[]> {

@@ -1,10 +1,12 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import xmlFormat from 'xml-formatter';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { createContext, Script } from 'vm';
 import type { ConnectionManager } from '../../../../salesforce/connection';
+import { runTerminalCommand } from '../../../../utils/terminalCommand';
 import { xml } from './XmlHelper';
 import { input } from './InputHelper';
 import type { ExecuteScriptResult, YamlScript } from '../types';
@@ -18,7 +20,17 @@ function xmlEscape(s: string): string {
 }
 
 export class JsExecutor {
-  constructor(private readonly connectionManager: ConnectionManager) {}
+  constructor(
+    private readonly connectionManager: ConnectionManager,
+    private readonly workspaceRoot?: string,
+  ) {}
+
+  private makeRunFn(signal: AbortSignal | undefined, logFn: (...args: unknown[]) => void) {
+    return (cmd: string) =>
+      runTerminalCommand(cmd, this.workspaceRoot, signal, (chunk) =>
+        logFn(chunk.replace(/\n$/, '')),
+      );
+  }
 
   async execute(
     script: YamlScript,
@@ -44,8 +56,11 @@ export class JsExecutor {
         query: (soql: string) => this.connectionManager.query(soql),
         log: logFn,
         error: errorFn,
+        workspaceRoot: this.workspaceRoot,
+        run: this.makeRunFn(signal, logFn),
         console: { log: logFn, error: errorFn, warn: logFn },
         fs,
+        os,
         path,
         yaml,
         xmlFormat,
