@@ -86,7 +86,7 @@ export function createMonitoringDashboardFeature(opts: {
     }
     const svc = service;
     const ref = refresher;
-    const base = path.join('dist', 'features', 'monitoring', 'monitoring-dashboard');
+    const base = path.join('dist', 'features', 'monitoring', 'dashboard');
     return {
       id: 'monitoring-dashboard',
       tab: 'monitoring',

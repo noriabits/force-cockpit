@@ -1,6 +1,6 @@
 /**
  * Pure state core for the category/visibility filter bar shared by the
- * yaml-scripts and monitoring-dashboard webviews. No DOM access — the DOM
+ * yaml-scripts and monitoring dashboard webviews. No DOM access — the DOM
  * layer lives in category-filter-bar.js. `subFolder` is always stored as a
  * full path ('parent/sub').
  *

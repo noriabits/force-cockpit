@@ -8,7 +8,7 @@ import { buildOrgUrl } from './utils/salesforceUrl';
 import { featureRegistry } from './features/registry';
 import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
 import { createExecutionLogsFeature } from './features/utils/execution-logs/index';
-import { createMonitoringDashboardFeature } from './features/monitoring/monitoring-dashboard/index';
+import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
