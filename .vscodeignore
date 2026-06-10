@@ -2,6 +2,7 @@
 .vscode-test/**
 src/**
 .claude/**
+.codegraph/**
 .sfdx/**
 .sf/**
 .husky/**

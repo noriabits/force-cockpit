@@ -145,16 +145,22 @@ export class MonitoringDashboardService {
     const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
     const slug = toSlug(config.name, 'chart');
     const folder = config.folder || 'general';
-    const id = config.id || `${folder}/${slug}`;
+    // The id always follows the current category + name, so editing either
+    // moves the file (the old one is removed below)
+    const id = `${folder}/${slug}`;
 
-    const [resolvedFolder] = id.split('/');
-    const filename = id.includes('/') ? id.split('/').slice(1).join('/') : slug;
+    // Toggling the Private checkbox moves the config between shared/private
+    const movingBetweenLocations =
+      (config.source === 'user' || config.source === 'private') &&
+      (config.source === 'private') !== isPrivate;
 
-    // Block duplicate IDs across shared/private
+    // Block duplicate IDs across shared/private — except when the file in the
+    // other location is this config's own previous file (a privacy move)
     const otherPath = isPrivate ? this.paths.userPath : this.paths.privatePath;
-    if (otherPath && fs.existsSync(otherPath)) {
-      const otherFile = path.join(otherPath, resolvedFolder, `${filename}.yaml`);
-      const otherFileYml = path.join(otherPath, resolvedFolder, `${filename}.yml`);
+    const ownOldFile = movingBetweenLocations && config.id === id;
+    if (otherPath && fs.existsSync(otherPath) && !ownOldFile) {
+      const otherFile = path.join(otherPath, folder, `${slug}.yaml`);
+      const otherFileYml = path.join(otherPath, folder, `${slug}.yml`);
       if (fs.existsSync(otherFile) || fs.existsSync(otherFileYml)) {
         throw new Error(
           `A config with the same category and name already exists in the ${isPrivate ? 'shared' : 'private'} folder.`,
@@ -162,8 +168,8 @@ export class MonitoringDashboardService {
       }
     }
 
-    const targetDir = path.join(basePath, resolvedFolder);
-    const targetPath = path.join(targetDir, `${filename}.yaml`);
+    const targetDir = path.join(basePath, folder);
+    const targetPath = path.join(targetDir, `${slug}.yaml`);
     fs.mkdirSync(targetDir, { recursive: true });
 
     const data: Record<string, unknown> = {
@@ -204,7 +210,22 @@ export class MonitoringDashboardService {
 
     fs.writeFileSync(targetPath, yaml.dump(data), 'utf8');
 
-    return { ...config, id, folder: resolvedFolder, source: isPrivate ? 'private' : 'user' };
+    // Category/name change or privacy toggle on an existing user/private
+    // config: remove the old file so the config moves instead of duplicating.
+    // Builtin configs are bundled with the extension and never deleted.
+    if (
+      config.id &&
+      (config.id !== id || movingBetweenLocations) &&
+      (config.source === 'user' || config.source === 'private')
+    ) {
+      try {
+        this.deleteConfig(config.id, config.source === 'private');
+      } catch {
+        // old file already gone — nothing to clean up
+      }
+    }
+
+    return { ...config, id, folder, source: isPrivate ? 'private' : 'user' };
   }
 
   private parseMonitoringFile(

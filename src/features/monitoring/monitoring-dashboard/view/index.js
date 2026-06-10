@@ -1,5 +1,6 @@
 // @ts-check
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
+import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
 
 (function () {
   const win = /** @type {any} */ (window);
@@ -28,9 +29,6 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
   let connected = false;
   let isVisible = true; // Track panel visibility to pause auto-refresh when hidden
   let configs = /** @type {any[]} */ ([]);
-  let activeFolder = 'all';
-  let activeSubFolder = /** @type {string | null} */ (null);
-  let activeVisibility = 'all'; // 'all' | 'shared' | 'private'
   let searchQuery = '';
   /** Track connected org to avoid re-rendering on focus-regain with the same org */
   let connectedOrgId = /** @type {string | null} */ (null);
@@ -63,6 +61,21 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
   const visibilityFilterEl = /** @type {HTMLElement} */ (
     document.getElementById('monitoring-visibility-filter')
   );
+
+  // ── Category/visibility filter bar (shared module) ─────────────────────────
+  const filterBar = createCategoryFilterBar({
+    visibilityEl: visibilityFilterEl,
+    pillsEl: pillsContainer,
+    subPillsEl,
+    visibilityOptions: [
+      { value: 'all', label: L.filterAll },
+      { value: 'shared', label: L.filterShared },
+      { value: 'private', label: L.filterPrivate },
+    ],
+    labels: { pillAll: L.pillAll, pillSubAll: L.pillSubAll },
+    getItems: () => configs,
+    onChange: () => applyFilters(),
+  });
 
   // ── Init ───────────────────────────────────────────────────────────────────
   addBtn.textContent = L.btnAddChart;
@@ -313,23 +326,16 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     clearAllRefreshTimers();
     pendingQueries.clear();
 
-    // Reset filter state
-    activeVisibility = 'all';
-    activeFolder = 'all';
-    activeSubFolder = null;
-
     grid.innerHTML = '';
 
-    buildVisibilityFilter();
+    // Monitoring intentionally resets all filters on a full reload
+    filterBar.reset();
 
     if (cfgs.length === 0) {
       noResults.textContent = L.noConfigs;
       noResults.style.display = '';
-      buildPills([]);
       return;
     }
-
-    rebuildPillsForCurrentVisibility();
 
     for (const cfg of cfgs) {
       const card = buildViewCard(cfg);
@@ -352,139 +358,9 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
     }
   }
 
-  // ── Category pills ─────────────────────────────────────────────────────────
-  /** @param {string[]} folders */
-  function buildPills(folders) {
-    pillsContainer.innerHTML = '';
-    subPillsEl.innerHTML = '';
-    subPillsEl.classList.remove('visible');
-
-    // Only show top-level folder names (before first '/')
-    const topLevel = [...new Set(folders.map((f) => f.split('/')[0]))].sort();
-
-    const allPill = makePill(L.pillAll, 'all');
-    pillsContainer.appendChild(allPill);
-
-    for (const folder of topLevel) {
-      pillsContainer.appendChild(makePill(folder, folder));
-    }
-  }
-
-  /**
-   * @param {string} label
-   * @param {string} value
-   */
-  function makePill(label, value) {
-    const btn = document.createElement('button');
-    btn.className = 'category-pill' + (activeFolder === value ? ' active' : '');
-    btn.textContent = label;
-    btn.addEventListener('click', () => {
-      activeFolder = value;
-      activeSubFolder = null;
-      subPillsEl.innerHTML = '';
-      subPillsEl.classList.remove('visible');
-      pillsContainer
-        .querySelectorAll('.category-pill')
-        .forEach((p) => p.classList.remove('active'));
-      btn.classList.add('active');
-
-      if (value !== 'all') {
-        // Check for sub-folders among visible configs
-        const visible = getVisibleConfigs();
-        const subFolders = visible
-          .map((/** @type {any} */ c) => c.folder)
-          .filter((f) => f !== value && f.startsWith(value + '/'))
-          .map((f) => f.slice(value.length + 1));
-        const uniqueSubs = [...new Set(subFolders)].sort();
-        if (uniqueSubs.length > 0) {
-          buildSubPills(uniqueSubs);
-        }
-      }
-
-      applyFilters();
-    });
-    return btn;
-  }
-
-  // ── Visibility filter ───────────────────────────────────────────────────────
-  function buildVisibilityFilter() {
-    visibilityFilterEl.innerHTML = '';
-    const options = [
-      { value: 'all', label: L.filterAll },
-      { value: 'shared', label: L.filterShared },
-      { value: 'private', label: L.filterPrivate },
-    ];
-    for (const opt of options) {
-      const btn = document.createElement('button');
-      btn.className = 'visibility-filter-btn' + (activeVisibility === opt.value ? ' active' : '');
-      btn.textContent = opt.label;
-      btn.addEventListener('click', () => {
-        activeVisibility = opt.value;
-        visibilityFilterEl
-          .querySelectorAll('.visibility-filter-btn')
-          .forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        activeFolder = 'all';
-        activeSubFolder = null;
-        rebuildPillsForCurrentVisibility();
-        applyFilters();
-      });
-      visibilityFilterEl.appendChild(btn);
-    }
-  }
-
-  function getVisibleConfigs() {
-    if (activeVisibility === 'private')
-      return configs.filter((/** @type {any} */ c) => c.source === 'private');
-    if (activeVisibility === 'shared')
-      return configs.filter((/** @type {any} */ c) => c.source !== 'private');
-    return configs;
-  }
-
-  function rebuildPillsForCurrentVisibility() {
-    const visible = getVisibleConfigs();
-    const folders = [...new Set(visible.map((/** @type {any} */ c) => c.folder))].sort();
-    buildPills(folders);
-  }
-
-  /** @param {string[]} subFolders */
-  function buildSubPills(subFolders) {
-    subPillsEl.innerHTML = '';
-    subPillsEl.classList.add('visible');
-
-    const allSub = document.createElement('button');
-    allSub.className = 'category-pill active';
-    allSub.textContent = L.pillSubAll;
-    allSub.addEventListener('click', () => {
-      activeSubFolder = null;
-      subPillsEl.querySelectorAll('.category-pill').forEach((p) => p.classList.remove('active'));
-      allSub.classList.add('active');
-      applyFilters();
-    });
-    subPillsEl.appendChild(allSub);
-
-    for (const sub of subFolders) {
-      const btn = document.createElement('button');
-      btn.className = 'category-pill';
-      btn.textContent = sub;
-      btn.addEventListener('click', () => {
-        activeSubFolder = sub;
-        subPillsEl.querySelectorAll('.category-pill').forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
-        applyFilters();
-      });
-      subPillsEl.appendChild(btn);
-    }
-  }
-
   // ── Filters ────────────────────────────────────────────────────────────────
   function isFiltered() {
-    return (
-      activeFolder !== 'all' ||
-      activeSubFolder !== null ||
-      searchQuery !== '' ||
-      activeVisibility !== 'all'
-    );
+    return filterBar.isFiltered() || searchQuery !== '';
   }
 
   function applyFilters() {
@@ -497,23 +373,8 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       const source = card.getAttribute('data-source') || '';
       const search = (card.getAttribute('data-search-text') || '').toLowerCase();
 
-      // Visibility filter
-      let visibilityMatch = true;
-      if (activeVisibility === 'private') visibilityMatch = source === 'private';
-      else if (activeVisibility === 'shared') visibilityMatch = source !== 'private';
-
-      // Folder / sub-folder match
-      let folderMatch = true;
-      if (activeFolder !== 'all') {
-        if (activeSubFolder) {
-          folderMatch = folder === activeFolder + '/' + activeSubFolder;
-        } else {
-          folderMatch = folder === activeFolder || folder.startsWith(activeFolder + '/');
-        }
-      }
-
       const searchMatch = !searchQuery || search.includes(searchQuery);
-      const visible = visibilityMatch && folderMatch && searchMatch;
+      const visible = filterBar.matches({ folder, source }) && searchMatch;
       const cardEl = /** @type {HTMLElement} */ (card);
       cardEl.style.display = visible ? '' : 'none';
       if (visible) visibleCount++;
@@ -1102,6 +963,9 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
       const position = configId ? cfg.position : nextAvailablePosition();
       return {
         id: configId || '',
+        // Previous location — lets the host delete the old file when the
+        // category or name changes (move semantics)
+        source: cfg.source,
         folder: folderVal,
         name: nameVal,
         description: descVal,
@@ -1203,7 +1067,7 @@ import { isSalesforceRecordId } from '../../../../utils/salesforce';
           grid.appendChild(newCard);
         }
         triggerQuery(savedCfg.id, savedCfg.soql, savedCfg.labelField, savedCfg.valueFields);
-        rebuildPillsForCurrentVisibility();
+        filterBar.render();
         applyFilters();
       };
       card.__pendingSaveError = (/** @type {string} */ errMsg) => {

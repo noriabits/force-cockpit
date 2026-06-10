@@ -6,3 +6,4 @@ dist/
 .sf/
 .DS_Store
 .claude
+.codegraph/

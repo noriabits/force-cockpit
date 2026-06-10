@@ -467,6 +467,184 @@ chartType: bar`,
         /already exists in the private folder/,
       );
     });
+
+    it('creates nested sub-category folders', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      const saved = service.saveConfig({
+        id: '',
+        folder: 'orders/quarterly',
+        name: 'Nested Chart',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      });
+
+      expect(saved.id).toBe('orders/quarterly/nested-chart');
+      expect(fs.existsSync(path.join(userPath, 'orders', 'quarterly', 'nested-chart.yaml'))).toBe(
+        true,
+      );
+    });
+
+    it('moves the file when the category of an existing config changes', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      const base = {
+        id: '',
+        folder: 'orders',
+        name: 'My Chart',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      };
+      const saved = service.saveConfig(base);
+      expect(fs.existsSync(path.join(userPath, 'orders', 'my-chart.yaml'))).toBe(true);
+
+      const moved = service.saveConfig({ ...saved, folder: 'sales' });
+      expect(moved.id).toBe('sales/my-chart');
+      expect(fs.existsSync(path.join(userPath, 'sales', 'my-chart.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(userPath, 'orders', 'my-chart.yaml'))).toBe(false);
+    });
+
+    it('moves the file when an existing config is renamed', () => {
+      const userPath = path.join(tmpDir, 'user');
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ userPath });
+      const saved = service.saveConfig({
+        id: '',
+        folder: 'orders',
+        name: 'Old Name',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      });
+
+      const renamed = service.saveConfig({ ...saved, name: 'New Name' });
+      expect(renamed.id).toBe('orders/new-name');
+      expect(fs.existsSync(path.join(userPath, 'orders', 'new-name.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(userPath, 'orders', 'old-name.yaml'))).toBe(false);
+    });
+
+    it('moves a shared config to private when the Private checkbox is toggled on', () => {
+      const userPath = path.join(tmpDir, 'user');
+      const privatePath = path.join(tmpDir, 'private');
+      fs.mkdirSync(userPath, { recursive: true });
+      fs.mkdirSync(privatePath, { recursive: true });
+
+      const service = makeService({ userPath, privatePath });
+      const saved = service.saveConfig({
+        id: '',
+        folder: 'orders',
+        name: 'My Chart',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      });
+      expect(saved.source).toBe('user');
+
+      const moved = service.saveConfig(saved, true);
+      expect(moved.source).toBe('private');
+      expect(moved.id).toBe('orders/my-chart');
+      expect(fs.existsSync(path.join(privatePath, 'orders', 'my-chart.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(userPath, 'orders', 'my-chart.yaml'))).toBe(false);
+    });
+
+    it('moves a private config back to shared when the Private checkbox is toggled off', () => {
+      const userPath = path.join(tmpDir, 'user');
+      const privatePath = path.join(tmpDir, 'private');
+      fs.mkdirSync(userPath, { recursive: true });
+      fs.mkdirSync(privatePath, { recursive: true });
+
+      const service = makeService({ userPath, privatePath });
+      const saved = service.saveConfig(
+        {
+          id: '',
+          folder: 'orders',
+          name: 'My Chart',
+          description: '',
+          soql: 'SELECT Id FROM Account',
+          labelField: 'Id',
+          valueFields: [{ field: 'Id', label: 'ID' }],
+          chartType: 'bar' as const,
+          refreshInterval: 0,
+        },
+        true,
+      );
+      expect(saved.source).toBe('private');
+
+      const moved = service.saveConfig(saved, false);
+      expect(moved.source).toBe('user');
+      expect(fs.existsSync(path.join(userPath, 'orders', 'my-chart.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(privatePath, 'orders', 'my-chart.yaml'))).toBe(false);
+    });
+
+    it('moves between locations and folders in a single save', () => {
+      const userPath = path.join(tmpDir, 'user');
+      const privatePath = path.join(tmpDir, 'private');
+      fs.mkdirSync(userPath, { recursive: true });
+      fs.mkdirSync(privatePath, { recursive: true });
+
+      const service = makeService({ userPath, privatePath });
+      const saved = service.saveConfig({
+        id: '',
+        folder: 'orders',
+        name: 'My Chart',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      });
+
+      const moved = service.saveConfig({ ...saved, folder: 'sales' }, true);
+      expect(moved.id).toBe('sales/my-chart');
+      expect(moved.source).toBe('private');
+      expect(fs.existsSync(path.join(privatePath, 'sales', 'my-chart.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(userPath, 'orders', 'my-chart.yaml'))).toBe(false);
+    });
+
+    it('never deletes builtin files when editing a builtin config', () => {
+      const builtInPath = path.join(tmpDir, 'builtin');
+      const userPath = path.join(tmpDir, 'user');
+      writeConfig(builtInPath, 'orders', 'chart.yaml', VALID_YAML);
+      fs.mkdirSync(userPath, { recursive: true });
+
+      const service = makeService({ builtInPath, userPath });
+      const saved = service.saveConfig({
+        id: 'orders/chart',
+        source: 'builtin' as const,
+        folder: 'sales',
+        name: 'Chart',
+        description: '',
+        soql: 'SELECT Id FROM Account',
+        labelField: 'Id',
+        valueFields: [{ field: 'Id', label: 'ID' }],
+        chartType: 'bar' as const,
+        refreshInterval: 0,
+      });
+
+      expect(saved.id).toBe('sales/chart');
+      expect(fs.existsSync(path.join(userPath, 'sales', 'chart.yaml'))).toBe(true);
+      expect(fs.existsSync(path.join(builtInPath, 'orders', 'chart.yaml'))).toBe(true);
+    });
   });
 
   describe('deleteConfig', () => {

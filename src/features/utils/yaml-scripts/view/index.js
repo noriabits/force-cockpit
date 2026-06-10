@@ -3,6 +3,7 @@ import { renderLogWithLinks, renderLogWithJsonTables } from './log-rendering.js'
 import { createCodeEditor } from './code-editor.js';
 import { createFormInputsEditor } from './form-inputs-editor.js';
 import { createAccordionBuilder } from './accordion-builder.js';
+import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
 
 (function () {
   const win = /** @type {any} */ (window);
@@ -109,13 +110,10 @@ import { createAccordionBuilder } from './accordion-builder.js';
   let currentOrgData = null;
   /** @type {string | null} */
   let lastConnectedOrgId = null;
-  let activeFolderFilter = 'all';
-  /** @type {string | null} */
-  let activeSubFolder = null;
-  /** @type {'all' | 'favorites' | 'shared' | 'private'} */
-  let activeVisibility = 'all';
+  // Mutated in place (never reassigned) — accordion-builder and the filter bar
+  // capture this reference at creation time
   /** @type {Set<string>} */
-  let favoriteIds = new Set();
+  const favoriteIds = new Set();
   /** @type {string | null} */
   let lastSavedScriptId = null;
   /** @type {string | null} */
@@ -167,53 +165,23 @@ import { createAccordionBuilder } from './accordion-builder.js';
   if (filterUserDebugLabel) filterUserDebugLabel.textContent = L.labelDefaultFilterUserDebug;
   if (formatJsonLabel) formatJsonLabel.textContent = L.labelDefaultFormatJson;
 
-  // ── Visibility filter ──────────────────────────────────────────────────────
+  // ── Category/visibility filter bar (shared module) ────────────────────────
 
-  function buildVisibilityFilter() {
-    visibilityFilterEl.innerHTML = '';
-    const options =
-      /** @type {Array<{value: 'all'|'favorites'|'shared'|'private', label: string}>} */ ([
-        { value: 'all', label: L.filterAll },
-        { value: 'shared', label: L.filterShared },
-        { value: 'private', label: L.filterPrivate },
-        { value: 'favorites', label: L.filterFavorites },
-      ]);
-    for (const opt of options) {
-      const btn = document.createElement('button');
-      btn.className = 'visibility-filter-btn' + (activeVisibility === opt.value ? ' active' : '');
-      btn.textContent = opt.label;
-      btn.addEventListener('click', () => {
-        if (activeVisibility === opt.value) return;
-        activeVisibility = opt.value;
-        visibilityFilterEl.querySelectorAll('.visibility-filter-btn').forEach((b) => {
-          b.classList.toggle('active', b === btn);
-        });
-        // Reset folder/sub-folder when visibility changes
-        activeFolderFilter = 'all';
-        activeSubFolder = null;
-        rebuildPillsForCurrentVisibility();
-        applyFilters();
-      });
-      visibilityFilterEl.appendChild(btn);
-    }
-  }
-
-  function rebuildPillsForCurrentVisibility() {
-    const visibleScripts = getVisibleScripts(currentScripts);
-    const folders = [...new Set(visibleScripts.map((s) => s.folder))].sort();
-    buildPills(folders);
-  }
-
-  /** @param {any[]} scripts */
-  function getVisibleScripts(scripts) {
-    if (activeVisibility === 'all') return scripts;
-    if (activeVisibility === 'favorites') return scripts.filter((s) => favoriteIds.has(s.id));
-    return scripts.filter((s) =>
-      activeVisibility === 'private'
-        ? s.source === 'private'
-        : s.source === 'user' || s.source === 'builtin',
-    );
-  }
+  const filterBar = createCategoryFilterBar({
+    visibilityEl: visibilityFilterEl,
+    pillsEl: pillsContainer,
+    subPillsEl,
+    visibilityOptions: [
+      { value: 'all', label: L.filterAll },
+      { value: 'shared', label: L.filterShared },
+      { value: 'private', label: L.filterPrivate },
+      { value: 'favorites', label: L.filterFavorites },
+    ],
+    labels: { pillAll: L.pillAll, pillSubAll: L.pillSubAll },
+    getItems: () => currentScripts,
+    isFavorite: (item) => favoriteIds.has(item.id ?? ''),
+    onChange: () => applyFilters(),
+  });
 
   // ── Refresh button ─────────────────────────────────────────────────────────
 
@@ -339,8 +307,9 @@ import { createAccordionBuilder } from './accordion-builder.js';
     formDeleteBtn.style.display = 'none';
     formPrivate.checked = false;
     resetForm();
-    if (activeFolderFilter !== 'all') {
-      formFolder.value = activeSubFolder ?? activeFolderFilter;
+    const filterState = filterBar.getState();
+    if (filterState.folder !== 'all') {
+      formFolder.value = filterState.subFolder ?? filterState.folder;
       updateSaveBtn();
     }
     refreshDropdown();
@@ -542,25 +511,10 @@ import { createAccordionBuilder } from './accordion-builder.js';
       const source = section.getAttribute('data-source') ?? '';
       const searchText = (section.getAttribute('data-search-text') ?? '').toLowerCase();
 
-      const visibilityMatch =
-        activeVisibility === 'all' ||
-        (activeVisibility === 'favorites' &&
-          favoriteIds.has(section.getAttribute('data-script-id') ?? '')) ||
-        (activeVisibility === 'private' && source === 'private') ||
-        (activeVisibility === 'shared' && (source === 'user' || source === 'builtin'));
-
-      let folderMatch;
-      if (activeFolderFilter === 'all') {
-        folderMatch = true;
-      } else if (activeSubFolder !== null) {
-        folderMatch = folder === activeSubFolder;
-      } else {
-        // Top-level: match exact or anything starting with "parentFolder/"
-        folderMatch = folder === activeFolderFilter || folder.startsWith(activeFolderFilter + '/');
-      }
-
       const textMatch = !query || searchText.includes(query);
-      const show = visibilityMatch && folderMatch && textMatch;
+      const show =
+        filterBar.matches({ folder, source, id: section.getAttribute('data-script-id') ?? '' }) &&
+        textMatch;
 
       section.style.display = show ? '' : 'none';
       if (show) visible++;
@@ -571,98 +525,6 @@ import { createAccordionBuilder } from './accordion-builder.js';
   }
 
   searchInput.addEventListener('input', applyFilters);
-
-  // ── Pill buttons ──────────────────────────────────────────────────────────
-
-  /**
-   * @param {string[]} folders - all folders from scripts currently visible under active visibility
-   */
-  function buildPills(folders) {
-    pillsContainer.innerHTML = '';
-    subPillsEl.innerHTML = '';
-    subPillsEl.classList.remove('visible');
-    activeFolderFilter = 'all';
-    activeSubFolder = null;
-
-    // Only show top-level folder names as primary pills
-    const topLevelFolders = [...new Set(folders.map((f) => f.split('/')[0]))].sort();
-
-    const allPill = document.createElement('button');
-    allPill.className = 'category-pill active';
-    allPill.textContent = L.pillAll;
-    allPill.addEventListener('click', () => setActiveFolder('all', allPill));
-    pillsContainer.appendChild(allPill);
-
-    for (const topFolder of topLevelFolders) {
-      const pill = document.createElement('button');
-      pill.className = 'category-pill';
-      pill.textContent = topFolder;
-      pill.addEventListener('click', () => {
-        setActiveFolder(topFolder, pill);
-        // Build sub-category pills for this parent
-        const subFolders = folders
-          .filter((f) => f.startsWith(topFolder + '/'))
-          .map((f) => f.slice(topFolder.length + 1));
-        buildSubPills(topFolder, subFolders);
-      });
-      pillsContainer.appendChild(pill);
-    }
-  }
-
-  /**
-   * @param {string} parentFolder
-   * @param {string[]} subFolders - child portion only (e.g. 'advanced' from 'orders/advanced')
-   */
-  function buildSubPills(parentFolder, subFolders) {
-    subPillsEl.innerHTML = '';
-    if (subFolders.length === 0) {
-      subPillsEl.classList.remove('visible');
-      return;
-    }
-    subPillsEl.classList.add('visible');
-    activeSubFolder = null;
-
-    const allSubPill = document.createElement('button');
-    allSubPill.className = 'category-pill active';
-    allSubPill.textContent = L.pillSubAll;
-    allSubPill.addEventListener('click', () => {
-      activeSubFolder = null;
-      subPillsEl.querySelectorAll('.category-pill').forEach((p) => {
-        p.classList.toggle('active', p === allSubPill);
-      });
-      applyFilters();
-    });
-    subPillsEl.appendChild(allSubPill);
-
-    for (const sub of [...new Set(subFolders)].sort()) {
-      const pill = document.createElement('button');
-      pill.className = 'category-pill';
-      pill.textContent = sub;
-      pill.addEventListener('click', () => {
-        activeSubFolder = `${parentFolder}/${sub}`;
-        subPillsEl.querySelectorAll('.category-pill').forEach((p) => {
-          p.classList.toggle('active', p === pill);
-        });
-        applyFilters();
-      });
-      subPillsEl.appendChild(pill);
-    }
-  }
-
-  /**
-   * @param {string} folder
-   * @param {HTMLButtonElement} activePill
-   */
-  function setActiveFolder(folder, activePill) {
-    activeFolderFilter = folder;
-    activeSubFolder = null;
-    subPillsEl.innerHTML = '';
-    subPillsEl.classList.remove('visible');
-    pillsContainer.querySelectorAll('.category-pill').forEach((p) => {
-      p.classList.toggle('active', p === activePill);
-    });
-    applyFilters();
-  }
 
   // ── Accordion builder ─────────────────────────────────────────────────────
 
@@ -692,10 +554,6 @@ import { createAccordionBuilder } from './accordion-builder.js';
    * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
-    const prevVisibility = activeVisibility;
-    const prevFolder = activeFolderFilter;
-    const prevSubFolder = activeSubFolder;
-
     currentScripts = scripts;
     executeStateUpdaters.clear();
     scriptsList.innerHTML = '';
@@ -709,52 +567,9 @@ import { createAccordionBuilder } from './accordion-builder.js';
 
     noResults.style.display = 'none';
 
-    // Build visibility filter — restore previous selection instead of always defaulting to 'all'
-    activeVisibility = prevVisibility;
-    buildVisibilityFilter();
-
-    // Collect unique folders from currently-visible scripts
-    const visibleForPills = getVisibleScripts(scripts);
-    const folders = [...new Set(visibleForPills.map((s) => s.folder))].sort();
-    buildPills(folders); // resets activeFolderFilter → 'all', activeSubFolder → null
-
-    // Restore folder filter if the pill still exists after the rebuild
-    if (prevFolder !== 'all') {
-      const restoredPill = /** @type {HTMLButtonElement | undefined} */ (
-        Array.from(pillsContainer.querySelectorAll('.category-pill')).find(
-          (p) => p.textContent === prevFolder,
-        )
-      );
-      if (restoredPill) {
-        pillsContainer
-          .querySelectorAll('.category-pill')
-          .forEach((p) => p.classList.remove('active'));
-        restoredPill.classList.add('active');
-        activeFolderFilter = prevFolder;
-        // Rebuild sub-pills for this folder and restore active sub-folder if applicable
-        const subFolders = folders
-          .filter((f) => f.startsWith(prevFolder + '/'))
-          .map((f) => f.slice(prevFolder.length + 1));
-        if (subFolders.length > 0) {
-          buildSubPills(prevFolder, subFolders);
-          if (prevSubFolder !== null) {
-            const subName = prevSubFolder.slice(prevFolder.length + 1);
-            const restoredSubPill = /** @type {HTMLButtonElement | undefined} */ (
-              Array.from(subPillsEl.querySelectorAll('.category-pill')).find(
-                (p) => p.textContent === subName,
-              )
-            );
-            if (restoredSubPill) {
-              subPillsEl
-                .querySelectorAll('.category-pill')
-                .forEach((p) => p.classList.remove('active'));
-              restoredSubPill.classList.add('active');
-              activeSubFolder = prevSubFolder;
-            }
-          }
-        }
-      }
-    }
+    // Rebuild pills/visibility — reconciles the previous selection against the
+    // new script list (restores it when the folders still exist)
+    filterBar.render();
 
     // Populate folder dropdown for the new-script form
     refreshDropdown();
@@ -901,8 +716,10 @@ import { createAccordionBuilder } from './accordion-builder.js';
     hideNewForm();
     if (savedScript?.folder) {
       const top = savedScript.folder.split('/')[0];
-      activeFolderFilter = top;
-      activeSubFolder = savedScript.folder !== top ? savedScript.folder : null;
+      filterBar.setState({
+        folder: top,
+        subFolder: savedScript.folder !== top ? savedScript.folder : null,
+      });
     }
     const after = savedScript
       ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript].sort((a, b) =>
@@ -921,8 +738,10 @@ import { createAccordionBuilder } from './accordion-builder.js';
     hideNewForm();
     if (updatedScript?.folder) {
       const top = updatedScript.folder.split('/')[0];
-      activeFolderFilter = top;
-      activeSubFolder = updatedScript.folder !== top ? updatedScript.folder : null;
+      filterBar.setState({
+        folder: top,
+        subFolder: updatedScript.folder !== top ? updatedScript.folder : null,
+      });
     }
     const after = updatedScript
       ? [
@@ -953,7 +772,8 @@ import { createAccordionBuilder } from './accordion-builder.js';
 
   /** @param {any} data */
   function handleFavorites(data) {
-    favoriteIds = new Set(data?.favorites ?? []);
+    favoriteIds.clear();
+    for (const id of data?.favorites ?? []) favoriteIds.add(id);
     updateFavoriteStars();
     applyFilters();
   }
