@@ -11,6 +11,9 @@ import { createExecutionLogsFeature } from './features/utils/execution-logs/inde
 import { createMonitoringDashboardFeature } from './features/monitoring/monitoring-dashboard/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
+import { ensureUserFolders } from './utils/workspaceSetup';
+import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
+import { OrgConnectionController } from './services/OrgConnectionController';
 
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
@@ -31,53 +34,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const connectionManager = new ConnectionManager();
 
-  // Status bar item: shows Sandbox / Production indicator
-  const orgTypeItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-  orgTypeItem.tooltip = 'Force Cockpit: org type';
-  context.subscriptions.push(orgTypeItem);
-
-  type OrgType = 'production' | 'protected-sandbox' | 'sandbox';
-  async function resolveOrgType(): Promise<OrgType> {
-    if (await connectionManager.isProductionOrg()) return 'production';
-    const sandboxName = (connectionManager.getSandboxName() ?? '').toLowerCase();
-    const isProtected = cockpitConfig.protectedSandboxes
-      .map((s) => s.toLowerCase())
-      .includes(sandboxName);
-    return isProtected ? 'protected-sandbox' : 'sandbox';
-  }
-
-  connectionManager.on('connectionChanged', (event: ConnectionChangedEvent) => {
-    if (!event.connected) {
-      orgTypeItem.hide();
-      return;
-    }
-    void (async () => {
-      try {
-        const orgType = await resolveOrgType();
-        switch (orgType) {
-          case 'production':
-            orgTypeItem.text = '$(circle-filled) Production';
-            orgTypeItem.color = new vscode.ThemeColor('errorForeground');
-            orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-            break;
-          case 'protected-sandbox':
-            orgTypeItem.text = '$(circle-filled) Protected Sandbox';
-            orgTypeItem.color = new vscode.ThemeColor('charts.yellow');
-            orgTypeItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-            break;
-          case 'sandbox':
-            orgTypeItem.text = '$(circle-filled) Sandbox';
-            orgTypeItem.color = new vscode.ThemeColor('testing.iconPassed');
-            orgTypeItem.backgroundColor = undefined;
-            break;
-        }
-        orgTypeItem.show();
-      } catch {
-        orgTypeItem.hide();
-      }
-    })();
-  });
-
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   const builtInPath = path.join(context.extensionPath, 'force-cockpit');
   const userBasePath =
@@ -87,22 +43,11 @@ export function activate(context: vscode.ExtensionContext): void {
   let cockpitConfig = loadConfig(context.extensionPath, userBasePath);
   connectionManager.setApiVersion(cockpitConfig.apiVersion);
 
-  // Auto-create user folders on first run (only when we have an absolute path)
-  if (path.isAbsolute(userBasePath)) {
-    fs.mkdirSync(path.join(userBasePath, 'scripts'), { recursive: true });
-    fs.mkdirSync(path.join(userBasePath, 'monitoring'), { recursive: true });
-    fs.mkdirSync(path.join(userBasePath, 'private', 'scripts'), { recursive: true });
-    fs.mkdirSync(path.join(userBasePath, 'private', 'monitoring'), { recursive: true });
-    // Drop a .gitignore inside private/ so its contents are never committed
-    const privateGitignore = path.join(userBasePath, 'private', '.gitignore');
-    if (!fs.existsSync(privateGitignore)) {
-      try {
-        fs.writeFileSync(privateGitignore, '*\n', 'utf8');
-      } catch {
-        // Silent — gitignore management is best-effort
-      }
-    }
-  }
+  // Status bar item: shows Sandbox / Production indicator
+  setupOrgTypeStatusBar(context, connectionManager, () => cockpitConfig);
+
+  // Auto-create user folders on first run
+  ensureUserFolders(userBasePath);
 
   // Watch config.yaml for live changes
   function reloadConfig(): void {
@@ -225,117 +170,39 @@ export function activate(context: vscode.ExtensionContext): void {
   // --- Watch .sf/config.json for target-org changes ---
   if (workspaceRoot) {
     const sfConfigPath = path.join(workspaceRoot, '.sf', 'config.json');
-    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    let connectVersion = 0;
-
-    // Single connection attempt — re-reads credentials fresh each time.
-    // Returns true on success, throws on failure (version-stale returns false).
-    async function attemptConnect(target: string, myVersion: number): Promise<boolean> {
-      if (myVersion !== connectVersion) return false;
-      const details = await getOrgDetails(target);
-      if (myVersion !== connectVersion) return false;
-      await connectionManager.connect(details);
-      return true;
-    }
-
-    async function connectFromConfig(opts: { force?: boolean } = {}): Promise<void> {
-      const force = opts.force === true;
-      const myVersion = ++connectVersion;
-      try {
-        let target: string | undefined;
-        try {
-          const raw = fs.readFileSync(sfConfigPath, 'utf8');
-          const config = JSON.parse(raw) as Record<string, string>;
-          target = config['target-org'];
-        } catch (err) {
-          if (force) {
-            vscode.window.showWarningMessage(
-              `Force Cockpit: could not read .sf/config.json. ${err instanceof Error ? err.message : String(err)}`,
-            );
-            return;
-          }
-          throw err;
-        }
-
-        if (!target) {
-          if (connectionManager.isConnected) {
-            if (!(await guardBusy('The default org was removed.'))) return;
-            if (myVersion !== connectVersion) return;
-            connectionManager.disconnect();
-          } else if (force) {
-            vscode.window.showInformationMessage(
-              'Force Cockpit: no default org set in .sf/config.json.',
-            );
-          }
-          return;
-        }
-
-        // Skip if already connected to the same org (unless forcing a refresh)
-        const current = connectionManager.getCurrentOrg();
-        if (!force && (current?.alias === target || current?.username === target)) return;
-
-        const guardMessage = force ? 'Refreshing the org connection.' : 'The default org changed.';
-        if (!(await guardBusy(guardMessage))) return;
-        if (myVersion !== connectVersion) return;
-
-        if (connectionManager.isConnected) connectionManager.disconnect();
-
-        // Notify the webview that a connection attempt is starting (shows spinner)
-        MainPanel.currentPanel?.notifyConnecting(target);
-
-        // Retry up to 3 times. On each retry: re-read credentials from disk (picks up any
-        // token the SF CLI wrote) and concurrently trigger an SF CLI token refresh so the
-        // next attempt has a fresh access token.
-        const retryDelaysMs = [2000, 4000, 8000];
-        let lastErr: unknown;
-        for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
-          try {
-            if (!(await attemptConnect(target, myVersion))) return; // stale — exit silently
-            return; // success — connectionChanged event updates the panel
-          } catch (err) {
-            if (myVersion !== connectVersion) return;
-            lastErr = err;
-            if (attempt < retryDelaysMs.length) {
-              // Refresh token and wait concurrently before retrying
-              await Promise.all([
-                new Promise<void>((resolve) => setTimeout(resolve, retryDelaysMs[attempt])),
-                refreshOrgToken(target),
-              ]);
-            }
-          }
-        }
-        // All attempts failed
-        vscode.window.showWarningMessage(
-          `Force Cockpit: failed to connect to org "${target}". ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
-        );
-      } catch (err) {
-        outputChannel.appendLine(`[Error] connectFromConfig failed: ${String(err)}`);
-      }
-    }
-
-    function scheduleConnect(): void {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => void connectFromConfig(), 300);
-    }
+    const orgController = new OrgConnectionController({
+      connectionManager,
+      readTargetOrg: () => {
+        const raw = fs.readFileSync(sfConfigPath, 'utf8');
+        const config = JSON.parse(raw) as Record<string, string>;
+        return config['target-org'];
+      },
+      getOrgDetails,
+      refreshOrgToken,
+      guardBusy,
+      notifyConnecting: (target) => MainPanel.currentPanel?.notifyConnecting(target),
+      showWarning: (msg) => void vscode.window.showWarningMessage(msg),
+      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+      log: (msg) => outputChannel.appendLine(msg),
+    });
+    context.subscriptions.push(orgController);
 
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(workspaceRoot, '.sf/config.json'),
     );
-    watcher.onDidChange(scheduleConnect);
-    watcher.onDidCreate(scheduleConnect);
-    watcher.onDidDelete(() => {
-      if (connectionManager.isConnected) connectionManager.disconnect();
-    });
+    watcher.onDidChange(() => orgController.scheduleConnect());
+    watcher.onDidCreate(() => orgController.scheduleConnect());
+    watcher.onDidDelete(() => orgController.handleConfigDeleted());
     context.subscriptions.push(watcher);
 
     context.subscriptions.push(
       vscode.commands.registerCommand('forceCockpit.refreshOrg', () =>
-        connectFromConfig({ force: true }),
+        orgController.connectFromConfig({ force: true }),
       ),
     );
 
     // Auto-connect on activation — reuses connectFromConfig() with retry and race-guards
-    void connectFromConfig();
+    void orgController.connectFromConfig();
   }
 }
 

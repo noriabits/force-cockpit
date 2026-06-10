@@ -3,6 +3,7 @@
 src/**
 .claude/**
 .codegraph/**
+docs/**
 .sfdx/**
 .sf/**
 .husky/**
