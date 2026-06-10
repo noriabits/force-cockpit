@@ -1,29 +1,20 @@
 // @ts-check
-import { isSalesforceRecordId } from '../../../../utils/salesforce';
+// Monitoring dashboard webview orchestrator. Owns state, DOM refs, the shared
+// filter bar, card shells, query dispatch, auto-refresh timers, and feature
+// registration. Chart rendering, table rendering, the edit form, and drag
+// reordering are delegated to focused sibling modules (each created via a
+// factory that receives a ctx so it never reaches into this scope directly).
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
+import { formatValue } from './format-value';
+import { createChartRenderer, CHART_TYPES_WITH_CANVAS } from './chart-rendering';
+import { createTableRenderer } from './table-rendering';
+import { createEditForm } from './edit-form';
+import { createDragOrder } from './drag-order';
 
 (function () {
   const win = /** @type {any} */ (window);
   const L = win.MonitoringLabels;
   const vscode = win.__vscode;
-
-  // ── Constants ──────────────────────────────────────────────────────────────
-  const CHART_COLORS = [
-    '#4ec9b0',
-    '#569cd6',
-    '#ce9178',
-    '#dcdcaa',
-    '#c586c0',
-    '#9cdcfe',
-    '#f44747',
-    '#4fc1ff',
-    '#b5cea8',
-    '#d4d4d4',
-  ];
-  /** Chart types rendered with Chart.js canvas */
-  const CHART_TYPES_WITH_CANVAS = ['bar', 'line', 'pie', 'doughnut'];
-  /** All chart types including metric and table — used in edit form dropdown */
-  const ALL_CHART_TYPES = [...CHART_TYPES_WITH_CANVAS, 'metric', 'table'];
 
   // ── State ──────────────────────────────────────────────────────────────────
   let connected = false;
@@ -42,8 +33,6 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
   const refreshTimers = new Map();
   /** @type {Set<string>} configIds currently being queried */
   const pendingQueries = new Set();
-  /** configId currently being dragged, or null */
-  let dragSrcId = /** @type {string | null} */ (null);
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   const monitoringPanel = /** @type {HTMLElement} */ (document.getElementById('monitoring-panel'));
@@ -77,6 +66,28 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     onChange: () => applyFilters(),
   });
 
+  // ── Delegated rendering modules ────────────────────────────────────────────
+  const chartRenderer = createChartRenderer({ chartInstances, labels: L, setCardStatus });
+  const tableRenderer = createTableRenderer({ grid, labels: L, setCardStatus, vscode });
+  const dragOrder = createDragOrder({ grid, getConfigs: () => configs, vscode });
+  const editForm = createEditForm({
+    labels: L,
+    vscode,
+    grid,
+    chartInstances,
+    pendingQueries,
+    debounceTimers,
+    getConfigs: () => configs,
+    setConfigs: (c) => {
+      configs = c;
+    },
+    nextAvailablePosition: () => dragOrder.nextAvailablePosition(),
+    buildViewCard,
+    triggerQuery,
+    filterBar,
+    applyFilters,
+  });
+
   // ── Init ───────────────────────────────────────────────────────────────────
   addBtn.textContent = L.btnAddChart;
   noResults.textContent = L.noResults;
@@ -91,58 +102,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     applyFilters();
   });
 
-  // Grid-level live-swap dragover. Per-card dragover with Y-only midpoint logic
-  // doesn't work in a 2-D grid (cards in the same row can't be distinguished).
-  // We instead find the closest visible sibling under the cursor and reorder
-  // continuously as the user drags. The dragged card itself is excluded.
-  grid.addEventListener('dragover', (e) => {
-    if (!dragSrcId) return;
-    const dragCard = /** @type {HTMLElement | null} */ (
-      grid.querySelector(`.card[data-config-id="${dragSrcId}"]`)
-    );
-    if (!dragCard) return;
-    e.preventDefault();
-    const dt = /** @type {DataTransfer | null} */ (/** @type {DragEvent} */ (e).dataTransfer);
-    if (dt) dt.dropEffect = 'move';
-    const target = findClosestCard(dragCard, e.clientX, e.clientY);
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
-    const isAfter = e.clientX > rect.left + rect.width / 2;
-    if (isAfter) {
-      if (target.nextSibling !== dragCard) {
-        grid.insertBefore(dragCard, target.nextSibling);
-      }
-    } else {
-      if (dragCard.nextSibling !== target) {
-        grid.insertBefore(dragCard, target);
-      }
-    }
-  });
-
-  /**
-   * @param {HTMLElement} excluded
-   * @param {number} x
-   * @param {number} y
-   * @returns {HTMLElement | null}
-   */
-  function findClosestCard(excluded, x, y) {
-    const cards = /** @type {HTMLElement[]} */ (
-      Array.from(grid.querySelectorAll('.card[data-config-id]'))
-    ).filter((c) => c !== excluded && c.style.display !== 'none');
-    let best = null;
-    let bestDist = Infinity;
-    for (const card of cards) {
-      const rect = card.getBoundingClientRect();
-      const dx = x - (rect.left + rect.width / 2);
-      const dy = y - (rect.top + rect.height / 2);
-      const dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = card;
-      }
-    }
-    return best;
-  }
+  dragOrder.init();
 
   // ── Tab visibility observer ────────────────────────────────────────────────
   // Charts rendered inside a display:none container get 0×0 dimensions and show
@@ -392,29 +352,6 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     noResults.style.display = visibleCount === 0 && configs.length > 0 ? '' : 'none';
   }
 
-  // ── Card ordering ───────────────────────────────────────────────────────────
-  function nextAvailablePosition() {
-    let max = -1;
-    for (const c of configs) {
-      if (typeof c.position === 'number' && c.position > max) max = c.position;
-    }
-    return max + 1;
-  }
-
-  function saveCardOrder() {
-    const allCards = Array.from(grid.querySelectorAll('.card[data-config-id]'));
-    const positions = allCards.map((card, idx) => ({
-      id: card.getAttribute('data-config-id') || '',
-      position: idx,
-      source: card.getAttribute('data-source') || '',
-    }));
-    for (const { id, position } of positions) {
-      const cfg = configs.find((/** @type {any} */ c) => c.id === id);
-      if (cfg) cfg.position = position;
-    }
-    vscode.postMessage({ type: 'saveMonitoringPositions', positions });
-  }
-
   // ── Build view-mode card ───────────────────────────────────────────────────
   /** @param {any} cfg */
   function buildCardContentArea(cfg) {
@@ -462,23 +399,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     // by default lets users select and copy text inside the card (e.g. table cells).
     card.draggable = false;
 
-    card.addEventListener('dragstart', (e) => {
-      if (grid.querySelector('.monitoring-edit-form')) {
-        e.preventDefault();
-        return;
-      }
-      dragSrcId = cfg.id;
-      card.classList.add('monitoring-card--dragging');
-      /** @type {DataTransfer} */ (e.dataTransfer).effectAllowed = 'move';
-    });
-
-    card.addEventListener('dragend', () => {
-      card.draggable = false;
-      card.classList.remove('monitoring-card--dragging');
-      const wasDragging = dragSrcId === cfg.id;
-      dragSrcId = null;
-      if (wasDragging) saveCardOrder();
-    });
+    dragOrder.makeCardDraggable(card, cfg.id);
 
     card.appendChild(buildCardHeader(cfg));
 
@@ -585,40 +506,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     }
     typeSelect.disabled = !connected;
     typeSelect.addEventListener('change', () => {
-      const chart = chartInstances.get(cfg.id);
-      if (!chart) return;
-      const newType = typeSelect.value;
-      const isMultiColor = newType === 'pie' || newType === 'doughnut';
-      chart.config.type = newType;
-      // Re-color datasets: always one color per label
-      const labels = /** @type {any[]} */ (chart.data.labels ?? []);
-      const perLabelColors = labels.map(
-        (/** @type {any} */ _l, /** @type {number} */ idx) =>
-          CHART_COLORS[idx % CHART_COLORS.length],
-      );
-      chart.data.datasets.forEach((/** @type {any} */ ds) => {
-        ds.backgroundColor = perLabelColors;
-        ds.borderColor = perLabelColors;
-        ds.pointBackgroundColor = perLabelColors;
-        ds.pointBorderColor = perLabelColors;
-      });
-      // Show legend for multi-colour charts or multi-dataset charts
-      if (chart.options.plugins && chart.options.plugins.legend) {
-        chart.options.plugins.legend.display = chart.data.datasets.length > 1 || isMultiColor;
-      }
-      // Restore or clear scales: pie/doughnut have no axes; bar/line need x+y
-      const stacked = cfg.stacked || false;
-      chart.options.scales = isMultiColor
-        ? {}
-        : {
-            x: {
-              stacked,
-              ticks: { color: '#aaaaaa', maxRotation: 45 },
-              grid: { color: '#333333' },
-            },
-            y: { stacked, ticks: { color: '#aaaaaa' }, grid: { color: '#333333' } },
-          };
-      chart.update();
+      chartRenderer.switchChartType(cfg, typeSelect.value);
     });
     return typeSelect;
   }
@@ -637,7 +525,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     }
 
     card.innerHTML = '';
-    card.appendChild(buildEditForm(cfg, card, cfg.id));
+    card.appendChild(editForm.buildEditForm(cfg, card, cfg.id));
   }
 
   // ── Add new card ───────────────────────────────────────────────────────────
@@ -659,628 +547,11 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     card.className = 'card monitoring-card';
     card.setAttribute('data-new-card', '1');
 
-    card.appendChild(buildEditForm(newCfg, card, null));
+    card.appendChild(editForm.buildEditForm(newCfg, card, null));
     grid.insertBefore(card, grid.firstChild);
 
     // Hide no-results if shown
     noResults.style.display = 'none';
-  }
-
-  // ── Build edit form ────────────────────────────────────────────────────────
-  /**
-   * @param {any} cfg
-   * @param {any} card
-   * @param {string | null} configId
-   */
-  function buildEditForm(cfg, card, configId) {
-    const form = document.createElement('div');
-    form.className = 'monitoring-edit-form';
-    /** @type {Array<() => void>} */
-    const cleanups = []; // Track cleanup functions for form teardown
-
-    // Name
-    form.appendChild(
-      makeFormRow(
-        L.labelName,
-        makeInput('text', cfg.name, L.placeholderName, 'monitoring-edit-name'),
-      ),
-    );
-
-    // Category
-    const { element: folderCombobox, cleanup: folderCleanup } = makeFolderCombobox(cfg.folder);
-    cleanups.push(folderCleanup);
-    form.appendChild(makeFormRow(L.labelCategory, folderCombobox));
-
-    // Description
-    form.appendChild(
-      makeFormRow(
-        L.labelDescription,
-        makeInput('text', cfg.description, L.placeholderDescription, 'monitoring-edit-desc'),
-      ),
-    );
-
-    // SOQL
-    const soqlArea = document.createElement('textarea');
-    soqlArea.className = 'text-input monitoring-soql-input';
-    soqlArea.value = cfg.soql;
-    soqlArea.placeholder = L.placeholderSoql;
-    soqlArea.id = 'monitoring-edit-soql';
-    form.appendChild(makeFormRow(L.labelSoql, soqlArea));
-
-    // Label field (hidden for metric type)
-    const labelFieldInput = makeInput(
-      'text',
-      cfg.labelField,
-      L.placeholderLabelField,
-      'monitoring-edit-labelfield',
-    );
-    const labelFieldRow = makeFormRow(L.labelLabelField, labelFieldInput);
-    form.appendChild(labelFieldRow);
-
-    // Value fields
-    const vfContainer = document.createElement('div');
-    vfContainer.className = 'monitoring-value-fields';
-    for (const vf of cfg.valueFields) {
-      vfContainer.appendChild(
-        makeValueFieldRow(
-          vf.field,
-          vf.label,
-          vf.format || '',
-          vf.threshold ?? null,
-          vf.thresholdCondition || 'above',
-          vfContainer,
-        ),
-      );
-    }
-    const addVfBtn = document.createElement('button');
-    addVfBtn.className = 'btn btn-secondary btn-sm';
-    addVfBtn.textContent = L.btnAddValueField;
-    addVfBtn.style.alignSelf = 'flex-start';
-    addVfBtn.addEventListener('click', () => {
-      vfContainer.insertBefore(makeValueFieldRow('', '', '', null, 'above', vfContainer), addVfBtn);
-    });
-    vfContainer.appendChild(addVfBtn);
-    form.appendChild(makeFormRow(L.labelValueFields, vfContainer));
-
-    // Chart type
-    const chartTypeSelect = document.createElement('select');
-    chartTypeSelect.className = 'text-input monitoring-chart-type-select';
-    chartTypeSelect.style.width = 'auto';
-    for (const t of ALL_CHART_TYPES) {
-      const opt = document.createElement('option');
-      opt.value = t;
-      opt.textContent = L.chartTypes[t];
-      if (t === cfg.chartType) opt.selected = true;
-      chartTypeSelect.appendChild(opt);
-    }
-    form.appendChild(makeFormRow(L.labelChartType, chartTypeSelect));
-
-    // Stacked checkbox (bar/line only)
-    const stackedCheckbox = document.createElement('input');
-    stackedCheckbox.type = 'checkbox';
-    stackedCheckbox.id = 'monitoring-edit-stacked';
-    stackedCheckbox.checked = cfg.stacked || false;
-    const stackedRow = makeFormRow(L.labelStacked, stackedCheckbox);
-    stackedRow.classList.add('monitoring-form-row--inline');
-    form.appendChild(stackedRow);
-
-    // Notify on record count increase — applies to all chart types
-    const notifyCheckbox = document.createElement('input');
-    notifyCheckbox.type = 'checkbox';
-    notifyCheckbox.id = 'monitoring-edit-notify-increase';
-    notifyCheckbox.checked = cfg.notifyOnIncrease || false;
-    const notifyRow = makeFormRow(L.labelNotifyOnIncrease, notifyCheckbox);
-    notifyRow.classList.add('monitoring-form-row--inline');
-    form.appendChild(notifyRow);
-
-    // Refresh interval
-    const intervalInput = makeInput(
-      'number',
-      String(cfg.refreshInterval ?? 0),
-      '0',
-      'monitoring-edit-interval',
-    );
-    intervalInput.min = '0';
-    intervalInput.style.width = '80px';
-    form.appendChild(makeFormRow(L.labelRefreshInterval, intervalInput));
-
-    // Private checkbox
-    const privateCheckbox = document.createElement('input');
-    privateCheckbox.type = 'checkbox';
-    privateCheckbox.id = 'monitoring-edit-private';
-    privateCheckbox.checked = cfg.source === 'private';
-    const privateRow = makeFormRow(L.labelPrivate, privateCheckbox);
-    privateRow.classList.add('monitoring-form-row--inline');
-    form.appendChild(privateRow);
-
-    // Preview area — contains canvas, table placeholder, and metric placeholder
-    const previewWrapper = document.createElement('div');
-    previewWrapper.className = 'monitoring-preview-wrapper monitoring-canvas-wrapper';
-
-    const previewCanvasId = 'chart-preview-' + (configId || 'new').replace(/\//g, '-');
-    const previewCanvas = document.createElement('canvas');
-    previewCanvas.id = previewCanvasId;
-    previewCanvas.className = 'monitoring-preview-canvas';
-    previewWrapper.appendChild(previewCanvas);
-
-    const previewTableWrapper = document.createElement('div');
-    previewTableWrapper.className = 'monitoring-table-wrapper monitoring-preview-table';
-    previewTableWrapper.style.display = 'none';
-    previewWrapper.appendChild(previewTableWrapper);
-
-    const previewMetricEl = document.createElement('div');
-    previewMetricEl.className = 'monitoring-metric-display monitoring-preview-metric';
-    previewMetricEl.style.display = 'none';
-    previewWrapper.appendChild(previewMetricEl);
-
-    form.appendChild(previewWrapper);
-
-    // Status / error
-    const statusEl = document.createElement('span');
-    statusEl.className = 'monitoring-status';
-    form.appendChild(statusEl);
-
-    const errorBox = document.createElement('div');
-    errorBox.className = 'error-box';
-    errorBox.style.display = 'none';
-    form.appendChild(errorBox);
-
-    // Actions row
-    const actionsRow = document.createElement('div');
-    actionsRow.className = 'monitoring-edit-actions';
-
-    const previewBtn = document.createElement('button');
-    previewBtn.className = 'btn btn-secondary';
-    previewBtn.textContent = L.btnPreview;
-
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'btn btn-primary';
-    saveBtn.textContent = L.btnSave;
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'btn btn-secondary';
-    cancelBtn.textContent = L.btnCancel;
-
-    actionsRow.appendChild(previewBtn);
-    actionsRow.appendChild(saveBtn);
-    actionsRow.appendChild(cancelBtn);
-
-    // Delete button — only when editing an existing config
-    if (configId) {
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'btn monitoring-form-delete-btn';
-      deleteBtn.textContent = L.btnDelete;
-      deleteBtn.addEventListener('click', () => {
-        vscode.postMessage({
-          type: 'deleteMonitoringConfig',
-          configId,
-          configName: cfg.name,
-          source: cfg.source,
-          isPrivate: cfg.source === 'private',
-        });
-      });
-      actionsRow.appendChild(deleteBtn);
-    }
-
-    form.appendChild(actionsRow);
-
-    // ── Visibility helpers ──
-    function updateFormVisibility() {
-      const type = chartTypeSelect.value;
-      // Hide label field for metric (not needed)
-      labelFieldRow.style.display = type === 'metric' ? 'none' : '';
-      // Show stacked only for bar / line
-      stackedRow.style.display = type === 'bar' || type === 'line' ? '' : 'none';
-    }
-
-    updateFormVisibility();
-    chartTypeSelect.addEventListener('change', updateFormVisibility);
-
-    // ── Helpers used by event handlers ──
-    function readScalarFormFields() {
-      const nameVal = /** @type {HTMLInputElement} */ (
-        form.querySelector('#monitoring-edit-name')
-      ).value.trim();
-      const folderVal =
-        /** @type {HTMLInputElement} */ (
-          form.querySelector('#monitoring-edit-folder')
-        ).value.trim() || 'general';
-      const descVal = /** @type {HTMLInputElement} */ (
-        form.querySelector('#monitoring-edit-desc')
-      ).value.trim();
-      const soqlVal = /** @type {HTMLTextAreaElement} */ (
-        form.querySelector('#monitoring-edit-soql')
-      ).value.trim();
-      const labelFieldVal = /** @type {HTMLInputElement} */ (
-        form.querySelector('#monitoring-edit-labelfield')
-      ).value.trim();
-      const intervalVal =
-        parseInt(
-          /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-interval')).value,
-          10,
-        ) || 0;
-      const stackedVal =
-        /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-stacked'))?.checked ||
-        false;
-      const notifyOnIncreaseVal =
-        /** @type {HTMLInputElement} */ (form.querySelector('#monitoring-edit-notify-increase'))
-          ?.checked || false;
-      return {
-        nameVal,
-        folderVal,
-        descVal,
-        soqlVal,
-        labelFieldVal,
-        intervalVal,
-        stackedVal,
-        notifyOnIncreaseVal,
-      };
-    }
-
-    function readValueFields() {
-      const vfRows = vfContainer.querySelectorAll('.monitoring-value-field-row');
-      const valueFields = [];
-      for (const row of vfRows) {
-        const inputs = row.querySelectorAll('input');
-        const formatSel = /** @type {HTMLSelectElement | null} */ (
-          row.querySelector('.monitoring-vf-format-select')
-        );
-        const conditionSel = /** @type {HTMLSelectElement | null} */ (
-          row.querySelector('.monitoring-vf-condition-select')
-        );
-        const field = inputs[0].value.trim();
-        const label = inputs[1].value.trim();
-        const format = formatSel ? formatSel.value : '';
-        const thresholdRaw = inputs[2] ? inputs[2].value.trim() : '';
-        const threshold = thresholdRaw !== '' ? Number(thresholdRaw) : undefined;
-        const thresholdCondition = conditionSel ? conditionSel.value : 'above';
-        if (field) {
-          /** @type {any} */
-          const vf = { field, label: label || field };
-          if (format) vf.format = format;
-          if (threshold != null && !isNaN(threshold)) {
-            vf.threshold = threshold;
-            vf.thresholdCondition = thresholdCondition;
-          }
-          valueFields.push(vf);
-        }
-      }
-      return valueFields;
-    }
-
-    function readFormConfig() {
-      const {
-        nameVal,
-        folderVal,
-        descVal,
-        soqlVal,
-        labelFieldVal,
-        intervalVal,
-        stackedVal,
-        notifyOnIncreaseVal,
-      } = readScalarFormFields();
-      const valueFields = readValueFields();
-      const position = configId ? cfg.position : nextAvailablePosition();
-      return {
-        id: configId || '',
-        // Previous location — lets the host delete the old file when the
-        // category or name changes (move semantics)
-        source: cfg.source,
-        folder: folderVal,
-        name: nameVal,
-        description: descVal,
-        soql: soqlVal,
-        labelField: labelFieldVal,
-        valueFields: valueFields.length > 0 ? valueFields : cfg.valueFields,
-        chartType: chartTypeSelect.value,
-        refreshInterval: intervalVal,
-        stacked: stackedVal,
-        notifyOnIncrease: notifyOnIncreaseVal,
-        ...(typeof position === 'number' ? { position } : {}),
-      };
-    }
-
-    function triggerPreview() {
-      const liveCfg = readFormConfig();
-      const isMetric = liveCfg.chartType === 'metric';
-      const isTable = liveCfg.chartType === 'table';
-
-      if (!liveCfg.soql || liveCfg.valueFields.length === 0) return;
-      if (!isMetric && !liveCfg.labelField) return;
-
-      statusEl.textContent = L.statusLoading;
-      errorBox.style.display = 'none';
-
-      const previewId = '__preview__' + (configId || 'new');
-      pendingQueries.add(previewId);
-
-      if (isTable) {
-        vscode.postMessage({
-          type: 'runMonitoringTableQuery',
-          configId: previewId,
-          configName: liveCfg.name,
-          soql: liveCfg.soql,
-          labelField: liveCfg.labelField,
-          valueFields: liveCfg.valueFields,
-        });
-      } else {
-        vscode.postMessage({
-          type: 'runMonitoringQuery',
-          configId: previewId,
-          configName: liveCfg.name,
-          soql: liveCfg.soql,
-          labelField: liveCfg.labelField,
-          valueFields: liveCfg.valueFields,
-        });
-      }
-    }
-
-    // Debounced auto-preview on SOQL change
-    soqlArea.addEventListener('input', () => {
-      const timerId = debounceTimers.get('__preview__');
-      if (timerId) clearTimeout(timerId);
-      debounceTimers.set('__preview__', setTimeout(triggerPreview, 800));
-    });
-
-    // Chart type change → instant update on preview chart (canvas types only)
-    chartTypeSelect.addEventListener('change', () => {
-      const previewId = '__preview__' + (configId || 'new');
-      const chart = chartInstances.get(previewId);
-      if (chart) {
-        chart.config.type = chartTypeSelect.value;
-        chart.update();
-      }
-    });
-
-    previewBtn.addEventListener('click', triggerPreview);
-
-    saveBtn.addEventListener('click', () => {
-      const liveCfg = readFormConfig();
-      if (!liveCfg.name) {
-        errorBox.textContent = 'Name is required.';
-        errorBox.style.display = '';
-        return;
-      }
-      if (!liveCfg.soql) {
-        errorBox.textContent = 'SOQL query is required.';
-        errorBox.style.display = '';
-        return;
-      }
-      if (!liveCfg.labelField && liveCfg.chartType !== 'metric') {
-        errorBox.textContent = 'Label field is required.';
-        errorBox.style.display = '';
-        return;
-      }
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      card.__pendingSaveResolve = (/** @type {any} */ savedCfg) => {
-        const savedCleanups = card.__pendingSaveResolveCleanups || [];
-        savedCleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
-        configs = configs.filter((/** @type {any} */ c) => c.id !== cfg.id);
-        configs.push(savedCfg);
-        const newCard = buildViewCard(savedCfg);
-        if (configId) {
-          card.replaceWith(newCard);
-        } else {
-          // New card: drop the placeholder and append to the end
-          card.remove();
-          grid.appendChild(newCard);
-        }
-        triggerQuery(savedCfg.id, savedCfg.soql, savedCfg.labelField, savedCfg.valueFields);
-        filterBar.render();
-        applyFilters();
-      };
-      card.__pendingSaveError = (/** @type {string} */ errMsg) => {
-        saveBtn.disabled = false;
-        saveBtn.textContent = L.btnSave;
-        errorBox.textContent = errMsg;
-        errorBox.style.display = '';
-      };
-      // On successful save, the __pendingSaveResolve callback will replace the card and trigger cleanup
-      // Set a flag so cleanup is called after the card is replaced
-      card.__pendingSaveResolveCleanups = /** @type {Array<() => void>} */ (cleanups);
-      const isPrivate =
-        /** @type {HTMLInputElement | null} */ (form.querySelector('#monitoring-edit-private'))
-          ?.checked || false;
-      vscode.postMessage({ type: 'saveMonitoringConfig', config: liveCfg, isPrivate });
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      cleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
-      if (configId) {
-        // Revert to view mode with original config
-        const originalCfg = configs.find((/** @type {any} */ c) => c.id === configId) || cfg;
-        const newCard = buildViewCard(originalCfg);
-        card.replaceWith(newCard);
-      } else {
-        // New card — just remove it
-        card.remove();
-      }
-    });
-
-    return form;
-  }
-
-  // ── Form helpers ───────────────────────────────────────────────────────────
-  /**
-   * @param {string} labelText
-   * @param {HTMLElement} inputEl
-   */
-  function makeFormRow(labelText, inputEl) {
-    const row = document.createElement('div');
-    row.className = 'monitoring-form-row';
-    const label = document.createElement('label');
-    label.className = 'monitoring-form-label';
-    label.textContent = labelText;
-    row.appendChild(label);
-    row.appendChild(inputEl);
-    return row;
-  }
-
-  /**
-   * @param {string} type
-   * @param {string} value
-   * @param {string} placeholder
-   * @param {string} id
-   * @returns {HTMLInputElement}
-   */
-  function makeInput(type, value, placeholder, id) {
-    const input = document.createElement('input');
-    input.type = type;
-    input.className = 'text-input';
-    input.value = value || '';
-    input.placeholder = placeholder || '';
-    if (id) input.id = id;
-    return input;
-  }
-
-  /**
-   * Build a combobox for the Category field (text input + dropdown of existing folders).
-   * @param {string} currentValue
-   * @returns {{ element: HTMLDivElement, cleanup: () => void }}
-   */
-  function makeFolderCombobox(currentValue) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'monitoring-folder-combobox';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'text-input';
-    input.value = currentValue || '';
-    input.placeholder = L.placeholderCategory;
-    input.id = 'monitoring-edit-folder';
-    input.autocomplete = 'off';
-
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'monitoring-folder-toggle';
-    toggle.tabIndex = -1;
-    toggle.innerHTML = '&#9662;';
-
-    const dropdown = document.createElement('div');
-    dropdown.className = 'monitoring-folder-dropdown';
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(toggle);
-    wrapper.appendChild(dropdown);
-
-    // Populate dropdown from existing config folders
-    const folders = [...new Set(configs.map((/** @type {any} */ c) => c.folder))].sort();
-    for (const folder of folders) {
-      const opt = document.createElement('div');
-      opt.className = 'monitoring-folder-option';
-      opt.textContent = folder;
-      opt.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        input.value = folder;
-        dropdown.classList.remove('open');
-      });
-      dropdown.appendChild(opt);
-    }
-
-    // Toggle button
-    toggle.addEventListener('click', () => {
-      if (dropdown.classList.contains('open')) {
-        dropdown.classList.remove('open');
-      } else if (dropdown.children.length > 0) {
-        dropdown.classList.add('open');
-      }
-      input.focus();
-    });
-
-    // Click-outside close — track listener for cleanup
-    const clickHandler = (/** @type {MouseEvent} */ e) => {
-      if (!wrapper.contains(/** @type {Node} */ (e.target))) {
-        dropdown.classList.remove('open');
-      }
-    };
-    document.addEventListener('click', clickHandler);
-
-    return {
-      element: wrapper,
-      cleanup: () => document.removeEventListener('click', clickHandler),
-    };
-  }
-
-  /** @param {string} currentFormat @returns {HTMLSelectElement} */
-  function buildFormatSelect(currentFormat) {
-    const formatSelect = document.createElement('select');
-    formatSelect.className = 'monitoring-vf-format-select';
-    formatSelect.title = L.labelValueFieldFormat;
-    for (const [val, lbl] of Object.entries(L.formatOptions)) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = /** @type {string} */ (lbl);
-      if (val === (currentFormat || '')) opt.selected = true;
-      formatSelect.appendChild(opt);
-    }
-    return formatSelect;
-  }
-
-  /**
-   * @param {number | null} threshold
-   * @param {string} thresholdCondition
-   * @returns {{ thresholdInput: HTMLInputElement, conditionSelect: HTMLSelectElement }}
-   */
-  function buildThresholdGroup(threshold, thresholdCondition) {
-    const thresholdInput = /** @type {HTMLInputElement} */ (
-      makeInput('number', threshold != null ? String(threshold) : '', L.placeholderThreshold, '')
-    );
-    thresholdInput.className = 'text-input monitoring-vf-threshold-input';
-    thresholdInput.title = L.placeholderThreshold;
-    thresholdInput.min = '0';
-
-    const conditionSelect = document.createElement('select');
-    conditionSelect.className = 'monitoring-vf-condition-select';
-    conditionSelect.title = L.labelThresholdCondition;
-    for (const [val, lbl] of Object.entries(L.conditionOptions)) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = /** @type {string} */ (lbl);
-      if (val === (thresholdCondition || 'above')) opt.selected = true;
-      conditionSelect.appendChild(opt);
-    }
-
-    return { thresholdInput, conditionSelect };
-  }
-
-  /**
-   * @param {string} field
-   * @param {string} label
-   * @param {string} format
-   * @param {number | null} threshold
-   * @param {string} thresholdCondition
-   * @param {HTMLElement} container
-   */
-  function makeValueFieldRow(field, label, format, threshold, thresholdCondition, container) {
-    const row = document.createElement('div');
-    row.className = 'monitoring-value-field-row';
-
-    const fieldInput = makeInput('text', field, L.placeholderValueFieldApi, '');
-    fieldInput.title = L.labelValueFieldApi;
-
-    const labelInput = makeInput('text', label, L.placeholderValueFieldLabel, '');
-    labelInput.title = L.labelValueFieldLabel;
-
-    const { thresholdInput, conditionSelect } = buildThresholdGroup(threshold, thresholdCondition);
-
-    const removeBtn = document.createElement('button');
-    removeBtn.className = 'monitoring-remove-vf-btn';
-    removeBtn.textContent = L.btnRemoveValueField;
-    removeBtn.title = 'Remove';
-    removeBtn.addEventListener('click', () => {
-      // Keep at least one row
-      const rows = container.querySelectorAll('.monitoring-value-field-row');
-      if (rows.length > 1) row.remove();
-    });
-
-    row.appendChild(fieldInput);
-    row.appendChild(labelInput);
-    row.appendChild(buildFormatSelect(format));
-    row.appendChild(thresholdInput);
-    row.appendChild(conditionSelect);
-    row.appendChild(removeBtn);
-    return row;
   }
 
   // ── Query execution ────────────────────────────────────────────────────────
@@ -1358,7 +629,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     const previewCanvas = document.getElementById(
       'chart-preview-' + data.configId.replace('__preview__', '').replace(/\//g, '-'),
     );
-    renderChart(data.configId, data, previewCanvas, previewChartType, false, []);
+    chartRenderer.renderChart(data.configId, data, previewCanvas, previewChartType, false, []);
     const editCard = findEditCard();
     if (editCard)
       setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
@@ -1386,7 +657,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     const typeSelect = findCardTypeSelect(data.configId);
     const chartType = typeSelect ? typeSelect.value : cfg?.chartType || 'bar';
 
-    renderChart(
+    chartRenderer.renderChart(
       data.configId,
       data,
       canvas,
@@ -1435,7 +706,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
       );
       if (previewTableEl) {
         previewTableEl.style.display = '';
-        renderTableInEl(previewTableEl, data);
+        tableRenderer.renderTableInEl(previewTableEl, data);
       }
       if (previewCanvasEl) previewCanvasEl.style.display = 'none';
       if (previewMetricEl) previewMetricEl.style.display = 'none';
@@ -1445,7 +716,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
       return;
     }
 
-    renderTable(data.configId, data);
+    tableRenderer.renderTable(data.configId, data);
   }
 
   // ── Save handlers ──────────────────────────────────────────────────────────
@@ -1510,328 +781,6 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     lblEl.textContent = data.datasets[0].label || '';
     el.appendChild(numEl);
     el.appendChild(lblEl);
-  }
-
-  // ── Table rendering ────────────────────────────────────────────────────────
-  /**
-   * @param {string} configId
-   * @param {any} data
-   */
-  function renderTable(configId, data) {
-    const card = grid.querySelector('[data-config-id="' + configId + '"]');
-    if (!card) return;
-    const wrapper = /** @type {HTMLElement | null} */ (
-      card.querySelector('.monitoring-table-wrapper')
-    );
-    if (!wrapper) return;
-    renderTableInEl(wrapper, data);
-    setCardStatus(configId, L.statusRows(data.totalRows));
-  }
-
-  /**
-   * @param {HTMLElement} wrapper
-   * @param {any} data
-   */
-  function renderTableInEl(wrapper, data) {
-    const w = /** @type {any} */ (wrapper);
-    let toolbar = /** @type {HTMLElement | null} */ (
-      wrapper.querySelector(':scope > .monitoring-table-toolbar')
-    );
-    let scrollEl = /** @type {HTMLElement | null} */ (
-      wrapper.querySelector(':scope > .monitoring-table-scroll')
-    );
-    let filterInput = /** @type {HTMLInputElement | null} */ (
-      toolbar ? toolbar.querySelector('.monitoring-table-filter') : null
-    );
-    let matchCount = /** @type {HTMLElement | null} */ (
-      toolbar ? toolbar.querySelector('.monitoring-table-match-count') : null
-    );
-
-    if (!toolbar || !scrollEl || !filterInput || !matchCount) {
-      wrapper.innerHTML = '';
-      toolbar = document.createElement('div');
-      toolbar.className = 'monitoring-table-toolbar';
-      filterInput = document.createElement('input');
-      filterInput.type = 'text';
-      filterInput.className = 'monitoring-table-filter';
-      filterInput.placeholder = L.placeholderTableFilter;
-      matchCount = document.createElement('span');
-      matchCount.className = 'monitoring-table-match-count';
-      toolbar.appendChild(filterInput);
-      toolbar.appendChild(matchCount);
-      scrollEl = document.createElement('div');
-      scrollEl.className = 'monitoring-table-scroll';
-      wrapper.appendChild(toolbar);
-      wrapper.appendChild(scrollEl);
-
-      filterInput.addEventListener('input', () => applyFilterAndSort(wrapper));
-
-      scrollEl.addEventListener('click', (event) => {
-        const target = /** @type {HTMLElement} */ (event.target);
-        if (target.tagName === 'A' && target.classList.contains('monitoring-record-link')) {
-          event.preventDefault();
-          const recordId = target.getAttribute('data-record-id');
-          if (recordId) {
-            vscode.postMessage({ type: 'openRecord', recordId });
-          }
-        }
-      });
-    }
-
-    if (!data.rows || data.rows.length === 0) {
-      scrollEl.innerHTML = '';
-      const empty = document.createElement('span');
-      empty.className = 'monitoring-table-no-matches';
-      empty.textContent = L.statusNoData;
-      scrollEl.appendChild(empty);
-      filterInput.disabled = true;
-      matchCount.textContent = '';
-      w._tableState = { data, sortCol: -1, sortAsc: true };
-      return;
-    }
-    filterInput.disabled = false;
-
-    scrollEl.innerHTML = '';
-    const table = document.createElement('table');
-    table.className = 'monitoring-table';
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    data.columnLabels.forEach((/** @type {string} */ lbl, /** @type {number} */ i) => {
-      const th = document.createElement('th');
-      th.className = 'monitoring-table-th';
-      th.textContent = lbl;
-      th.addEventListener('click', () => {
-        const state = w._tableState;
-        if (!state) return;
-        if (state.sortCol === i) {
-          state.sortAsc = !state.sortAsc;
-        } else {
-          state.sortCol = i;
-          state.sortAsc = true;
-        }
-        applyFilterAndSort(wrapper);
-      });
-      headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    table.appendChild(tbody);
-    scrollEl.appendChild(table);
-
-    const prev = w._tableState;
-    const keepSort = !!(
-      prev &&
-      prev.data &&
-      prev.data.columnLabels &&
-      prev.data.columnLabels.length === data.columnLabels.length
-    );
-    w._tableState = {
-      data,
-      tbody,
-      sortCol: keepSort ? prev.sortCol : -1,
-      sortAsc: keepSort ? prev.sortAsc : true,
-      matchCount,
-      filterInput,
-    };
-
-    applyFilterAndSort(wrapper);
-  }
-
-  /**
-   * @param {HTMLElement} wrapper
-   */
-  function applyFilterAndSort(wrapper) {
-    const state = /** @type {any} */ (wrapper)._tableState;
-    if (!state || !state.tbody) return;
-    const q = state.filterInput.value.trim().toLowerCase();
-    const filtered = q
-      ? state.data.rows.filter((/** @type {string[]} */ row) =>
-          row.some((/** @type {string} */ c) =>
-            String(c == null ? '' : c)
-              .toLowerCase()
-              .includes(q),
-          ),
-        )
-      : state.data.rows;
-
-    if (filtered.length === 0 && q) {
-      state.tbody.innerHTML = `<tr><td class="monitoring-table-no-matches" colspan="${state.data.columnLabels.length}">${win.__escapeHtml(L.statusNoMatchingRows)}</td></tr>`;
-    } else {
-      sortAndRenderRows(state.tbody, filtered, state.sortCol, state.sortAsc);
-    }
-    state.matchCount.textContent = q
-      ? L.statusFilteredRows(filtered.length, state.data.rows.length)
-      : '';
-  }
-
-  /**
-   * @param {HTMLElement} tbody
-   * @param {string[][]} rows
-   * @param {number} sortCol
-   * @param {boolean} sortAsc
-   */
-  function sortAndRenderRows(tbody, rows, sortCol, sortAsc) {
-    const sorted =
-      sortCol >= 0
-        ? [...rows].sort((a, b) => {
-            const va = a[sortCol] ?? '';
-            const vb = b[sortCol] ?? '';
-            const na = Number(va);
-            const nb = Number(vb);
-            if (!isNaN(na) && !isNaN(nb)) return sortAsc ? na - nb : nb - na;
-            return sortAsc
-              ? String(va).localeCompare(String(vb))
-              : String(vb).localeCompare(String(va));
-          })
-        : rows;
-
-    tbody.innerHTML = '';
-    for (const row of sorted) {
-      const tr = document.createElement('tr');
-      for (const cell of row) {
-        const td = document.createElement('td');
-        td.className = 'monitoring-table-td';
-        if (isSalesforceRecordId(cell)) {
-          const a = document.createElement('a');
-          a.className = 'monitoring-record-link';
-          a.href = '#';
-          a.dataset.recordId = cell;
-          a.textContent = cell;
-          td.appendChild(a);
-        } else {
-          td.textContent = cell;
-        }
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-  }
-
-  // ── Chart rendering ────────────────────────────────────────────────────────
-  /**
-   * @param {any[]} labels
-   * @param {any[]} datasets
-   * @returns {any[]}
-   */
-  function buildChartDatasets(labels, datasets) {
-    const perLabelColors = labels.map(
-      (/** @type {any} */ _l, /** @type {number} */ idx) => CHART_COLORS[idx % CHART_COLORS.length],
-    );
-    return datasets.map((/** @type {any} */ ds) => ({
-      label: ds.label,
-      data: ds.data,
-      backgroundColor: perLabelColors,
-      borderColor: perLabelColors,
-      pointBackgroundColor: perLabelColors,
-      pointBorderColor: perLabelColors,
-      borderWidth: 1,
-    }));
-  }
-
-  /**
-   * @param {boolean} stacked
-   * @param {any[]} valueFields
-   * @param {boolean} isMultiColor
-   * @returns {any}
-   */
-  function buildChartScales(stacked, valueFields, isMultiColor) {
-    if (isMultiColor) return {};
-    return {
-      x: {
-        stacked: stacked || false,
-        ticks: { color: '#aaaaaa', maxRotation: 45 },
-        grid: { color: '#333333' },
-      },
-      y: {
-        stacked: stacked || false,
-        ticks: {
-          color: '#aaaaaa',
-          callback: (/** @type {any} */ value) => formatValue(value, valueFields?.[0]?.format),
-        },
-        grid: { color: '#333333' },
-      },
-    };
-  }
-
-  /**
-   * @param {any[]} valueFields
-   * @returns {any}
-   */
-  function buildChartTooltip(valueFields) {
-    return {
-      label: (/** @type {any} */ ctx) => {
-        const vf = valueFields?.[ctx.datasetIndex];
-        const raw = ctx.parsed?.y ?? ctx.parsed;
-        const formatted = formatValue(raw, vf?.format);
-        return ctx.dataset.label ? ctx.dataset.label + ': ' + formatted : formatted;
-      },
-    };
-  }
-
-  /**
-   * @param {string} configId
-   * @param {any} data
-   * @param {HTMLElement | null} canvas
-   * @param {string} chartType
-   * @param {boolean} stacked
-   * @param {any[]} valueFields
-   */
-  function renderChart(configId, data, canvas, chartType, stacked, valueFields) {
-    if (!canvas || !win.Chart) return;
-
-    const existing = chartInstances.get(configId);
-    if (existing) {
-      existing.destroy();
-      chartInstances.delete(configId);
-    }
-
-    if (!data.labels || data.labels.length === 0) {
-      setCardStatus(configId, L.statusNoData);
-      return;
-    }
-
-    const type = chartType || 'bar';
-    const isMultiColor = type === 'pie' || type === 'doughnut';
-    const datasets = buildChartDatasets(data.labels, data.datasets);
-
-    const chart = new win.Chart(canvas, {
-      type,
-      data: { labels: data.labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: data.datasets.length > 1 || isMultiColor,
-            labels: { color: '#cccccc' },
-          },
-          tooltip: { callbacks: buildChartTooltip(valueFields) },
-        },
-        scales: buildChartScales(stacked, valueFields, isMultiColor),
-      },
-    });
-
-    chartInstances.set(configId, chart);
-  }
-
-  // ── Format value ───────────────────────────────────────────────────────────
-  /**
-   * @param {any} value
-   * @param {string | undefined} format
-   * @returns {string}
-   */
-  function formatValue(value, format) {
-    const num = Number(value);
-    if (isNaN(num)) return String(value ?? '');
-    if (format === 'currency') {
-      return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    if (format === 'percent') {
-      return num.toFixed(1) + '%';
-    }
-    if (Number.isInteger(num)) return num.toLocaleString();
-    return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
   // ── Auto-refresh ───────────────────────────────────────────────────────────
