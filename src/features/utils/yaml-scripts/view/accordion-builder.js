@@ -2,6 +2,7 @@
 // Builds the per-script accordion section (header + body + log viewer) and
 // wires its execute handler. Depends on a small `ctx` object so it never
 // reaches into the orchestrator's module scope directly.
+import { wrapWithPasteButton } from '../../../shared/view/paste-input.js';
 
 /**
  * @typedef {Object} LogViewerRefs
@@ -279,26 +280,7 @@ export function createAccordionBuilder(ctx) {
             updateExecuteState();
           });
           inputFields.set(input.name, textarea);
-          const pasteWrapper = document.createElement('div');
-          pasteWrapper.className = 'input-with-paste input-with-paste--textarea';
-          const pasteBtn = document.createElement('button');
-          pasteBtn.type = 'button';
-          pasteBtn.className = 'paste-btn';
-          pasteBtn.title = 'Paste from clipboard';
-          pasteBtn.textContent = '📋';
-          pasteBtn.tabIndex = -1;
-          pasteBtn.addEventListener('click', () => {
-            navigator.clipboard
-              .readText()
-              .then((text) => {
-                textarea.value = text.trim();
-                updateExecuteState();
-              })
-              .catch(() => {});
-          });
-          pasteWrapper.appendChild(textarea);
-          pasteWrapper.appendChild(pasteBtn);
-          fieldDiv.appendChild(pasteWrapper);
+          fieldDiv.appendChild(wrapWithPasteButton(textarea, { textarea: true }));
         } else {
           const textInput = document.createElement('input');
           textInput.type = 'text';
@@ -315,26 +297,7 @@ export function createAccordionBuilder(ctx) {
             updateExecuteState();
           });
           inputFields.set(input.name, textInput);
-          const pasteWrapper = document.createElement('div');
-          pasteWrapper.className = 'input-with-paste';
-          const pasteBtn = document.createElement('button');
-          pasteBtn.type = 'button';
-          pasteBtn.className = 'paste-btn';
-          pasteBtn.title = 'Paste from clipboard';
-          pasteBtn.textContent = '📋';
-          pasteBtn.tabIndex = -1;
-          pasteBtn.addEventListener('click', () => {
-            navigator.clipboard
-              .readText()
-              .then((text) => {
-                textInput.value = text.trim();
-                updateExecuteState();
-              })
-              .catch(() => {});
-          });
-          pasteWrapper.appendChild(textInput);
-          pasteWrapper.appendChild(pasteBtn);
-          fieldDiv.appendChild(pasteWrapper);
+          fieldDiv.appendChild(wrapWithPasteButton(textInput));
         }
       }
 

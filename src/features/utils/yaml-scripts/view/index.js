@@ -4,6 +4,9 @@ import { createCodeEditor } from './code-editor.js';
 import { createFormInputsEditor } from './form-inputs-editor.js';
 import { createAccordionBuilder } from './accordion-builder.js';
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
+import { createFolderCombobox } from '../../../shared/view/folder-combobox.js';
+import { applyListFilter } from '../../../shared/view/list-filter';
+import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
 
 (function () {
   const win = /** @type {any} */ (window);
@@ -258,47 +261,14 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     updateApexDefaultsVisibility();
   }
 
-  function refreshDropdown() {
-    const folders = [...new Set(currentScripts.map((s) => s.folder))].sort();
-    folderDropdown.innerHTML = '';
-    for (const folder of folders) {
-      const opt = document.createElement('div');
-      opt.className = 'yaml-folder-option';
-      opt.textContent = folder;
-      opt.addEventListener('mousedown', (e) => {
-        e.preventDefault(); // prevent input blur before value is set
-        formFolder.value = folder;
-        folderDropdown.classList.remove('open');
-        updateSaveBtn();
-      });
-      folderDropdown.appendChild(opt);
-    }
-  }
-
-  function openDropdown() {
-    if (folderDropdown.children.length > 0) {
-      folderDropdown.classList.add('open');
-    }
-  }
-
-  function closeDropdown() {
-    folderDropdown.classList.remove('open');
-  }
-
-  folderToggle.addEventListener('click', () => {
-    if (folderDropdown.classList.contains('open')) {
-      closeDropdown();
-    } else {
-      openDropdown();
-    }
-    formFolder.focus();
-  });
-
-  document.addEventListener('click', (e) => {
-    const combobox = formFolder.closest('.yaml-folder-combobox');
-    if (combobox && !combobox.contains(/** @type {Node} */ (e.target))) {
-      closeDropdown();
-    }
+  const folderCombobox = createFolderCombobox({
+    wrapper: /** @type {HTMLElement} */ (formFolder.closest('.yaml-folder-combobox')),
+    input: formFolder,
+    toggleBtn: folderToggle,
+    dropdownEl: folderDropdown,
+    optionClass: 'yaml-folder-option',
+    getFolders: () => currentScripts.map((s) => s.folder),
+    onSelect: () => updateSaveBtn(),
   });
 
   function showNewForm() {
@@ -312,7 +282,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
       formFolder.value = filterState.subFolder ?? filterState.folder;
       updateSaveBtn();
     }
-    refreshDropdown();
+    folderCombobox.refresh();
     newForm.style.display = '';
     newBtn.disabled = true;
     formName.focus();
@@ -355,7 +325,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     updateApexDefaultsVisibility();
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
-    refreshDropdown();
+    folderCombobox.refresh();
     newForm.style.display = '';
     newBtn.disabled = true;
     formName.focus();
@@ -501,23 +471,17 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
   // ── Filtering ─────────────────────────────────────────────────────────────
 
   function applyFilters() {
-    const query = searchInput.value.toLowerCase().trim();
     const accordions = scriptsList.querySelectorAll('.accordion');
-    let visible = 0;
-
-    accordions.forEach((el) => {
-      const section = /** @type {HTMLElement} */ (el);
-      const folder = section.getAttribute('data-folder') ?? '';
-      const source = section.getAttribute('data-source') ?? '';
-      const searchText = (section.getAttribute('data-search-text') ?? '').toLowerCase();
-
-      const textMatch = !query || searchText.includes(query);
-      const show =
-        filterBar.matches({ folder, source, id: section.getAttribute('data-script-id') ?? '' }) &&
-        textMatch;
-
-      section.style.display = show ? '' : 'none';
-      if (show) visible++;
+    const visible = applyListFilter({
+      elements: accordions,
+      getAttrs: (el) => ({
+        folder: el.getAttribute('data-folder') ?? '',
+        source: el.getAttribute('data-source') ?? '',
+        id: el.getAttribute('data-script-id') ?? '',
+        searchText: el.getAttribute('data-search-text') ?? '',
+      }),
+      matches: (item) => filterBar.matches(item),
+      query: searchInput.value,
     });
 
     noResults.style.display = visible === 0 && accordions.length > 0 ? 'block' : 'none';
@@ -572,7 +536,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     filterBar.render();
 
     // Populate folder dropdown for the new-script form
-    refreshDropdown();
+    folderCombobox.refresh();
 
     for (const script of scripts) {
       scriptsList.appendChild(buildAccordion(script));
@@ -584,16 +548,11 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
     if (lastSavedScriptId) {
       const savedId = lastSavedScriptId;
       lastSavedScriptId = null;
-      requestAnimationFrame(() => {
-        const el = /** @type {HTMLElement | null} */ (
-          scriptsList.querySelector(`[data-script-id="${CSS.escape(savedId)}"]`)
-        );
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          el.classList.add('yaml-script--highlight');
-          setTimeout(() => el.classList.remove('yaml-script--highlight'), 1500);
-        }
-      });
+      scrollAndHighlight(
+        scriptsList,
+        `[data-script-id="${CSS.escape(savedId)}"]`,
+        'yaml-script--highlight',
+      );
     }
   }
 

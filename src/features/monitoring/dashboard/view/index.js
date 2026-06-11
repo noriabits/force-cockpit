@@ -5,6 +5,7 @@
 // reordering are delegated to focused sibling modules (each created via a
 // factory that receives a ctx so it never reaches into this scope directly).
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
+import { applyListFilter } from '../../../shared/view/list-filter';
 import { formatValue } from './format-value';
 import { createChartRenderer, CHART_TYPES_WITH_CANVAS } from './chart-rendering';
 import { createTableRenderer } from './table-rendering';
@@ -79,6 +80,8 @@ import { createDragOrder } from './drag-order';
     getConfigs: () => configs,
     nextAvailablePosition: () => dragOrder.nextAvailablePosition(),
     buildViewCard,
+    triggerQuery: (/** @type {any} */ cfg) =>
+      triggerQuery(cfg.id, cfg.soql, cfg.labelField, cfg.valueFields),
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -318,22 +321,22 @@ import { createDragOrder } from './drag-order';
 
   function applyFilters() {
     const cards = grid.querySelectorAll('.card[data-config-id]');
-    let visibleCount = 0;
     const filtered = isFiltered();
 
+    let visibleCount = applyListFilter({
+      elements: cards,
+      getAttrs: (card) => ({
+        folder: card.getAttribute('data-folder') || '',
+        source: card.getAttribute('data-source') || '',
+        searchText: card.getAttribute('data-search-text') || '',
+      }),
+      matches: (item) => filterBar.matches(item),
+      query: searchQuery,
+    });
+
+    // Hide drag handles when filtered (drag itself is gated on the handle's mousedown)
     for (const card of cards) {
-      const folder = card.getAttribute('data-folder') || '';
-      const source = card.getAttribute('data-source') || '';
-      const search = (card.getAttribute('data-search-text') || '').toLowerCase();
-
-      const searchMatch = !searchQuery || search.includes(searchQuery);
-      const visible = filterBar.matches({ folder, source }) && searchMatch;
-      const cardEl = /** @type {HTMLElement} */ (card);
-      cardEl.style.display = visible ? '' : 'none';
-      if (visible) visibleCount++;
-
-      // Hide drag handle when filtered (drag itself is gated on the handle's mousedown)
-      const handle = cardEl.querySelector('.monitoring-drag-handle');
+      const handle = card.querySelector('.monitoring-drag-handle');
       if (handle) /** @type {HTMLElement} */ (handle).style.display = filtered ? 'none' : '';
     }
 

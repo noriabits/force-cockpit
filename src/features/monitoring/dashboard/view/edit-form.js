@@ -6,6 +6,7 @@
 // hooks it sets are invoked by the message handlers in index.js — that contract
 // is preserved here.
 import { ALL_CHART_TYPES } from './chart-rendering';
+import { buildFolderCombobox } from '../../../shared/view/folder-combobox.js';
 
 /**
  * @typedef {Object} EditFormCtx
@@ -18,6 +19,7 @@ import { ALL_CHART_TYPES } from './chart-rendering';
  * @property {() => any[]} getConfigs
  * @property {() => number} nextAvailablePosition
  * @property {(cfg: any) => HTMLElement} buildViewCard
+ * @property {(cfg: any) => void} triggerQuery
  */
 
 /**
@@ -33,6 +35,7 @@ export function createEditForm(ctx) {
     getConfigs,
     nextAvailablePosition,
     buildViewCard,
+    triggerQuery,
   } = ctx;
 
   // ── Form helpers ─────────────────────────────────────────────────────────
@@ -66,74 +69,6 @@ export function createEditForm(ctx) {
     input.placeholder = placeholder || '';
     if (id) input.id = id;
     return input;
-  }
-
-  /**
-   * Build a combobox for the Category field (text input + dropdown of existing folders).
-   * @param {string} currentValue
-   * @returns {{ element: HTMLDivElement, cleanup: () => void }}
-   */
-  function makeFolderCombobox(currentValue) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'monitoring-folder-combobox';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'text-input';
-    input.value = currentValue || '';
-    input.placeholder = L.placeholderCategory;
-    input.id = 'monitoring-edit-folder';
-    input.autocomplete = 'off';
-
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'monitoring-folder-toggle';
-    toggle.tabIndex = -1;
-    toggle.innerHTML = '&#9662;';
-
-    const dropdown = document.createElement('div');
-    dropdown.className = 'monitoring-folder-dropdown';
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(toggle);
-    wrapper.appendChild(dropdown);
-
-    // Populate dropdown from existing config folders
-    const folders = [...new Set(getConfigs().map((/** @type {any} */ c) => c.folder))].sort();
-    for (const folder of folders) {
-      const opt = document.createElement('div');
-      opt.className = 'monitoring-folder-option';
-      opt.textContent = folder;
-      opt.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        input.value = folder;
-        dropdown.classList.remove('open');
-      });
-      dropdown.appendChild(opt);
-    }
-
-    // Toggle button
-    toggle.addEventListener('click', () => {
-      if (dropdown.classList.contains('open')) {
-        dropdown.classList.remove('open');
-      } else if (dropdown.children.length > 0) {
-        dropdown.classList.add('open');
-      }
-      input.focus();
-    });
-
-    // Click-outside close — track listener for cleanup
-    const clickHandler = (/** @type {MouseEvent} */ e) => {
-      if (!wrapper.contains(/** @type {Node} */ (e.target))) {
-        dropdown.classList.remove('open');
-      }
-    };
-    document.addEventListener('click', clickHandler);
-
-    return {
-      element: wrapper,
-      cleanup: () => document.removeEventListener('click', clickHandler),
-    };
   }
 
   /** @param {string} currentFormat @returns {HTMLSelectElement} */
@@ -238,9 +173,15 @@ export function createEditForm(ctx) {
     );
 
     // Category
-    const { element: folderCombobox, cleanup: folderCleanup } = makeFolderCombobox(cfg.folder);
-    cleanups.push(folderCleanup);
-    form.appendChild(makeFormRow(L.labelCategory, folderCombobox));
+    const folderCombo = buildFolderCombobox({
+      classPrefix: 'monitoring-folder',
+      value: cfg.folder,
+      placeholder: L.placeholderCategory,
+      inputId: 'monitoring-edit-folder',
+      getFolders: () => getConfigs().map((/** @type {any} */ c) => c.folder),
+    });
+    cleanups.push(folderCombo.cleanup);
+    form.appendChild(makeFormRow(L.labelCategory, folderCombo.element));
 
     // Description
     form.appendChild(
@@ -624,10 +565,14 @@ export function createEditForm(ctx) {
     cancelBtn.addEventListener('click', () => {
       cleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
       if (configId) {
-        // Revert to view mode with original config
+        // Revert to view mode with original config. buildViewCard only builds an
+        // empty canvas/table/metric shell — the chart instance was destroyed on
+        // entering edit mode — so re-run the query to repopulate it (otherwise the
+        // card stays blank until the user clicks Refresh).
         const originalCfg = getConfigs().find((/** @type {any} */ c) => c.id === configId) || cfg;
         const newCard = buildViewCard(originalCfg);
         card.replaceWith(newCard);
+        triggerQuery(originalCfg);
       } else {
         // New card — just remove it
         card.remove();
