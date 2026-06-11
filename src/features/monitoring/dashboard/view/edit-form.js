@@ -12,10 +12,7 @@ import { buildFolderCombobox } from '../../../shared/view/folder-combobox.js';
  * @typedef {Object} EditFormCtx
  * @property {any} labels
  * @property {{ postMessage: (msg: any) => void }} vscode
- * @property {HTMLElement} grid
  * @property {Map<string, any>} chartInstances
- * @property {Set<string>} pendingQueries
- * @property {Map<string, ReturnType<typeof setTimeout>>} debounceTimers
  * @property {() => any[]} getConfigs
  * @property {() => number} nextAvailablePosition
  * @property {(cfg: any) => HTMLElement} buildViewCard
@@ -30,13 +27,14 @@ export function createEditForm(ctx) {
     labels: L,
     vscode,
     chartInstances,
-    pendingQueries,
-    debounceTimers,
     getConfigs,
     nextAvailablePosition,
     buildViewCard,
     triggerQuery,
   } = ctx;
+
+  /** @type {Map<string, ReturnType<typeof setTimeout>>} preview-key → debounce timer */
+  const debounceTimers = new Map();
 
   // ── Form helpers ─────────────────────────────────────────────────────────
   /**
@@ -484,7 +482,6 @@ export function createEditForm(ctx) {
       errorBox.style.display = 'none';
 
       const previewId = '__preview__' + (configId || 'new');
-      pendingQueries.add(previewId);
 
       if (isTable) {
         vscode.postMessage({

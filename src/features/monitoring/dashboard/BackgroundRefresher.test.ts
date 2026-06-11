@@ -38,28 +38,6 @@ function makeMemento() {
   };
 }
 
-describe('hasNotifications', () => {
-  it('returns true when any value field has a threshold', async () => {
-    const { hasNotifications } =
-      (await import('./BackgroundRefresher')) as BackgroundRefresherModule;
-    expect(
-      hasNotifications(baseConfig({ valueFields: [{ field: 'A', label: 'A', threshold: 10 }] })),
-    ).toBe(true);
-  });
-
-  it('returns true when notifyOnIncrease is set', async () => {
-    const { hasNotifications } =
-      (await import('./BackgroundRefresher')) as BackgroundRefresherModule;
-    expect(hasNotifications(baseConfig({ notifyOnIncrease: true }))).toBe(true);
-  });
-
-  it('returns false when neither thresholds nor notifyOnIncrease are set', async () => {
-    const { hasNotifications } =
-      (await import('./BackgroundRefresher')) as BackgroundRefresherModule;
-    expect(hasNotifications(baseConfig())).toBe(false);
-  });
-});
-
 describe('BackgroundRefresher', () => {
   beforeEach(async () => {
     vi.useFakeTimers();

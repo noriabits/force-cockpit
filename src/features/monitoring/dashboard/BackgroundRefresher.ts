@@ -11,13 +11,13 @@ import {
   checkRowCountIncrease,
   fireRowCountNotifications,
 } from './notifications';
+import { hasNotifications } from './notification-config';
+
+// Re-exported so existing importers (and tests) keep working after the
+// predicate moved to the leaf `notification-config` module shared with the webview.
+export { hasNotifications };
 
 const MIN_REFRESH_INTERVAL_SECONDS = 10;
-
-export function hasNotifications(cfg: MonitoringConfig): boolean {
-  if (cfg.notifyOnIncrease) return true;
-  return cfg.valueFields?.some((vf) => vf.threshold != null) ?? false;
-}
 
 interface RefresherOptions {
   service: MonitoringDashboardService;
