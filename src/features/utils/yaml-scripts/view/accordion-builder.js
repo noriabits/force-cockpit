@@ -1,35 +1,33 @@
 // @ts-check
-// Builds the per-script accordion section (header + body + log viewer) and
-// wires its execute handler. Depends on a small `ctx` object so it never
-// reaches into the orchestrator's module scope directly.
+// Builds the per-script accordion section: header (favorite star, trigger,
+// badges, edit button), execution input fields and the body composition. The
+// log viewer and execute handler are injected factories (log-viewer.js /
+// execute-handler.js) so this module stays focused on structure. Depends on
+// a small `ctx` object so it never reaches into the orchestrator's module
+// scope directly.
 import { wrapWithPasteButton } from '../../../shared/view/paste-input.js';
 
-/**
- * @typedef {Object} LogViewerRefs
- * @property {HTMLElement} statusHint
- * @property {HTMLElement} errorBox
- * @property {HTMLElement} logViewer
- * @property {HTMLPreElement} logOutput
- * @property {HTMLButtonElement} openInEditorBtn
- * @property {HTMLButtonElement} copyToClipboardBtn
- */
+/** @typedef {import('./log-viewer.js').LogViewerRefs} LogViewerRefs */
 
 /**
  * @typedef {Object} AccordionBuilderCtx
  * @property {any} labels
  * @property {HTMLElement} scriptsList
  * @property {Set<string>} favoriteIds
- * @property {Map<string, string>} opIdToScriptId
  * @property {Map<string, () => void>} executeStateUpdaters
  * @property {() => boolean} getConnected
- * @property {() => any} getCurrentOrgData
  * @property {(script: any) => void} onEditClick
  * @property {{ postMessage: (msg: any) => void }} vscode
- * @property {(btn: HTMLButtonElement, onCancel: () => void) => string | null} startAction
- * @property {(orgData: any, prompt: string, onConfirmed: () => void, onCancelled?: () => void) => void} confirmIfSensitive
  * @property {(str: string) => string} escapeHtml
- * @property {(text: string) => string} renderLogWithLinks
- * @property {(text: string) => string} renderLogWithJsonTables
+ * @property {(script: any) => { fragment: DocumentFragment, refs: LogViewerRefs }} buildLogViewer
+ * @property {(params: {
+ *   script: any,
+ *   section: HTMLElement,
+ *   executeBtn: HTMLButtonElement,
+ *   needsOrg: boolean,
+ *   inputFields: Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+ *   refs: LogViewerRefs,
+ * }) => void} attachExecuteHandler
  */
 
 /**
@@ -40,17 +38,13 @@ export function createAccordionBuilder(ctx) {
     labels,
     scriptsList,
     favoriteIds,
-    opIdToScriptId,
     executeStateUpdaters,
     getConnected,
-    getCurrentOrgData,
     onEditClick,
     vscode,
-    startAction,
-    confirmIfSensitive,
     escapeHtml,
-    renderLogWithLinks,
-    renderLogWithJsonTables,
+    buildLogViewer,
+    attachExecuteHandler,
   } = ctx;
 
   /** @param {any} script @returns {HTMLButtonElement} */
@@ -305,209 +299,6 @@ export function createAccordionBuilder(ctx) {
     }
 
     return { element: inputsForm, inputFields };
-  }
-
-  /**
-   * @param {HTMLPreElement} logOutput
-   * @returns {HTMLButtonElement}
-   */
-  function buildOpenInEditorButton(logOutput) {
-    const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    button.className = 'yaml-open-editor-btn';
-    button.textContent = 'Open in editor';
-    button.style.display = 'none';
-    button.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      vscode.postMessage({ type: 'openScriptResult', content });
-    });
-    return button;
-  }
-
-  /**
-   * @param {HTMLPreElement} logOutput
-   * @returns {HTMLButtonElement}
-   */
-  function buildCopyToClipboardButton(logOutput) {
-    const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
-    button.className = 'yaml-copy-output-btn';
-    button.textContent = 'Copy to clipboard';
-    button.style.display = 'none';
-    button.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      navigator.clipboard
-        .writeText(content)
-        .then(() => {
-          button.textContent = 'Copied!';
-          setTimeout(() => {
-            button.textContent = 'Copy to clipboard';
-          }, 1500);
-        })
-        .catch(() => {});
-    });
-    return button;
-  }
-
-  /**
-   * @param {any} script
-   * @returns {{ fragment: DocumentFragment, refs: LogViewerRefs }}
-   */
-  function buildLogViewer(script) {
-    const fragment = document.createDocumentFragment();
-    const isApex = script.type !== 'command' && script.type !== 'js';
-
-    const statusHint = document.createElement('span');
-    statusHint.className = 'status-hint yaml-status';
-
-    const errorBox = document.createElement('div');
-    errorBox.className = 'error-box';
-
-    const logViewer = document.createElement('div');
-    logViewer.className = 'yaml-log-viewer';
-    logViewer.style.display = 'none';
-
-    const logOutput = /** @type {HTMLPreElement} */ (document.createElement('pre'));
-    logOutput.className = 'yaml-log-output';
-    logOutput.addEventListener('click', (event) => {
-      const target = /** @type {HTMLElement} */ (event.target);
-      if (target.tagName === 'A' && target.classList.contains('yaml-log-link')) {
-        event.preventDefault();
-        const url = target.getAttribute('data-url');
-        if (url) {
-          vscode.postMessage({ type: 'openExternalUrl', url });
-        }
-      }
-    });
-
-    if (isApex) {
-      const filterBar = document.createElement('div');
-      filterBar.className = 'yaml-log-filter-bar';
-
-      const filterCheckbox = document.createElement('input');
-      filterCheckbox.type = 'checkbox';
-      filterCheckbox.className = 'yaml-log-filter-checkbox';
-      filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
-      const filterLabel = document.createElement('label');
-      filterLabel.className = 'yaml-log-filter-label';
-      filterLabel.appendChild(filterCheckbox);
-      filterLabel.appendChild(document.createTextNode(labels.checkboxUserDebugOnly));
-
-      const jsonCheckbox = document.createElement('input');
-      jsonCheckbox.type = 'checkbox';
-      jsonCheckbox.className = 'yaml-log-json-checkbox';
-      jsonCheckbox.checked = script.formatJson ?? false;
-      const jsonLabel = document.createElement('label');
-      jsonLabel.className = 'yaml-log-filter-label';
-      jsonLabel.appendChild(jsonCheckbox);
-      jsonLabel.appendChild(document.createTextNode(labels.checkboxPrettyJson));
-
-      function refresh() {
-        const raw = logOutput.getAttribute('data-raw-log') ?? '';
-        const filtered = logOutput.getAttribute('data-filtered-log') ?? '';
-        const text = filterCheckbox.checked && filtered ? filtered : raw;
-        logOutput.innerHTML = jsonCheckbox.checked
-          ? renderLogWithJsonTables(text)
-          : renderLogWithLinks(text);
-      }
-
-      filterCheckbox.addEventListener('change', refresh);
-      jsonCheckbox.addEventListener('change', () => {
-        if (jsonCheckbox.checked && !filterCheckbox.checked) {
-          filterCheckbox.checked = true;
-        }
-        refresh();
-      });
-
-      filterBar.appendChild(filterLabel);
-      filterBar.appendChild(jsonLabel);
-      logViewer.appendChild(filterBar);
-    }
-
-    logViewer.appendChild(logOutput);
-
-    const openInEditorBtn = buildOpenInEditorButton(logOutput);
-    logViewer.appendChild(openInEditorBtn);
-
-    const copyToClipboardBtn = buildCopyToClipboardButton(logOutput);
-    logViewer.appendChild(copyToClipboardBtn);
-
-    fragment.appendChild(statusHint);
-    fragment.appendChild(errorBox);
-    fragment.appendChild(logViewer);
-
-    return {
-      fragment,
-      refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn },
-    };
-  }
-
-  /**
-   * @param {{
-   *   script: any,
-   *   section: HTMLElement,
-   *   executeBtn: HTMLButtonElement,
-   *   needsOrg: boolean,
-   *   inputFields: Map<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-   *   refs: LogViewerRefs,
-   * }} params
-   */
-  function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
-    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } =
-      refs;
-
-    executeBtn.addEventListener('click', () => {
-      if (needsOrg && !getConnected()) return;
-
-      /** @type {Record<string, string>} */
-      const inputValues = {};
-      inputFields.forEach((field, name) => {
-        if (field instanceof HTMLInputElement && field.type === 'checkbox') {
-          inputValues[name] = field.checked ? 'true' : 'false';
-        } else {
-          inputValues[name] = field.value.trim();
-        }
-      });
-
-      /** @type {string | null} */
-      let scriptOpId = null;
-
-      function doExecute() {
-        statusHint.textContent = labels.statusExecuting;
-        errorBox.textContent = '';
-        logViewer.style.display = 'block';
-        logOutput.textContent = '';
-        logOutput.removeAttribute('data-raw-log');
-        logOutput.removeAttribute('data-filtered-log');
-        logOutput.classList.remove('yaml-log-output--success', 'yaml-log-output--error');
-        openInEditorBtn.style.display = 'none';
-        copyToClipboardBtn.style.display = 'none';
-
-        const filterCheckbox = /** @type {HTMLInputElement | null} */ (
-          section.querySelector('.yaml-log-filter-checkbox')
-        );
-        if (filterCheckbox) {
-          filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
-        }
-        const jsonCheckbox = /** @type {HTMLInputElement | null} */ (
-          section.querySelector('.yaml-log-json-checkbox')
-        );
-        if (jsonCheckbox) jsonCheckbox.checked = script.formatJson ?? false;
-
-        section.classList.add('open');
-        scriptOpId = startAction(executeBtn, () => {
-          statusHint.textContent = '';
-          vscode.postMessage({ type: 'cancelOperation', opId: scriptOpId });
-        });
-        if (scriptOpId) opIdToScriptId.set(scriptOpId, script.id);
-        vscode.postMessage({
-          type: 'executeYamlScript',
-          scriptId: script.id,
-          inputs: inputValues,
-          opId: scriptOpId,
-        });
-      }
-
-      confirmIfSensitive(getCurrentOrgData(), 'Execute this script?', doExecute, () => {});
-    });
   }
 
   /** @param {any} script @returns {HTMLElement} */
