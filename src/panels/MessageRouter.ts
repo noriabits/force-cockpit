@@ -1,6 +1,7 @@
 // Routes incoming webview messages to their handlers:
 //   - Built-in host routes (ready, query, openRecord, openInBrowser, refreshOrg,
-//     confirmAction, openExternalUrl, operationStarted/Ended, cancelOperation)
+//     confirmAction, openExternalUrl, exportQueryResult, operationStarted/Ended,
+//     cancelOperation)
 //   - Feature routes registered via defineFeature()
 // On success: posts `{ type: successType, data: <result + context> }`.
 // On error:   posts `{ type: errorType,   data: <context + message> }`.
@@ -8,6 +9,8 @@
 // the webview can correlate.
 
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
@@ -78,6 +81,9 @@ export class MessageRouter {
         }
         return;
       }
+      case 'exportQueryResult':
+        await this._exportQueryResult(message);
+        return;
       case 'openExternalUrl': {
         const url = message.url as string;
         if (url && /^https?:\/\//i.test(url)) {
@@ -113,6 +119,31 @@ export class MessageRouter {
       }
       default:
         await this._dispatchFeatureRoute(message);
+    }
+  }
+
+  /**
+   * Writes a Quick Query export to a timestamped file in the workspace root and
+   * opens it in the editor. Errors (no workspace folder, write failure) surface
+   * via a native error message; otherwise fire-and-forget like openRecord.
+   */
+  private async _exportQueryResult(message: IncomingMessage): Promise<void> {
+    const content = message.content as string;
+    const format = message.format === 'json' ? 'json' : 'csv';
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!root) {
+      await vscode.window.showErrorMessage('Open a workspace folder to export query results.');
+      return;
+    }
+    try {
+      // 2026-06-11T14:30:45.123Z → 20260611-143045
+      const iso = new Date().toISOString().replace(/[-:]/g, '');
+      const stamp = `${iso.slice(0, 8)}-${iso.slice(9, 15)}`;
+      const filePath = path.join(root, `query-result-${stamp}.${format}`);
+      await fs.promises.writeFile(filePath, content, 'utf8');
+      await vscode.window.showTextDocument(vscode.Uri.file(filePath));
+    } catch (err) {
+      await vscode.window.showErrorMessage(`Export failed: ${(err as Error).message}`);
     }
   }
 

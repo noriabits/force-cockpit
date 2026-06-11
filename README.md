@@ -54,7 +54,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 | Tab | Description |
 |-----|-------------|
-| **Overview** | Org info card, storage usage bars, SOQL query editor with results table |
+| **Overview** | Org info card, storage usage bars, SOQL Quick Query editor with a filterable, sortable results table |
 | **Utils** | Built-in utilities (Clone User, Reactivate OmniScript) and custom YAML scripts |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files |
 
@@ -62,7 +62,15 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 ## Overview Tab
 
-The Overview tab shows org connection details and storage usage bars (Data Storage and File Storage), and provides a quick SOQL query editor.
+The Overview tab shows org connection details and storage usage bars (Data Storage and File Storage), and provides a SOQL Quick Query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`).
+
+The results table supports:
+
+- **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
+- **Sort** — click any column header to sort; click again to reverse.
+- **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
+- **Record counts** — `SELECT COUNT() FROM …` queries show the count instead of "0 records".
+- **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 
 ---
 

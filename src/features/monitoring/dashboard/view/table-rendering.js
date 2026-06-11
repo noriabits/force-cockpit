@@ -4,7 +4,7 @@
 // render-state stash (`wrapper._tableState`) drives both the filter input and
 // sort-header clicks, so the filter text + sort persist across auto-refresh.
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
-import { filterRows, sortRows } from './table-sort';
+import { filterRows, sortRows } from '../../../shared/view/table-sort';
 
 /**
  * @typedef {Object} TableRendererCtx

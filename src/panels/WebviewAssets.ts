@@ -18,18 +18,20 @@ export class WebviewAssets {
   // Webview core modules loaded synchronously before main.js. Order matters:
   // ipc.js sets up the dispatch registry everything else registers with, so it
   // must come first. main.js (the bootstrap that posts `ready`) runs last.
+  // Paths are extension-root-relative so esbuild-bundled modules (under dist/)
+  // can sit alongside the plain media/modules/ scripts.
   static readonly WEBVIEW_MODULES: readonly string[] = [
-    'ipc.js',
-    'action-tracker.js',
-    'confirmation.js',
-    'org-lifecycle.js',
-    'storage-bars.js',
-    'query-editor.js',
-    'tabs.js',
-    'utils-subtab.js',
-    'accordion.js',
-    'filter.js',
-    'paste-buttons.js',
+    'media/modules/ipc.js',
+    'media/modules/action-tracker.js',
+    'media/modules/confirmation.js',
+    'media/modules/org-lifecycle.js',
+    'media/modules/storage-bars.js',
+    'dist/webview/query-editor.js',
+    'media/modules/tabs.js',
+    'media/modules/utils-subtab.js',
+    'media/modules/accordion.js',
+    'media/modules/filter.js',
+    'media/modules/paste-buttons.js',
   ];
 
   constructor(
@@ -95,8 +97,7 @@ export class WebviewAssets {
 
   private _buildWebviewModuleTags(nonce: string): string {
     return WebviewAssets.WEBVIEW_MODULES.map(
-      (name) =>
-        `<script nonce="${nonce}" src="${this._fileUri('media', 'modules', name)}"></script>`,
+      (relPath) => `<script nonce="${nonce}" src="${this._fileUri(relPath)}"></script>`,
     ).join('\n    ');
   }
 

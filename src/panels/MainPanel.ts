@@ -77,6 +77,7 @@ export class MainPanel {
           vscode.Uri.file(path.join(context.extensionPath, 'webviews')),
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'features')),
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'vendor')),
+          vscode.Uri.file(path.join(context.extensionPath, 'dist', 'webview')),
         ],
       },
     );

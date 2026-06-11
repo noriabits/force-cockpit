@@ -10,7 +10,7 @@ export default [
   eslint.configs.recommended,
   {
     // Feature webview scripts — run in the browser, not Node.js
-    files: ['src/features/**/*.js'],
+    files: ['src/features/**/*.js', 'src/webview/**/*.js'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'script',
@@ -42,8 +42,8 @@ export default [
     },
   },
   {
-    // ES module sources bundled by esbuild (currently only yaml-scripts/view/)
-    files: ['src/features/**/view/**/*.js'],
+    // ES module sources bundled by esbuild (feature view/ dirs + webview/)
+    files: ['src/features/**/view/**/*.js', 'src/webview/**/*.js'],
     languageOptions: {
       sourceType: 'module',
     },

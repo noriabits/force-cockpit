@@ -169,7 +169,20 @@
 
             <!-- Results -->
             <div id="query-results" style="display: none">
-              <div class="results-meta" id="results-meta"></div>
+              <div class="query-results-toolbar">
+                <input
+                  type="text"
+                  id="query-filter-input"
+                  class="query-filter-input"
+                  placeholder="Filter results…"
+                  spellcheck="false"
+                />
+                <span class="query-match-count" id="query-match-count"></span>
+                <span class="results-meta" id="results-meta"></span>
+                <span class="query-toolbar-spacer"></span>
+                <button class="btn btn-ghost" id="btn-export-csv">Export CSV</button>
+                <button class="btn btn-ghost" id="btn-export-json">Export JSON</button>
+              </div>
               <div class="table-wrapper">
                 <table class="results-table" id="results-table">
                   <thead id="results-thead"></thead>

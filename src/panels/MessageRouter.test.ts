@@ -1,16 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { showWarningMessage, executeCommand, openExternal } = vi.hoisted(() => ({
+const {
+  showWarningMessage,
+  showErrorMessage,
+  showTextDocument,
+  executeCommand,
+  openExternal,
+  writeFile,
+  workspaceFolders,
+} = vi.hoisted(() => ({
   showWarningMessage: vi.fn(),
+  showErrorMessage: vi.fn(),
+  showTextDocument: vi.fn(),
   executeCommand: vi.fn(),
   openExternal: vi.fn(),
+  writeFile: vi.fn(),
+  workspaceFolders: { value: undefined as unknown },
 }));
 vi.mock('vscode', () => ({
-  window: { showWarningMessage },
+  window: { showWarningMessage, showErrorMessage, showTextDocument },
   commands: { executeCommand },
   env: { openExternal },
-  Uri: { parse: (s: string) => ({ toString: () => s, _raw: s }) },
+  workspace: {
+    get workspaceFolders() {
+      return workspaceFolders.value;
+    },
+  },
+  Uri: {
+    parse: (s: string) => ({ toString: () => s, _raw: s }),
+    file: (s: string) => ({ fsPath: s, _file: s }),
+  },
 }));
+vi.mock('fs', () => ({ promises: { writeFile } }));
 
 import { MessageRouter } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
@@ -58,8 +79,12 @@ function makeRouter(
 
 beforeEach(() => {
   showWarningMessage.mockReset();
+  showErrorMessage.mockReset();
+  showTextDocument.mockReset();
   executeCommand.mockReset();
   openExternal.mockReset();
+  writeFile.mockReset();
+  workspaceFolders.value = undefined;
 });
 
 describe('MessageRouter built-in routes', () => {
@@ -167,6 +192,44 @@ describe('MessageRouter built-in routes', () => {
       type: 'confirmActionResult',
       data: { confirmed: false, requestId: 'r2' },
     });
+  });
+
+  it('exportQueryResult writes a timestamped file to the workspace root and opens it', async () => {
+    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
+    writeFile.mockResolvedValue(undefined);
+    const { router } = makeRouter();
+    await router.handle({ type: 'exportQueryResult', content: 'a,b\r\n1,2', format: 'csv' });
+
+    expect(writeFile).toHaveBeenCalledOnce();
+    const [filePath, content] = writeFile.mock.calls[0];
+    expect(filePath).toMatch(/\/ws\/query-result-\d{8}-\d{6}\.csv$/);
+    expect(content).toBe('a,b\r\n1,2');
+    expect(showTextDocument).toHaveBeenCalledOnce();
+    expect(showTextDocument.mock.calls[0][0].fsPath).toBe(filePath);
+  });
+
+  it('exportQueryResult uses a .json extension for json format', async () => {
+    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
+    writeFile.mockResolvedValue(undefined);
+    const { router } = makeRouter();
+    await router.handle({ type: 'exportQueryResult', content: '[]', format: 'json' });
+    expect(writeFile.mock.calls[0][0]).toMatch(/\.json$/);
+  });
+
+  it('exportQueryResult shows an error when no workspace folder is open', async () => {
+    workspaceFolders.value = undefined;
+    const { router } = makeRouter();
+    await router.handle({ type: 'exportQueryResult', content: 'x', format: 'csv' });
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(showErrorMessage).toHaveBeenCalledOnce();
+  });
+
+  it('exportQueryResult surfaces a write failure via showErrorMessage', async () => {
+    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
+    writeFile.mockRejectedValue(new Error('disk full'));
+    const { router } = makeRouter();
+    await router.handle({ type: 'exportQueryResult', content: 'x', format: 'csv' });
+    expect(showErrorMessage).toHaveBeenCalledWith('Export failed: disk full');
   });
 });
 
