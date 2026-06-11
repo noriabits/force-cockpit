@@ -16,12 +16,8 @@ import { ALL_CHART_TYPES } from './chart-rendering';
  * @property {Set<string>} pendingQueries
  * @property {Map<string, ReturnType<typeof setTimeout>>} debounceTimers
  * @property {() => any[]} getConfigs
- * @property {(configs: any[]) => void} setConfigs
  * @property {() => number} nextAvailablePosition
  * @property {(cfg: any) => HTMLElement} buildViewCard
- * @property {(id: string, soql: string, labelField: string, valueFields: any[]) => void} triggerQuery
- * @property {{ render: () => void }} filterBar
- * @property {() => void} applyFilters
  */
 
 /**
@@ -31,17 +27,12 @@ export function createEditForm(ctx) {
   const {
     labels: L,
     vscode,
-    grid,
     chartInstances,
     pendingQueries,
     debounceTimers,
     getConfigs,
-    setConfigs,
     nextAvailablePosition,
     buildViewCard,
-    triggerQuery,
-    filterBar,
-    applyFilters,
   } = ctx;
 
   // ── Form helpers ─────────────────────────────────────────────────────────
@@ -613,32 +604,16 @@ export function createEditForm(ctx) {
       }
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
-      card.__pendingSaveResolve = (/** @type {any} */ savedCfg) => {
-        const savedCleanups = card.__pendingSaveResolveCleanups || [];
-        savedCleanups.forEach((/** @type {() => void} */ cleanup) => cleanup());
-        const next = getConfigs().filter((/** @type {any} */ c) => c.id !== cfg.id);
-        next.push(savedCfg);
-        setConfigs(next);
-        const newCard = buildViewCard(savedCfg);
-        if (configId) {
-          card.replaceWith(newCard);
-        } else {
-          // New card: drop the placeholder and append to the end
-          card.remove();
-          grid.appendChild(newCard);
-        }
-        triggerQuery(savedCfg.id, savedCfg.soql, savedCfg.labelField, savedCfg.valueFields);
-        filterBar.render();
-        applyFilters();
-      };
       card.__pendingSaveError = (/** @type {string} */ errMsg) => {
         saveBtn.disabled = false;
         saveBtn.textContent = L.btnSave;
         errorBox.textContent = errMsg;
         errorBox.style.display = '';
       };
-      // On successful save, the __pendingSaveResolve callback will replace the card and trigger cleanup
-      // Set a flag so cleanup is called after the card is replaced
+      // On success the host route persists the file and the webview reloads the
+      // whole grid from disk (see onSaveResult), so the rebuilt card always
+      // carries the persisted id. We only stash the form cleanups here so that
+      // reload-time teardown can release this form's listeners/timers.
       card.__pendingSaveResolveCleanups = /** @type {Array<() => void>} */ (cleanups);
       const isPrivate =
         /** @type {HTMLInputElement | null} */ (form.querySelector('#monitoring-edit-private'))

@@ -6,6 +6,15 @@ A VSCode extension that provides a Salesforce utilities cockpit. It connects to 
 
 Published on the VS Code Marketplace under the `noriabits` publisher. Also available as a `.vsix` file for manual installation.
 
+## Code Intelligence (codegraph)
+
+This repo is indexed by **codegraph** — a SQLite knowledge graph of every symbol, edge, and file. Prefer it over manual Grep+Read loops when exploring the codebase or before editing/writing code.
+
+- "How does X work" / architecture / bug questions → `codegraph_context` first, then `codegraph_explore` for the source it surfaces.
+- "How does X reach Y" / trace a call path → `codegraph_trace`.
+- Single symbol's signature/body/callers → `codegraph_node`; quick name lookup → `codegraph_search`.
+- The codegraph tools are **deferred** — load their schemas via `ToolSearch` (e.g. `select:mcp__codegraph__codegraph_context`) before calling. Fall back to Grep/Read only to confirm a detail codegraph didn't cover.
+
 ## Architecture
 
 ```
@@ -51,6 +60,7 @@ src/
     ├── salesforceUrl.ts          # buildOrgUrl(org), buildRecordUrl(org, recordId) — shared URL builders for SF frontdoor.jsp
     ├── slug.ts                   # toSlug(name, fallback) — shared kebab-case slug generator (yaml-scripts + monitoring)
     ├── yaml-loader.ts            # loadYamlItems() — 3-way merge (builtin < user < private) of `{category}/{sub-category}/*.yaml`
+    ├── yamlRepository.ts         # Shared YAML-persistence helpers (splitItemId, resolveYamlPath, checkDuplicateId, deleteYamlItem) — used by ScriptRepository + MonitoringConfigRepository
     └── terminalCommand.ts        # Shared runTerminalCommand(command, workspaceRoot?) utility
 ```
 
@@ -285,7 +295,7 @@ Each script gets an accordion with an Execute button visible in the collapsed he
 - `execution/ApexExecutor.ts` — executes Apex via `ConnectionManager.executeAnonymousWithDebugLog` with `assertApexSuccess`, returns `ExecuteScriptResult` with the debug log (+ filtered USER_DEBUG view).
 - `execution/CommandExecutor.ts` — executes shell commands via `runTerminalCommand` in the workspace root. Supports `AbortSignal` and streaming log chunks.
 - `execution/JsExecutor.ts` — runs user JS in a Node.js `vm` sandbox (`createContext` + `Script`). Context: `connection`, `org`, `query`, `log`/`error`, `console`, `fs`, `path`, `yaml`, `xmlFormat`, `DOMParser`, `XMLSerializer`, `xml`, `input`, `xmlEscape`, `setTimeout`, `clearTimeout`, `Promise`. Async IIFE wrap so top-level `await` works. `AbortSignal` via `Promise.race`.
-- `persistence/ScriptRepository.ts` — all file I/O: `save`/`update`/`delete` under user or private path, `saveExecutionLog` under `{userBasePath}/logs/` (auto-creates with `.gitignore`). Uses `toSlug` from `src/utils/slug.ts` (shared with monitoring).
+- `persistence/ScriptRepository.ts` — all file I/O: `save`/`update`/`delete` under user or private path, `saveExecutionLog` under `{userBasePath}/logs/` (auto-creates with `.gitignore`). Uses `toSlug` from `src/utils/slug.ts` and the shared `checkDuplicateId`/`deleteYamlItem` helpers from `src/utils/yamlRepository.ts` (both shared with monitoring).
 - `view/` — webview source as ES modules. **Bundled** by a dedicated esbuild call into `dist/features/utils/yaml-scripts/view.js` (single `<script>` loaded by `WebviewAssets`). `scripts/copy-feature-assets.js` skips `view/` directories so the raw sources never reach `dist/`. Sub-modules:
   - `view/index.js` — entry point IIFE: DOM refs, label init, top-level state (`connected`, `currentOrgData`, `favoriteIds`, etc.), the new/edit form controller, message dispatch, feature registration. Wires the sub-modules below via factory invocations. Category/visibility filtering is delegated to the shared `createCategoryFilterBar` from `src/features/shared/view/category-filter-bar.js`.
   - `view/log-rendering.js` — pure: `renderLogWithLinks`, `renderLogWithJsonTables` (and helpers `deepParseJson`, `renderJsonCell`, `renderJsonAsTable`). String-in/string-out, no DOM mutation, no shared state.
@@ -313,6 +323,14 @@ Each script gets an accordion with an Execute button visible in the collapsed he
 
 ### Monitoring tab (`src/features/monitoring/dashboard/`)
 SOQL-based Chart.js dashboards. Configs are YAML files in `force-cockpit/monitoring/{category}/*.yaml`. Two sources merged: bundled extension path + user workspace path (same pattern as yaml-scripts).
+
+**Host-side layout** (mirrors the yaml-scripts facade/parser/repository split):
+- `types.ts` — shared interfaces (`MonitoringConfig`, `MonitoringValueField`, `MonitoringQueryResult`, `MonitoringTableResult`). `MonitoringDashboardService.ts` re-exports these so existing importers (`BackgroundRefresher.ts`, `notifications.ts`, `routes.ts`) keep compiling.
+- `parsing/MonitoringConfigParser.ts` — YAML file → `MonitoringConfig | null`. Chain of focused helpers (`validateDoc`, `normalizeValueFields`, `buildConfig`); invalid/malformed docs return `null` (silently skipped by the loader).
+- `persistence/MonitoringConfigRepository.ts` — all file I/O: `saveConfig` (broken into `resolveSaveTarget`/`buildYamlData`/`cleanupOldFile`), `deleteConfig`, `savePositions`. Uses the shared `src/utils/yamlRepository.ts` helpers + `toSlug` from `src/utils/slug.ts`. Owns slug generation, duplicate-id check, shared/private move semantics, and the refresh-interval floor.
+- `MonitoringDashboardService.ts` — thin facade (~110 lines): constructor wires the parser + repository, `loadConfigs()` (loader + hidden-builtin filter), `runQuery()`/`runTableQuery()` (query execution), and thin `saveConfig`/`deleteConfig`/`savePositions` delegations to the repository. Public API unchanged.
+- `routes.ts` — `buildMonitoringRoutes({ service, refresher, workspaceState, outputChannel })` returns the seven route handlers; also owns `loadHiddenBuiltins`/`persistHiddenBuiltins` and the shared `fireQueryNotifications(...)` helper (folds the duplicated threshold/row-count notification block from the chart vs table routes into one).
+- `index.ts` — factory only: paths, eager/lazy service+refresher construction, `routes: buildMonitoringRoutes(...)` (built inside the factory closure so the lazy CM path resolves), the refresher proxy, and `reloadConfigs`.
 
 **YAML schema**:
 ```yaml
@@ -409,7 +427,7 @@ Or: Extensions panel → `...` → Install from VSIX.
 - **Salesforce operations** that modify data use `executeAnonymous` (Apex) via the Tooling API, not direct DML through jsforce.
 - The `.vscodeignore` excludes `.sfdx/`, `.sf/`, `.claude/`, `node_modules/`, `src/`, `out/`, and `*.map` from the VSIX.
 - Always run `npm run package` after changes to generate an updated `.vsix`.
-- **Unit tests** use **Vitest** (`npm test`). Test files live alongside the source as `*.test.ts`. All tests are pure unit tests — no real Salesforce org, no network calls. Mock pattern: `function makeMock(overrides = {}): ConnectionManager { return { ... } as unknown as ConnectionManager; }`. Private methods are accessed via `(service as any).method()`. Files with `beforeEach`/`afterEach` must place them inside a `describe` block (not at module scope) to avoid a Vitest v4 runner crash. Test files with test coverage: `apexUtils.ts`, `CloneUserService.ts`, `ReactivateOmniscriptService.ts`, `YamlScriptsService.ts`, `MonitoringDashboardService.ts`, `config.ts`, `category-filter-state.ts`, `OrgConnectionController.ts`, `orgType.ts`, `workspaceSetup.ts`, `dashboard/view/format-value.ts`, `dashboard/view/table-sort.ts`, `BackgroundRefresher.ts`, `notifications.ts`, `salesforce/soap/SoapEnvelope.ts`, `salesforce/soap/SoapResponseParser.ts`, `panels/OperationRegistry.ts`, `panels/MessageRouter.ts`, `salesforce/connection.ts`.
+- **Unit tests** use **Vitest** (`npm test`). Test files live alongside the source as `*.test.ts`. All tests are pure unit tests — no real Salesforce org, no network calls. Mock pattern: `function makeMock(overrides = {}): ConnectionManager { return { ... } as unknown as ConnectionManager; }`. Private methods are accessed via `(service as any).method()`. Files with `beforeEach`/`afterEach` must place them inside a `describe` block (not at module scope) to avoid a Vitest v4 runner crash. Test files with test coverage: `apexUtils.ts`, `CloneUserService.ts`, `ReactivateOmniscriptService.ts`, `YamlScriptsService.ts`, `MonitoringDashboardService.ts`, `dashboard/parsing/MonitoringConfigParser.ts`, `dashboard/persistence/MonitoringConfigRepository.ts`, `utils/yamlRepository.ts`, `config.ts`, `category-filter-state.ts`, `OrgConnectionController.ts`, `orgType.ts`, `workspaceSetup.ts`, `dashboard/view/format-value.ts`, `dashboard/view/table-sort.ts`, `BackgroundRefresher.ts`, `notifications.ts`, `salesforce/soap/SoapEnvelope.ts`, `salesforce/soap/SoapResponseParser.ts`, `panels/OperationRegistry.ts`, `panels/MessageRouter.ts`, `salesforce/connection.ts`.
 
 ## Org Connection — File Watcher Pattern
 

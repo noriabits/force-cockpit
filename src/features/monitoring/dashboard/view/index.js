@@ -73,19 +73,12 @@ import { createDragOrder } from './drag-order';
   const editForm = createEditForm({
     labels: L,
     vscode,
-    grid,
     chartInstances,
     pendingQueries,
     debounceTimers,
     getConfigs: () => configs,
-    setConfigs: (c) => {
-      configs = c;
-    },
     nextAvailablePosition: () => dragOrder.nextAvailablePosition(),
     buildViewCard,
-    triggerQuery,
-    filterBar,
-    applyFilters,
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -169,7 +162,7 @@ import { createDragOrder } from './drag-order';
           onQueryError(message.data);
           break;
         case 'saveMonitoringConfigResult':
-          onSaveResult(message.data.config);
+          onSaveResult();
           break;
         case 'saveMonitoringConfigError':
           onSaveError(message.data.message);
@@ -720,22 +713,37 @@ import { createDragOrder } from './drag-order';
   }
 
   // ── Save handlers ──────────────────────────────────────────────────────────
-  /** @param {any} savedCfg */
-  function onSaveResult(savedCfg) {
-    const card = /** @type {any} */ (
-      grid.querySelector('[data-config-id="' + savedCfg.id + '"], [data-new-card]')
+  /**
+   * Find the card that initiated the in-flight save. We can't match by
+   * `savedCfg.id`: on a rename/category change the returned id differs from the
+   * editing card's `data-config-id` (which still holds the OLD id), so we'd
+   * never find it. The editing card is the one carrying the pending callback.
+   * @param {string} prop
+   */
+  function findEditingCard(prop) {
+    return /** @type {any} */ (
+      [...grid.querySelectorAll('.card')].find((c) => /** @type {any} */ (c)[prop])
     );
-    if (card && card.__pendingSaveResolve) {
-      card.__pendingSaveResolve(savedCfg);
+  }
+
+  function onSaveResult() {
+    // Mirror onDeleteResult: re-sync the whole grid from disk after a save.
+    // The previous in-place card swap maintained the card's id by hand, so any
+    // drift (e.g. after a rename) left the webview holding a STALE old id; the
+    // next rename then sent that dead id and the host couldn't delete the real
+    // old file — files piled up. A full reload makes the rebuilt card carry the
+    // persisted id, so every subsequent rename sends the correct old id.
+    const card = findEditingCard('__pendingSaveResolveCleanups');
+    if (card) {
+      const cleanups = card.__pendingSaveResolveCleanups || [];
+      cleanups.forEach((/** @type {() => void} */ fn) => fn());
     }
+    loadConfigs();
   }
 
   /** @param {string} errMsg */
   function onSaveError(errMsg) {
-    const card = /** @type {any} */ (
-      grid.querySelector('[data-new-card]') ||
-        grid.querySelector('.card:has(.monitoring-edit-form)')
-    );
+    const card = findEditingCard('__pendingSaveError');
     if (card && card.__pendingSaveError) {
       card.__pendingSaveError(errMsg);
     }

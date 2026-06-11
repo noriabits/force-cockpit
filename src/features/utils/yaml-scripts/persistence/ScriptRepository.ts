@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { toSlug } from '../../../../utils/slug';
+import { checkDuplicateId, deleteYamlItem } from '../../../../utils/yamlRepository';
 import type { SaveScriptInput, ScriptInput, YamlScript } from '../types';
 
 interface RepositoryPaths {
@@ -26,7 +27,10 @@ export class ScriptRepository {
     const id = `${folder}/${slug}`;
 
     const otherPath = isPrivate ? this.paths.userPath : this.paths.privatePath;
-    this.checkDuplicateId(id, otherPath);
+    checkDuplicateId(id, otherPath, {
+      noun: 'script',
+      otherLabel: isPrivate ? 'shared' : 'private',
+    });
 
     const targetDir = path.join(basePath, folder);
     const targetPath = path.join(targetDir, `${slug}.yaml`);
@@ -58,7 +62,12 @@ export class ScriptRepository {
     if (oldScriptId !== newId || isPrivate !== wasPrivate) {
       const otherPath = isPrivate ? this.paths.userPath : this.paths.privatePath;
       const movingSameId = isPrivate !== wasPrivate && oldScriptId === newId;
-      if (!movingSameId) this.checkDuplicateId(newId, otherPath);
+      if (!movingSameId) {
+        checkDuplicateId(newId, otherPath, {
+          noun: 'script',
+          otherLabel: isPrivate ? 'shared' : 'private',
+        });
+      }
     }
 
     fs.mkdirSync(newDir, { recursive: true });
@@ -73,14 +82,7 @@ export class ScriptRepository {
 
   delete(scriptId: string, isPrivate = false): void {
     const basePath = isPrivate ? this.paths.privatePath : this.paths.userPath;
-    const parts = scriptId.split('/');
-    const folder = parts.slice(0, -1).join('/');
-    const basename = parts[parts.length - 1];
-    const filePath = path.join(basePath, folder, `${basename}.yaml`);
-    if (!fs.existsSync(filePath)) {
-      throw new Error('Cannot delete: script not found.');
-    }
-    fs.unlinkSync(filePath);
+    deleteYamlItem(basePath, scriptId, 'script');
   }
 
   saveExecutionLog(scriptName: string, debugLog: string): void {
@@ -129,20 +131,6 @@ export class ScriptRepository {
       `${oldParts[oldParts.length - 1]}.yaml`,
     );
     return { basePath, oldBasePath, newSlug, newFolder, newId, newDir, newPath, oldPath };
-  }
-
-  private checkDuplicateId(id: string, otherBasePath: string): void {
-    if (!otherBasePath || !fs.existsSync(otherBasePath)) return;
-    const parts = id.split('/');
-    const folder = parts.slice(0, -1).join('/');
-    const basename = parts[parts.length - 1];
-    const otherFile = path.join(otherBasePath, folder, `${basename}.yaml`);
-    const otherFileYml = path.join(otherBasePath, folder, `${basename}.yml`);
-    if (fs.existsSync(otherFile) || fs.existsSync(otherFileYml)) {
-      throw new Error(
-        `A script with the same category and name already exists in the ${otherBasePath.includes('/private/') ? 'private' : 'shared'} folder.`,
-      );
-    }
   }
 
   private validateScriptFile(scriptFile: string): void {
