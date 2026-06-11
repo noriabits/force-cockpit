@@ -1,12 +1,16 @@
 // @ts-check
-// SOQL Quick Query editor on the Overview tab:
-//   - textarea + Run/Clear buttons + keyboard shortcut (Cmd/Ctrl+Enter)
-//   - results table with filter, sortable columns, clickable record Ids
-//   - export the current (filtered + sorted) view to a CSV/JSON file
+// SOQL Quick Query editor on the Overview tab — orchestrator. Wires:
+//   - the shared textarea + Run/Clear + Cmd/Ctrl+Enter shortcut + Tooling toggle
+//   - the results table (filter, sortable columns, clickable record Ids, export)
+//   - multiple query tabs (tabs.js) with per-tab in-memory results
 // Bundled by esbuild into dist/webview/query-editor.js. Registers via
 // win.__onMessage and exposes win.__clearQueryResults for org-lifecycle.js.
 import { createResultsTable } from './results-table';
 import { toCsv, toJson } from './export-format';
+import { createQueryTabs } from './tabs';
+import { createQueryHistory } from './history';
+import { createDescribeCache } from './autocomplete/describe-cache';
+import { createAutocomplete } from './autocomplete/autocomplete';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -14,6 +18,10 @@ const vscode = win.__vscode;
 const soqlInput = /** @type {HTMLTextAreaElement} */ (document.getElementById('soql-input'));
 const btnRunQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-run-query'));
 const btnClearQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-clear-query'));
+const toolingCheckbox = /** @type {HTMLInputElement} */ (
+  document.getElementById('query-use-tooling')
+);
+const tabBarEl = /** @type {HTMLElement} */ (document.getElementById('query-tab-bar'));
 const queryHint = /** @type {HTMLElement} */ (document.getElementById('query-hint'));
 const queryResults = /** @type {HTMLElement} */ (document.getElementById('query-results'));
 const resultsMeta = /** @type {HTMLElement} */ (document.getElementById('results-meta'));
@@ -24,6 +32,12 @@ const filterInput = /** @type {HTMLInputElement} */ (document.getElementById('qu
 const counterEl = /** @type {HTMLElement} */ (document.getElementById('query-match-count'));
 const btnExportCsv = /** @type {HTMLButtonElement} */ (document.getElementById('btn-export-csv'));
 const btnExportJson = /** @type {HTMLButtonElement} */ (document.getElementById('btn-export-json'));
+const btnHistory = /** @type {HTMLButtonElement} */ (document.getElementById('btn-query-history'));
+const historyDropdown = /** @type {HTMLElement} */ (
+  document.getElementById('query-history-dropdown')
+);
+const btnSaveQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-save-query'));
+const autocompleteEl = /** @type {HTMLElement} */ (document.getElementById('query-autocomplete'));
 
 const table = createResultsTable({
   thead: resultsThead,
@@ -35,38 +49,115 @@ const table = createResultsTable({
   escapeHtml: win.__escapeHtml,
 });
 
-function clearResults() {
+// ── Results display ───────────────────────────────────────────────────────────
+function hideResults() {
   queryResults.style.display = 'none';
   queryError.style.display = 'none';
   table.clear();
 }
 
-// Expose for org-lifecycle.js to clear on disconnect.
-win.__clearQueryResults = clearResults;
-
 /** @param {{ records: any[], totalSize: number }} data */
-function renderQueryResults(data) {
+function showResults(data) {
   queryError.style.display = 'none';
   table.setData(data.records, data.totalSize);
   queryResults.style.display = '';
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const tabs = createQueryTabs({
+  tabBarEl,
+  textarea: soqlInput,
+  toolingCheckbox,
+  vscode,
+  onActivate: (tab) => {
+    // Render the activated tab's stored results, or clear if it has none.
+    if (tab && tab.results) showResults(tab.results);
+    else hideResults();
+  },
+});
+
+/** Load a query (from history/saved) into the active tab's editor. */
+function loadQueryIntoEditor(/** @type {{ query: string, useToolingApi: boolean }} */ entry) {
+  soqlInput.value = entry.query;
+  toolingCheckbox.checked = !!entry.useToolingApi;
+  tabs.onActiveEdited();
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+const history = createQueryHistory({
+  buttonEl: btnHistory,
+  dropdownEl: historyDropdown,
+  saveBtn: btnSaveQuery,
+  vscode,
+  getCurrent: () => ({ query: soqlInput.value, useToolingApi: toolingCheckbox.checked }),
+  onPick: loadQueryIntoEditor,
+});
+
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+const describeCache = createDescribeCache({ vscode });
+createAutocomplete({
+  textarea: soqlInput,
+  dropdownEl: autocompleteEl,
+  describeCache,
+  isConnected: () => !!win.__orgConnected,
+  onInsert: () => tabs.onActiveEdited(),
+});
+
+// Clear the visible results on disconnect (the active tab's in-memory results
+// stay until the next run overwrites them). Also drop the describe cache so a
+// new org re-describes its own schema.
+win.__clearQueryResults = () => {
+  hideResults();
+  describeCache.clear();
+};
+
+/** @type {{ soql: string, useToolingApi: boolean } | null} */
+let lastRun = null;
+
 // ── Message handlers ────────────────────────────────────────────────────────
 win.__onMessage('queryResult', (/** @type {any} */ msg) => {
   btnRunQuery.disabled = false;
   queryHint.textContent = '';
-  renderQueryResults(msg.data);
+  tabs.setActiveResults(msg.data);
+  showResults(msg.data);
+  if (lastRun) history.recordRun(lastRun.soql, lastRun.useToolingApi);
 });
 
 win.__onMessage('queryError', (/** @type {any} */ msg) => {
   btnRunQuery.disabled = false;
   queryHint.textContent = '';
   queryResults.style.display = 'none';
+  tabs.setActiveResults(null);
   queryError.textContent = msg.data.message;
   queryError.style.display = '';
 });
 
-// ── Button handlers ─────────────────────────────────────────────────────────
+win.__onMessage('queryStateLoaded', (/** @type {any} */ msg) => {
+  tabs.load(msg.data);
+  history.load(msg.data);
+});
+
+win.__onMessage('queryHistoryUpdated', (/** @type {any} */ msg) => {
+  history.onHistoryUpdated(msg.data.history);
+});
+
+win.__onMessage('savedQueriesUpdated', (/** @type {any} */ msg) => {
+  history.onSavedUpdated(msg.data.savedQueries);
+});
+
+win.__onMessage('describeGlobalResult', (/** @type {any} */ msg) => {
+  describeCache.onGlobalResult(msg.data);
+});
+
+win.__onMessage('describeSObjectResult', (/** @type {any} */ msg) => {
+  describeCache.onSObjectResult(msg.data.name, msg.data);
+});
+
+win.__onMessage('describeError', (/** @type {any} */ msg) => {
+  describeCache.onError(msg.data);
+});
+
+// ── Button + input handlers ───────────────────────────────────────────────────
 btnRunQuery.addEventListener('click', () => {
   const soql = soqlInput.value.trim();
   if (!soql) return;
@@ -76,16 +167,22 @@ btnRunQuery.addEventListener('click', () => {
     return;
   }
 
-  clearResults();
+  hideResults();
   btnRunQuery.disabled = true;
   queryHint.textContent = 'Running…';
-  vscode.postMessage({ type: 'query', soql });
+  lastRun = { soql, useToolingApi: toolingCheckbox.checked };
+  vscode.postMessage({ type: 'query', soql, useToolingApi: toolingCheckbox.checked });
 });
 
 btnClearQuery.addEventListener('click', () => {
   soqlInput.value = '';
-  clearResults();
+  tabs.onActiveEdited();
+  hideResults();
+  tabs.setActiveResults(null);
 });
+
+soqlInput.addEventListener('input', () => tabs.onActiveEdited());
+toolingCheckbox.addEventListener('change', () => tabs.onActiveEdited());
 
 /** @param {'csv' | 'json'} format */
 function exportResults(format) {
@@ -104,3 +201,6 @@ soqlInput.addEventListener('keydown', (e) => {
     btnRunQuery.click();
   }
 });
+
+// Load persisted tabs/state once the bundle is live.
+vscode.postMessage({ type: 'loadQueryState' });

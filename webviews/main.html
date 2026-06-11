@@ -153,6 +153,7 @@
               <h3 class="card-title">⚡ Quick Query</h3>
             </div>
             <div class="query-editor">
+              <div class="query-tab-bar" id="query-tab-bar"></div>
               <textarea
                 id="soql-input"
                 class="soql-textarea"
@@ -160,9 +161,25 @@
                 placeholder="SELECT Id, Name FROM Account LIMIT 10"
                 rows="4"
               ></textarea>
+              <div class="query-autocomplete" id="query-autocomplete" style="display: none"></div>
               <div class="query-toolbar">
                 <button class="btn btn-primary" id="btn-run-query">Run Query</button>
                 <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
+                <label class="query-tooling-toggle" title="Run against the Tooling API">
+                  <input type="checkbox" id="query-use-tooling" />
+                  Tooling API
+                </label>
+                <div class="query-history-wrap">
+                  <button class="btn btn-ghost" id="btn-query-history">History ▾</button>
+                  <div
+                    class="query-history-dropdown"
+                    id="query-history-dropdown"
+                    style="display: none"
+                  ></div>
+                </div>
+                <button class="btn btn-ghost" id="btn-save-query" title="Save current query">
+                  ★ Save
+                </button>
                 <span class="query-hint" id="query-hint"></span>
               </div>
             </div>

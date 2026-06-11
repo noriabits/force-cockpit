@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
+import { QueryStateStore } from '../services/QueryStateStore';
+import { DescribeService } from '../services/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
 import type { CockpitConfig } from '../utils/config';
 import { WebviewAssets } from './WebviewAssets';
@@ -108,6 +110,8 @@ export class MainPanel {
       webview: panel.webview,
       connectionManager,
       queryService: new QueryService(connectionManager),
+      queryStateStore: new QueryStateStore(context.workspaceState),
+      describeService: new DescribeService(connectionManager),
       features: this._features,
       operations: this._operations,
       onReady: () => this._sendOrgInfo(),

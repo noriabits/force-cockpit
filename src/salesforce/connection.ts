@@ -128,6 +128,13 @@ export class ConnectionManager extends EventEmitter {
     return this._connection.describeGlobal();
   }
 
+  async describeSObject(name: string): Promise<jsforce.DescribeSObjectResult> {
+    if (!this._connection) {
+      throw new Error(NOT_CONNECTED);
+    }
+    return this._connection.describe(name);
+  }
+
   async executeAnonymous(apexBody: string): Promise<{
     compiled: boolean;
     success: boolean;

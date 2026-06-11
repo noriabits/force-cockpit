@@ -54,7 +54,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 | Tab | Description |
 |-----|-------------|
-| **Overview** | Org info card, storage usage bars, SOQL Quick Query editor with a filterable, sortable results table |
+| **Overview** | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table |
 | **Utils** | Built-in utilities (Clone User, Reactivate OmniScript) and custom YAML scripts |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files |
 
@@ -63,6 +63,13 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 ## Overview Tab
 
 The Overview tab shows org connection details and storage usage bars (Data Storage and File Storage), and provides a SOQL Quick Query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`).
+
+The editor supports:
+
+- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
+- **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
+- **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
+- **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
 
 The results table supports:
 

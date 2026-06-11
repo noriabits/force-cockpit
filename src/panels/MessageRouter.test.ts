@@ -36,6 +36,8 @@ vi.mock('fs', () => ({ promises: { writeFile } }));
 import { MessageRouter } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
+import type { QueryStateStore } from '../services/QueryStateStore';
+import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule } from '../features/FeatureModule';
 import type { OperationRegistry } from './OperationRegistry';
 
@@ -46,6 +48,8 @@ function makeRouter(
     getCurrentOrg?: ReturnType<typeof vi.fn>;
     onReady?: ReturnType<typeof vi.fn>;
     operations?: Partial<OperationRegistry>;
+    queryStateStore?: Partial<QueryStateStore>;
+    describeService?: Partial<DescribeService>;
   } = {},
 ) {
   const postMessage = vi.fn();
@@ -56,6 +60,18 @@ function makeRouter(
   const queryService = {
     runQuery: opts.runQuery ?? vi.fn().mockResolvedValue({ records: [] }),
   } as unknown as QueryService;
+  const queryStateStore = {
+    getState: vi.fn(() => ({ tabs: [], activeTab: 0, history: [], savedQueries: [] })),
+    saveTabs: vi.fn().mockResolvedValue(undefined),
+    addHistory: vi.fn().mockResolvedValue([]),
+    saveSavedQueries: vi.fn().mockResolvedValue([]),
+    ...opts.queryStateStore,
+  } as unknown as QueryStateStore;
+  const describeService = {
+    describeGlobal: vi.fn().mockResolvedValue({ sobjects: [] }),
+    describeSObject: vi.fn().mockResolvedValue({ name: 'Account', fields: [] }),
+    ...opts.describeService,
+  } as unknown as DescribeService;
   const operations = {
     startWebviewOp: vi.fn(),
     endWebviewOp: vi.fn(),
@@ -70,11 +86,21 @@ function makeRouter(
     webview,
     connectionManager,
     queryService,
+    queryStateStore,
+    describeService,
     features: opts.features ?? [],
     operations,
     onReady,
   });
-  return { router, postMessage, operations, onReady };
+  return {
+    router,
+    postMessage,
+    operations,
+    onReady,
+    queryService,
+    queryStateStore,
+    describeService,
+  };
 }
 
 beforeEach(() => {
@@ -113,6 +139,91 @@ describe('MessageRouter built-in routes', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'queryError',
       data: { message: 'bad soql' },
+    });
+  });
+
+  it('query forwards the useToolingApi flag to the service', async () => {
+    const runQuery = vi.fn().mockResolvedValue({ records: [] });
+    const { router } = makeRouter({ runQuery });
+    await router.handle({ type: 'query', soql: 'SELECT Id FROM ApexClass', useToolingApi: true });
+    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM ApexClass', true);
+  });
+
+  it('loadQueryState → posts queryStateLoaded with the stored state', async () => {
+    const state = {
+      tabs: [{ name: 'Query 1', query: 'SELECT Id FROM Account', useToolingApi: false }],
+      activeTab: 0,
+      history: [],
+      savedQueries: [],
+    };
+    const { router, postMessage } = makeRouter({
+      queryStateStore: { getState: vi.fn(() => state) },
+    });
+    await router.handle({ type: 'loadQueryState' });
+    expect(postMessage).toHaveBeenCalledWith({ type: 'queryStateLoaded', data: state });
+  });
+
+  it('saveQueryTabs → persists the tabs (fire-and-forget, no post)', async () => {
+    const saveTabs = vi.fn().mockResolvedValue(undefined);
+    const { router, postMessage } = makeRouter({ queryStateStore: { saveTabs } });
+    const tabs = [{ name: 'A', query: 'q', useToolingApi: false }];
+    await router.handle({ type: 'saveQueryTabs', tabs, activeTab: 0 });
+    expect(saveTabs).toHaveBeenCalledWith(tabs, 0);
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('addQueryHistory → posts the updated history list', async () => {
+    const history = [{ query: 'q', useToolingApi: false }];
+    const addHistory = vi.fn().mockResolvedValue(history);
+    const { router, postMessage } = makeRouter({ queryStateStore: { addHistory } });
+    await router.handle({ type: 'addQueryHistory', query: 'q', useToolingApi: false });
+    expect(addHistory).toHaveBeenCalledWith({ query: 'q', useToolingApi: false });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryHistoryUpdated',
+      data: { history },
+    });
+  });
+
+  it('saveSavedQueries → posts the stored saved-query list', async () => {
+    const savedQueries = [{ name: 'S', query: 'q', useToolingApi: false }];
+    const saveSavedQueries = vi.fn().mockResolvedValue(savedQueries);
+    const { router, postMessage } = makeRouter({ queryStateStore: { saveSavedQueries } });
+    await router.handle({ type: 'saveSavedQueries', savedQueries });
+    expect(saveSavedQueries).toHaveBeenCalledWith(savedQueries);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'savedQueriesUpdated',
+      data: { savedQueries },
+    });
+  });
+
+  it('describeGlobal → posts describeGlobalResult with the projection', async () => {
+    const projection = { sobjects: [{ name: 'Account', label: 'Account', keyPrefix: '001' }] };
+    const { router, postMessage } = makeRouter({
+      describeService: { describeGlobal: vi.fn().mockResolvedValue(projection) },
+    });
+    await router.handle({ type: 'describeGlobal' });
+    expect(postMessage).toHaveBeenCalledWith({ type: 'describeGlobalResult', data: projection });
+  });
+
+  it('describeSObject → echoes the requested name in the result', async () => {
+    const describeSObject = vi.fn().mockResolvedValue({ name: 'Account', fields: [] });
+    const { router, postMessage } = makeRouter({ describeService: { describeSObject } });
+    await router.handle({ type: 'describeSObject', name: 'Account' });
+    expect(describeSObject).toHaveBeenCalledWith('Account');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'describeSObjectResult',
+      data: { name: 'Account', fields: [] },
+    });
+  });
+
+  it('describe failure → posts describeError', async () => {
+    const { router, postMessage } = makeRouter({
+      describeService: { describeGlobal: vi.fn().mockRejectedValue(new Error('no metadata')) },
+    });
+    await router.handle({ type: 'describeGlobal' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'describeError',
+      data: { message: 'no metadata' },
     });
   });
 

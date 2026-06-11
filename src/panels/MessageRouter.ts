@@ -1,7 +1,8 @@
 // Routes incoming webview messages to their handlers:
 //   - Built-in host routes (ready, query, openRecord, openInBrowser, refreshOrg,
-//     confirmAction, openExternalUrl, exportQueryResult, operationStarted/Ended,
-//     cancelOperation)
+//     confirmAction, openExternalUrl, exportQueryResult, loadQueryState,
+//     saveQueryTabs, addQueryHistory, saveSavedQueries, describeGlobal,
+//     describeSObject, operationStarted/Ended, cancelOperation)
 //   - Feature routes registered via defineFeature()
 // On success: posts `{ type: successType, data: <result + context> }`.
 // On error:   posts `{ type: errorType,   data: <context + message> }`.
@@ -13,6 +14,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
+import type { QueryStateStore, SavedQuery, QueryTab } from '../services/QueryStateStore';
+import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { OperationRegistry } from './OperationRegistry';
@@ -23,6 +26,8 @@ interface MessageRouterDeps {
   webview: vscode.Webview;
   connectionManager: ConnectionManager;
   queryService: QueryService;
+  queryStateStore: QueryStateStore;
+  describeService: DescribeService;
   features: FeatureModule[];
   operations: OperationRegistry;
   onReady: () => Promise<void>;
@@ -32,6 +37,8 @@ export class MessageRouter {
   private readonly webview: vscode.Webview;
   private readonly connectionManager: ConnectionManager;
   private readonly queryService: QueryService;
+  private readonly queryStateStore: QueryStateStore;
+  private readonly describeService: DescribeService;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
   private readonly _routeMap = new Map<string, RouteDescriptor>();
@@ -40,6 +47,8 @@ export class MessageRouter {
     this.webview = deps.webview;
     this.connectionManager = deps.connectionManager;
     this.queryService = deps.queryService;
+    this.queryStateStore = deps.queryStateStore;
+    this.describeService = deps.describeService;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
     for (const feature of deps.features) {
@@ -56,9 +65,64 @@ export class MessageRouter {
         return;
       case 'query':
         await this._route(
-          () => this.queryService.runQuery(message.soql as string),
+          () =>
+            this.queryService.runQuery(
+              message.soql as string,
+              message.useToolingApi as boolean | undefined,
+            ),
           'queryResult',
           'queryError',
+        );
+        return;
+      case 'loadQueryState':
+        await this._route(
+          async () => this.queryStateStore.getState(),
+          'queryStateLoaded',
+          'queryStateError',
+        );
+        return;
+      case 'saveQueryTabs':
+        await this.queryStateStore.saveTabs(
+          message.tabs as QueryTab[],
+          message.activeTab as number,
+        );
+        return;
+      case 'addQueryHistory':
+        await this._route(
+          async () => ({
+            history: await this.queryStateStore.addHistory({
+              query: message.query as string,
+              useToolingApi: message.useToolingApi as boolean,
+            }),
+          }),
+          'queryHistoryUpdated',
+          'queryHistoryError',
+        );
+        return;
+      case 'saveSavedQueries':
+        await this._route(
+          async () => ({
+            savedQueries: await this.queryStateStore.saveSavedQueries(
+              message.savedQueries as SavedQuery[],
+            ),
+          }),
+          'savedQueriesUpdated',
+          'savedQueriesError',
+        );
+        return;
+      case 'describeGlobal':
+        await this._route(
+          () => this.describeService.describeGlobal(),
+          'describeGlobalResult',
+          'describeError',
+        );
+        return;
+      case 'describeSObject':
+        await this._route(
+          () => this.describeService.describeSObject(message.name as string),
+          'describeSObjectResult',
+          'describeError',
+          { name: message.name as string },
         );
         return;
       case 'operationStarted': {

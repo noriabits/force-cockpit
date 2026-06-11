@@ -413,6 +413,48 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
+}
+
+/* SOQL autocomplete */
+.query-autocomplete {
+  position: absolute;
+  z-index: 25;
+  min-width: 240px;
+  max-width: 420px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 2px;
+  background-color: var(--vscode-editorWidget-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.query-ac-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.query-ac-item--active,
+.query-ac-item:hover {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.query-ac-label {
+  font-size: 12px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.query-ac-detail {
+  font-size: 10px;
+  opacity: 0.7;
 }
 
 .soql-textarea {
@@ -438,10 +480,204 @@ body {
   gap: 8px;
 }
 
+.query-tooling-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.query-tooling-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .query-hint {
   font-size: 11px;
   color: var(--vscode-descriptionForeground);
   margin-left: auto;
+}
+
+/* Query tabs */
+.query-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.query-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-editorWidget-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+}
+
+.query-tab--active {
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-input-background);
+  border-color: var(--vscode-focusBorder);
+}
+
+.query-tab-label {
+  cursor: pointer;
+}
+
+.query-tab-rename {
+  font-size: 12px;
+  padding: 0 2px;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 2px;
+  width: 90px;
+}
+
+.query-tab-close {
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.query-tab-close:hover {
+  color: var(--vscode-errorForeground);
+}
+
+.query-tab-add {
+  border: 1px solid var(--vscode-panel-border);
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.query-tab-add:hover {
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Query history dropdown */
+.query-history-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.query-history-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 320px;
+  max-width: 460px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  background-color: var(--vscode-editorWidget-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.query-history-save-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.query-history-save-input {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+}
+
+.query-history-section + .query-history-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 8px;
+}
+
+.query-history-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 4px;
+}
+
+.query-history-empty {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.7;
+  padding: 2px 4px;
+}
+
+.query-history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.query-history-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.query-history-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.query-history-tooling-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--vscode-badge-foreground);
+  background-color: var(--vscode-badge-background);
+}
+
+.query-history-remove {
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.query-history-remove:hover {
+  color: var(--vscode-errorForeground);
 }
 
 /* Results */
