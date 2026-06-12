@@ -3,7 +3,7 @@
 // context (soql-context.ts), fetches the needed describe metadata lazily via the
 // describe cache, renders a suggestion list anchored below the textarea, and
 // inserts the chosen value with textarea.setRangeText. Keyboard: ↑/↓ move,
-// Enter/Tab insert, Esc dismiss; Ctrl/Cmd+Space forces suggestions.
+// Enter/Tab insert, Esc dismiss; Ctrl+Space forces suggestions.
 import { analyzeSoql } from './soql-context';
 
 /**
@@ -186,8 +186,8 @@ export function createAutocomplete(ctx) {
   textarea.addEventListener(
     'keydown',
     (e) => {
-      // Ctrl/Cmd+Space forces suggestions even with no typed prefix.
-      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+      // Ctrl+Space forces suggestions even with no typed prefix.
+      if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault();
         trigger(true);
         return;

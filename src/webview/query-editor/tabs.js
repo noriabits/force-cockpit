@@ -74,7 +74,7 @@ export function createQueryTabs(ctx) {
   /** Debounced persist for high-frequency edits (typing in the textarea). */
   function persistDebounced() {
     if (persistTimer) clearTimeout(persistTimer);
-    persistTimer = setTimeout(persist, 500);
+    persistTimer = window.setTimeout(persist, 500);
   }
 
   function nextName() {
@@ -219,6 +219,7 @@ export function createQueryTabs(ctx) {
   }
 
   renderBar();
+  loadActiveIntoUI();
 
   return { load, switchTo, getActive: active, setActiveResults, onActiveEdited, persist };
 }

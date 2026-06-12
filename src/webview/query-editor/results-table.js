@@ -32,6 +32,39 @@ export function createResultsTable(ctx) {
   let sortCol = -1;
   let sortAsc = true;
 
+  // ── Relationship flattening ───────────────────────────────────────────────
+  /** @param {any} val */
+  function isSfRelationshipObject(val) {
+    return (
+      val !== null &&
+      typeof val === 'object' &&
+      !Array.isArray(val) &&
+      typeof val.attributes === 'object' &&
+      val.attributes !== null &&
+      typeof val.attributes.type === 'string'
+    );
+  }
+
+  /** @param {Record<string, any>} record @returns {Record<string, any>} */
+  function flattenRecord(record) {
+    /** @type {Record<string, any>} */
+    const result = {};
+    /** @param {Record<string, any>} obj @param {string} prefix */
+    function walk(obj, prefix) {
+      for (const [key, val] of Object.entries(obj)) {
+        if (key === 'attributes') continue;
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (isSfRelationshipObject(val)) {
+          walk(val, path);
+        } else {
+          result[path] = val;
+        }
+      }
+    }
+    walk(record, '');
+    return result;
+  }
+
   // ── Cell rendering ────────────────────────────────────────────────────────
   /** @param {string | null} cell */
   function cellHtml(cell) {
@@ -154,10 +187,27 @@ export function createResultsTable(ctx) {
       return;
     }
 
-    cols = Object.keys(records[0]).filter((k) => k !== 'attributes');
-    rows = records.map((record) =>
+    // Flatten nested SF relationship objects into dot-path columns so that
+    // e.g. SELECT Id, Parent.MasterRecord.Name shows "Parent.MasterRecord.Name"
+    // with the leaf value instead of raw JSON.
+    const flatRecords = records.map(flattenRecord);
+
+    // Collect all unique paths across all records (some paths only appear when
+    // an intermediate relationship is non-null), then drop any path that is a
+    // strict prefix of a longer path (avoids "Parent" shadowing "Parent.Name").
+    /** @type {Set<string>} */
+    const pathSet = new Set();
+    for (const r of flatRecords) {
+      for (const k of Object.keys(r)) pathSet.add(k);
+    }
+    const allPaths = [...pathSet];
+    cols = allPaths.filter(
+      (p) => !allPaths.some((other) => other !== p && other.startsWith(p + '.')),
+    );
+
+    rows = flatRecords.map((r) =>
       cols.map((col) => {
-        const val = record[col];
+        const val = r[col];
         if (val == null) return null;
         if (typeof val === 'object') return JSON.stringify(val);
         return String(val);
