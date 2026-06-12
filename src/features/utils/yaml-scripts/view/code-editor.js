@@ -3,13 +3,15 @@
 // <pre><code>, plus a line-number gutter. Syncs scroll, handles Tab indentation,
 // throttles highlighting via requestAnimationFrame.
 
-/** @param {'apex' | 'command' | 'js'} type */
+/** @param {'apex' | 'command' | 'js' | 'ai'} type */
 function languageForType(type) {
   switch (type) {
     case 'js':
       return 'javascript';
     case 'command':
       return 'bash';
+    case 'ai':
+      return 'plaintext';
     default:
       return 'apex';
   }
@@ -25,7 +27,7 @@ function languageForType(type) {
  * @returns {{
  *   getContent: () => string,
  *   setContent: (text: string) => void,
- *   setLanguage: (type: 'apex' | 'command' | 'js') => void,
+ *   setLanguage: (type: 'apex' | 'command' | 'js' | 'ai') => void,
  *   setPlaceholder: (text: string) => void,
  *   onInput: (handler: () => void) => void,
  * }}
@@ -49,6 +51,14 @@ export function createCodeEditor({ textarea, codeEl, gutter, hljs }) {
       highlightRaf = null;
       if (!text) {
         codeEl.innerHTML = '';
+        return;
+      }
+      // Plaintext (e.g. the AI prompt) and any language not registered in the
+      // bundle have no grammar — render the raw text so the overlay still shows
+      // it (the textarea's own text is transparent). hljs.highlight would throw
+      // "Unknown language" and leave the overlay empty → invisible text.
+      if (currentLang === 'plaintext' || !hljs.getLanguage(currentLang)) {
+        codeEl.textContent = text + '\n';
         return;
       }
       const result = hljs.highlight(text + '\n', { language: currentLang });

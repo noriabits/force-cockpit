@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
+import type { LmGateway } from './execution/ai/types';
 
 function makeMock(): ConnectionManager {
   return {
@@ -14,6 +15,14 @@ function makeMock(): ConnectionManager {
   } as unknown as ConnectionManager;
 }
 
+// These tests never execute AI scripts, so a no-op gateway suffices.
+function makeGateway(): LmGateway {
+  return {
+    listModels: async () => [],
+    send: async function* () {},
+  };
+}
+
 function makeService(
   paths: Partial<{
     builtInPath: string;
@@ -22,12 +31,16 @@ function makeService(
     workspaceRoot: string;
   }> = {},
 ): YamlScriptsService {
-  return new YamlScriptsService(makeMock(), {
-    builtInPath: paths.builtInPath ?? '',
-    userPath: paths.userPath ?? '',
-    privatePath: paths.privatePath ?? '',
-    workspaceRoot: paths.workspaceRoot ?? '',
-  });
+  return new YamlScriptsService(
+    makeMock(),
+    {
+      builtInPath: paths.builtInPath ?? '',
+      userPath: paths.userPath ?? '',
+      privatePath: paths.privatePath ?? '',
+      workspaceRoot: paths.workspaceRoot ?? '',
+    },
+    makeGateway(),
+  );
 }
 
 function writeScript(baseDir: string, folder: string, name: string, content: string): void {
@@ -303,12 +316,16 @@ describe('YamlScriptsService — executeScript orchestration', () => {
       success: true,
       debugLog: 'log-output',
     });
-    const svc = new YamlScriptsService(mock, {
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceRoot: '',
-    });
+    const svc = new YamlScriptsService(
+      mock,
+      {
+        builtInPath: '',
+        userPath: '',
+        privatePath: '',
+        workspaceRoot: '',
+      },
+      makeGateway(),
+    );
     const scripts = [
       {
         id: 'cat/s',

@@ -37,6 +37,10 @@ describe('escapeForType', () => {
     expect(escapeForType("raw'value", 'command')).toBe("raw'value");
   });
 
+  it('ai: returns the raw value unchanged (prompt is plain text)', () => {
+    expect(escapeForType("it's a prompt\nwith lines", 'ai')).toBe("it's a prompt\nwith lines");
+  });
+
   it('apex: escapes LF newlines as \\n', () => {
     expect(escapeForType('line1\nline2', 'apex')).toBe('line1\\nline2');
   });

@@ -184,4 +184,95 @@ describe('ScriptParser', () => {
       expect(result?.error).toContain('inside the workspace');
     });
   });
+
+  describe('parse (ai scripts)', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-ai-test-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function parseYaml(yaml: string, id = 'ai/x', folder = 'ai') {
+      const filePath = path.join(tmpDir, 'x.yaml');
+      fs.writeFileSync(filePath, yaml, 'utf8');
+      return new ScriptParser(tmpDir).parse(filePath, id, folder, 'user');
+    }
+
+    it('parses an ai script with a soql gather step', () => {
+      const result = parseYaml(
+        `name: Analyse\nmodel: claude-3.5-sonnet\ngather:\n  soql: SELECT Id FROM Account\nai: |\n  Summarise the data.\nallow-followup-queries: true`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.type).toBe('ai');
+      expect(result?.script).toContain('Summarise the data.');
+      expect(result?.model).toBe('claude-3.5-sonnet');
+      expect(result?.gather).toEqual({ kind: 'soql', value: 'SELECT Id FROM Account' });
+      expect(result?.allowFollowupQueries).toBe(true);
+    });
+
+    it('defaults model/allowFollowupQueries to undefined when omitted', () => {
+      const result = parseYaml(`name: A\ngather:\n  apex: System.debug(1);\nai: Do it.`);
+      expect(result?.type).toBe('ai');
+      expect(result?.gather).toEqual({ kind: 'apex', value: 'System.debug(1);' });
+      expect(result?.model).toBeUndefined();
+      expect(result?.allowFollowupQueries).toBeUndefined();
+    });
+
+    it('resolves an apex-file gather step and keeps the path', () => {
+      fs.writeFileSync(path.join(tmpDir, 'g.cls'), 'System.debug(42);', 'utf8');
+      const result = parseYaml(`name: A\ngather:\n  apex-file: g.cls\nai: Do it.`);
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.gather).toEqual({
+        kind: 'apex-file',
+        value: 'System.debug(42);',
+        file: 'g.cls',
+      });
+    });
+
+    it('supports an ai-file prompt', () => {
+      fs.writeFileSync(path.join(tmpDir, 'p.md'), 'Analyse everything.', 'utf8');
+      const result = parseYaml(`name: A\ngather:\n  soql: SELECT Id FROM Account\nai-file: p.md`);
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.type).toBe('ai');
+      expect(result?.script).toContain('Analyse everything.');
+    });
+
+    it('is invalid when gather is missing', () => {
+      const result = parseYaml(`name: A\nai: Do it.`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('gather');
+    });
+
+    it('is invalid when gather sets more than one source', () => {
+      const result = parseYaml(
+        `name: A\ngather:\n  soql: SELECT Id FROM Account\n  apex: System.debug(1);\nai: Do it.`,
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('ambiguous');
+    });
+
+    it('is invalid when the gather apex-file is missing on disk', () => {
+      const result = parseYaml(`name: A\ngather:\n  apex-file: nope.cls\nai: Do it.`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('not found');
+    });
+
+    it('picks the truthy gather field, ignoring an empty-string sibling', () => {
+      const result = parseYaml(
+        `name: A\ngather:\n  soql: ''\n  apex: System.debug(1);\nai: Do it.`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.gather).toEqual({ kind: 'apex', value: 'System.debug(1);' });
+    });
+
+    it('is ambiguous when both ai and apex are set at the top level', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);\nai: Do it.`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('Ambiguous');
+    });
+  });
 });

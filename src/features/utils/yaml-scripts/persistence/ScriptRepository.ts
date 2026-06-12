@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { toSlug } from '../../../../utils/slug';
 import { checkDuplicateId, deleteYamlItem } from '../../../../utils/yamlRepository';
-import type { SaveScriptInput, ScriptInput, YamlScript } from '../types';
+import type { GatherSpec, SaveScriptInput, ScriptInput, YamlScript } from '../types';
 
 interface RepositoryPaths {
   userPath: string;
@@ -150,20 +150,33 @@ export class ScriptRepository {
   private buildYamlData(input: SaveScriptInput): Record<string, unknown> {
     const data: Record<string, unknown> = { name: input.name };
     if (input.description) data.description = input.description;
+    if (input.type === 'ai' && input.model && input.model !== 'auto') data.model = input.model;
     const serializedInputs = this.serializeInputs(input.inputs);
     if (serializedInputs) data.inputs = serializedInputs;
-    if (input.scriptFile) {
-      if (input.type === 'apex') data['apex-file'] = input.scriptFile;
-      else if (input.type === 'js') data['js-file'] = input.scriptFile;
-      else data['command-file'] = input.scriptFile;
-    } else {
-      if (input.type === 'apex') data.apex = input.script;
-      else if (input.type === 'js') data.js = input.script;
-      else data.command = input.script;
+
+    const fileField = {
+      apex: 'apex-file',
+      js: 'js-file',
+      command: 'command-file',
+      ai: 'ai-file',
+    } as const;
+    const inlineField = { apex: 'apex', js: 'js', command: 'command', ai: 'ai' } as const;
+    if (input.scriptFile) data[fileField[input.type]] = input.scriptFile;
+    else data[inlineField[input.type]] = input.script;
+
+    if (input.type === 'ai') {
+      if (input.gather) data.gather = this.buildGatherYaml(input.gather);
+      if (input.allowFollowupQueries) data['allow-followup-queries'] = true;
     }
     if (input.type === 'apex' && input.filterUserDebug) data['filter-user-debug'] = true;
     if (input.type === 'apex' && input.formatJson) data['format-json'] = true;
     return data;
+  }
+
+  private buildGatherYaml(gather: GatherSpec): Record<string, unknown> {
+    if (gather.kind === 'apex-file') return { 'apex-file': gather.file ?? gather.value };
+    if (gather.kind === 'soql') return { soql: gather.value };
+    return { apex: gather.value };
   }
 
   private serializeInputs(inputs?: ScriptInput[]): Record<string, unknown>[] | undefined {
@@ -203,6 +216,11 @@ export class ScriptRepository {
       ...(input.inputs?.length ? { inputs: input.inputs } : {}),
       ...(input.filterUserDebug ? { filterUserDebug: true } : {}),
       ...(input.formatJson ? { formatJson: true } : {}),
+      ...(input.type === 'ai' && input.model && input.model !== 'auto'
+        ? { model: input.model }
+        : {}),
+      ...(input.gather ? { gather: input.gather } : {}),
+      ...(input.type === 'ai' && input.allowFollowupQueries ? { allowFollowupQueries: true } : {}),
     };
   }
 

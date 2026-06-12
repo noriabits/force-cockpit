@@ -4,11 +4,14 @@ import { ScriptParser } from './parsing/ScriptParser';
 import {
   substituteInputs,
   substituteSystemPlaceholders,
+  substituteVars,
   validateRequiredInputs,
 } from './parsing/PlaceholderResolver';
 import { ApexExecutor } from './execution/ApexExecutor';
 import { CommandExecutor } from './execution/CommandExecutor';
 import { JsExecutor } from './execution/JsExecutor';
+import { AiExecutor } from './execution/ai/AiExecutor';
+import type { LmGateway } from './execution/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
 import type { ExecuteScriptResult, SaveScriptInput, YamlScript } from './types';
 
@@ -27,10 +30,12 @@ export class YamlScriptsService {
   private readonly apex: ApexExecutor;
   private readonly command: CommandExecutor;
   private readonly js: JsExecutor;
+  private readonly ai: AiExecutor;
 
   constructor(
     private readonly connectionManager: ConnectionManager,
     private readonly paths: ServicePaths,
+    gateway: LmGateway,
   ) {
     this.parser = new ScriptParser(paths.workspaceRoot);
     this.repo = new ScriptRepository({
@@ -41,6 +46,7 @@ export class YamlScriptsService {
     this.apex = new ApexExecutor(connectionManager);
     this.command = new CommandExecutor(paths.workspaceRoot);
     this.js = new JsExecutor(connectionManager, paths.workspaceRoot);
+    this.ai = new AiExecutor(connectionManager, gateway);
   }
 
   async loadScripts(): Promise<YamlScript[]> {
@@ -94,11 +100,23 @@ export class YamlScriptsService {
 
   private resolvePlaceholders(script: YamlScript, values?: Record<string, string>): YamlScript {
     const org = this.connectionManager.getCurrentOrg();
+    const orgUsername = org?.username ?? '';
     const withInputs = substituteInputs(script, values);
-    const finalCode = substituteSystemPlaceholders(withInputs, script.type, {
-      orgUsername: org?.username ?? '',
-    });
-    return { ...script, script: finalCode };
+    const finalCode = substituteSystemPlaceholders(withInputs, script.type, { orgUsername });
+
+    // ai gather step: substitute into the gather code with Apex-style escaping
+    // (quote-safe for both inline Apex and SOQL WHERE clauses). User inputs win
+    // over system vars, matching the prompt/code substitution order.
+    let gather = script.gather;
+    if (gather) {
+      const inputVars = Object.fromEntries(
+        (script.inputs ?? []).map((inp) => [inp.name, values?.[inp.name] ?? '']),
+      );
+      const value = substituteVars(gather.value, { orgUsername, ...inputVars }, 'apex');
+      gather = { ...gather, value };
+    }
+
+    return { ...script, script: finalCode, ...(gather ? { gather } : {}) };
   }
 
   private dispatchExecution(
@@ -113,6 +131,8 @@ export class YamlScriptsService {
         return this.js.execute(script, signal, onLogChunk);
       case 'apex':
         return this.apex.execute(script);
+      case 'ai':
+        return this.ai.execute(script, signal, onLogChunk);
     }
   }
 }

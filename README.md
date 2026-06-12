@@ -89,7 +89,7 @@ The results table supports:
 > Scripts can also be created and edited directly in the UI — no need to write YAML by hand.
 <div align="center"><img src="media/scriptEditView.png" alt="Script Editor" /></div>
 
-The **Scripts** sub-tab executes scripts defined in YAML files. Three script types are supported. Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+The **Scripts** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
 
@@ -113,7 +113,7 @@ js: |
   log(JSON.stringify(result.records, null, 2));
 ```
 
-Exactly one of `apex:`, `command:`, or `js:` is required. Click **Execute** on any script card to run it.
+Exactly one of `apex:`, `command:`, `js:`, or `ai:` is required. Click **Execute** on any script card to run it.
 
 ### Configurable Inputs
 
@@ -173,8 +173,39 @@ apex: |
 | Apex | Blue | Yes | Debug log (USER_DEBUG filter available) |
 | Command | Purple | No | stdout/stderr |
 | JavaScript | Green | No | `log()` / `console.log()` output |
+| AI | Orange | Yes | Streamed model analysis |
 
 **JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
+
+### AI scripts
+
+An **AI script** gathers Salesforce data with a *fixed, author-defined* step and then uses a language model (via VS Code's built-in [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model), powered by GitHub Copilot) to **analyse** it. The analysis streams into the script's output.
+
+**Requirements:** GitHub Copilot must be enabled in VS Code (the first run shows a one-time consent prompt), and an org must be connected (the data step runs against it).
+
+```yaml
+name: Energy account analysis
+description: Summarises energy-industry accounts.
+model: auto                         # optional — pick a specific model in the form, or 'auto'
+inputs:
+  - name: industry
+    label: Industry
+    required: true
+gather:                             # the fixed data step — exactly one of soql / apex / apex-file
+  soql: SELECT Id, Name, AnnualRevenue FROM Account WHERE Industry = '${industry}'
+ai: |                               # the analysis prompt (use ai-file: to load it from a file)
+  Summarise the accounts below and flag anything unusual about their revenue.
+allow-followup-queries: true        # optional — lets the model run read-only SOQL for extra context
+```
+
+How it works and why it's safe:
+
+- **You control the data step.** The `gather` SOQL/Apex is yours and runs exactly as written — the model never writes or chooses Apex, so there is **no risk of it modifying data**.
+- **The model only analyses.** It receives the gathered data + your prompt and replies with text.
+- **Optional read-only follow-up.** With `allow-followup-queries: true`, the model may run additional **read-only SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
+- **Model picker.** Choose a specific model in the form (populated from the models Copilot offers) or leave it on **Auto**. Note: some models don't support follow-up queries — gather + analyse still works regardless.
+
+`${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
 
 ### Private scripts
 

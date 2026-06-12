@@ -2,7 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { YamlSource } from '../../../../utils/yaml-loader';
-import type { ScriptInput, ScriptType, YamlScript } from '../types';
+import type { GatherSpec, ScriptInput, ScriptType, YamlScript } from '../types';
+import { resolveWorkspaceFile } from './workspaceFile';
+
+type ParsedGather = {
+  apex?: string;
+  'apex-file'?: string;
+  soql?: string;
+};
 
 type ParsedYamlDoc = {
   name?: string;
@@ -10,12 +17,18 @@ type ParsedYamlDoc = {
   apex?: string;
   command?: string;
   js?: string;
+  ai?: string;
   'apex-file'?: string;
   'command-file'?: string;
   'js-file'?: string;
+  'ai-file'?: string;
   inputs?: unknown[];
   'filter-user-debug'?: boolean;
   'format-json'?: boolean;
+  // ── ai-only ──
+  model?: string;
+  gather?: ParsedGather;
+  'allow-followup-queries'?: boolean;
 };
 
 interface InvalidBase {
@@ -39,8 +52,8 @@ export class ScriptParser {
     if (content === null) return null;
 
     const parseOutcome = this.parseYamlContent(content, id, folder, source, basename);
-    if ('invalid' in parseOutcome) return parseOutcome;
-    const doc: ParsedYamlDoc = parseOutcome;
+    if ('invalid' in parseOutcome) return parseOutcome.invalid;
+    const doc: ParsedYamlDoc = parseOutcome.doc;
 
     const parsedInputs = this.parseInputs(doc.inputs);
 
@@ -60,6 +73,13 @@ export class ScriptParser {
     );
     if ('invalid' in resolved) return resolved.invalid;
 
+    let gather: GatherSpec | undefined;
+    if (type === 'ai') {
+      const gatherOutcome = this.resolveGather(doc, id, folder, source, doc.name!, parsedInputs);
+      if ('invalid' in gatherOutcome) return gatherOutcome.invalid;
+      gather = gatherOutcome.gather;
+    }
+
     return {
       id,
       folder,
@@ -72,6 +92,11 @@ export class ScriptParser {
       ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
       ...(type === 'apex' && doc['filter-user-debug'] ? { filterUserDebug: true } : {}),
       ...(type === 'apex' && doc['format-json'] ? { formatJson: true } : {}),
+      ...(type === 'ai' && typeof doc.model === 'string' && doc.model.trim()
+        ? { model: doc.model.trim() }
+        : {}),
+      ...(gather ? { gather } : {}),
+      ...(type === 'ai' && doc['allow-followup-queries'] ? { allowFollowupQueries: true } : {}),
     };
   }
 
@@ -91,25 +116,29 @@ export class ScriptParser {
     folder: string,
     source: YamlSource,
     basename: string,
-  ): ParsedYamlDoc | YamlScript {
+  ): { doc: ParsedYamlDoc } | { invalid: YamlScript } {
     let parsed: ParsedYamlDoc;
     try {
       parsed = yaml.load(content) as ParsedYamlDoc;
     } catch (err) {
-      return this.makeInvalidScript(
-        { id, folder, name: basename, description: '', source },
-        `Invalid YAML: ${(err as Error).message}`,
-      );
+      return {
+        invalid: this.makeInvalidScript(
+          { id, folder, name: basename, description: '', source },
+          `Invalid YAML: ${(err as Error).message}`,
+        ),
+      };
     }
 
     if (!parsed || typeof parsed !== 'object') {
-      return this.makeInvalidScript(
-        { id, folder, name: basename, description: '', source },
-        'File is empty or not a YAML object',
-      );
+      return {
+        invalid: this.makeInvalidScript(
+          { id, folder, name: basename, description: '', source },
+          'File is empty or not a YAML object',
+        ),
+      };
     }
 
-    return parsed;
+    return { doc: parsed };
   }
 
   private validateYamlDoc(
@@ -138,22 +167,24 @@ export class ScriptParser {
       parsed.apex,
       parsed.command,
       parsed.js,
+      parsed.ai,
       parsed['apex-file'],
       parsed['command-file'],
       parsed['js-file'],
+      parsed['ai-file'],
     ].filter(Boolean);
 
     if (scriptFields.length > 1) {
       return this.makeInvalidScript(
         { ...base, name: parsed.name },
-        "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file')",
+        "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'ai', 'apex-file', 'command-file', 'js-file', or 'ai-file')",
       );
     }
 
     if (scriptFields.length === 0) {
       return this.makeInvalidScript(
         { ...base, name: parsed.name },
-        "Missing required field: 'apex', 'command', 'js', 'apex-file', 'command-file', or 'js-file'",
+        "Missing required field: 'apex', 'command', 'js', 'ai', 'apex-file', 'command-file', 'js-file', or 'ai-file'",
       );
     }
 
@@ -165,15 +196,17 @@ export class ScriptParser {
     isFileRef: boolean;
     scriptFile: string | undefined;
   } {
-    const isFileRef = !parsed.apex && !parsed.js && !parsed.command;
-    const type =
+    const isFileRef = !parsed.apex && !parsed.js && !parsed.command && !parsed.ai;
+    const type: ScriptType =
       parsed.apex || parsed['apex-file']
         ? 'apex'
         : parsed.js || parsed['js-file']
           ? 'js'
-          : 'command';
+          : parsed.ai || parsed['ai-file']
+            ? 'ai'
+            : 'command';
     const scriptFile = isFileRef
-      ? (parsed['apex-file'] ?? parsed['js-file'] ?? parsed['command-file'])
+      ? (parsed['apex-file'] ?? parsed['js-file'] ?? parsed['command-file'] ?? parsed['ai-file'])
       : undefined;
     return { type, isFileRef, scriptFile };
   }
@@ -188,7 +221,7 @@ export class ScriptParser {
     scriptFile: string | undefined,
   ): { content: string } | { invalid: YamlScript } {
     if (!scriptFile) {
-      return { content: (parsed.apex ?? parsed.js ?? parsed.command)! };
+      return { content: (parsed.apex ?? parsed.js ?? parsed.command ?? parsed.ai)! };
     }
 
     const base: InvalidBase = {
@@ -201,45 +234,80 @@ export class ScriptParser {
       inputs: parsedInputs,
     };
 
-    if (!this.workspaceRoot) {
+    const resolved = resolveWorkspaceFile(this.workspaceRoot, scriptFile);
+    if ('error' in resolved) {
+      const withFile = resolved.error.includes('no workspace folder')
+        ? base
+        : { ...base, scriptFile };
+      return { invalid: this.makeInvalidScript(withFile, resolved.error) };
+    }
+    return { content: resolved.content };
+  }
+
+  // ── ai gather step ────────────────────────────────────────────────────────
+
+  private resolveGather(
+    parsed: ParsedYamlDoc,
+    id: string,
+    folder: string,
+    source: YamlSource,
+    name: string,
+    parsedInputs: ScriptInput[],
+  ): { gather: GatherSpec } | { invalid: YamlScript } {
+    const base: InvalidBase = {
+      id,
+      folder,
+      name,
+      description: parsed.description ?? '',
+      source,
+      type: 'ai',
+      inputs: parsedInputs,
+    };
+
+    const g = parsed.gather;
+    if (!g || typeof g !== 'object') {
       return {
         invalid: this.makeInvalidScript(
           base,
-          'Cannot resolve file path: no workspace folder is open.',
+          "AI scripts require a 'gather' step with one of 'apex', 'apex-file', or 'soql'",
         ),
       };
     }
 
-    const absPath = path.resolve(this.workspaceRoot, scriptFile);
-    const rootResolved = path.resolve(this.workspaceRoot);
-    if (!absPath.startsWith(rootResolved + path.sep) && absPath !== rootResolved) {
+    const fields = [g.apex, g['apex-file'], g.soql].filter(Boolean);
+    if (fields.length === 0) {
       return {
         invalid: this.makeInvalidScript(
-          { ...base, scriptFile },
-          'Script file must be inside the workspace folder.',
+          base,
+          "AI 'gather' must set exactly one of 'apex', 'apex-file', or 'soql'",
+        ),
+      };
+    }
+    if (fields.length > 1) {
+      return {
+        invalid: this.makeInvalidScript(
+          base,
+          "AI 'gather' is ambiguous: set exactly one of 'apex', 'apex-file', or 'soql'",
         ),
       };
     }
 
-    if (!fs.existsSync(absPath)) {
-      return {
-        invalid: this.makeInvalidScript(
-          { ...base, scriptFile },
-          `Script file not found: ${scriptFile}`,
-        ),
-      };
+    // Select by truthiness to match the count check above (exactly one field is
+    // truthy here) — a `typeof === 'string'` test would mis-pick an empty-string
+    // sibling field over the real one.
+    if (g.soql) {
+      return { gather: { kind: 'soql', value: g.soql } };
+    }
+    if (g.apex) {
+      return { gather: { kind: 'apex', value: g.apex } };
     }
 
-    try {
-      return { content: fs.readFileSync(absPath, 'utf8') };
-    } catch (err) {
-      return {
-        invalid: this.makeInvalidScript(
-          { ...base, scriptFile },
-          `Failed to read script file: ${(err as Error).message}`,
-        ),
-      };
+    const file = g['apex-file']!;
+    const resolved = resolveWorkspaceFile(this.workspaceRoot, file);
+    if ('error' in resolved) {
+      return { invalid: this.makeInvalidScript({ ...base, scriptFile: file }, resolved.error) };
     }
+    return { gather: { kind: 'apex-file', value: resolved.content, file } };
   }
 
   // ── Inputs parsing ───────────────────────────────────────────────────────

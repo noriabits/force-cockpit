@@ -41,7 +41,7 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
   const favoriteIds = new Set();
   /** @type {string | null} */
   let lastSavedScriptId = null;
-  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; filterUserDebug?: boolean; formatJson?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
+  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; filterUserDebug?: boolean; formatJson?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
   let currentScripts = [];
 
   // ── Category/visibility filter bar (shared module) ────────────────────────
@@ -141,7 +141,7 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
   // ── Render scripts list ───────────────────────────────────────────────────
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
     currentScripts = scripts;
@@ -259,6 +259,8 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
       }
       const logText =
         filterCheckbox?.checked && data.filteredDebugLog ? data.filteredDebugLog : data.debugLog;
+      // The "Format JSON" checkbox drives table rendering (default-checked for AI
+      // scripts — see log-viewer.js — so SOQL records render as a table).
       logOutput.innerHTML = jsonCheckbox?.checked
         ? renderLogWithJsonTables(logText)
         : renderLogWithLinks(logText);
@@ -391,6 +393,8 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
         scriptForm.setFilePath(data?.filePath ?? '');
       }
     },
+    listChatModelsResult: (data) => scriptForm.setModels(data?.models ?? []),
+    listChatModelsError: () => scriptForm.setModels([]),
   };
 
   // ── Feature registration ──────────────────────────────────────────────────

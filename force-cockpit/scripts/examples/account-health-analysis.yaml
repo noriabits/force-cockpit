@@ -1,0 +1,25 @@
+name: 🤖 Account Health Analysis
+description: Gathers an account's open opportunities and recent cases, then has the AI summarise its health and flag risks.
+inputs:
+  - name: accountId
+    label: Account ID
+    required: true
+gather:
+  # Runs against the connected org. The model never writes this query — it only analyses the result.
+  soql: >
+    SELECT Id, Name, Industry, AnnualRevenue,
+           (SELECT Name, StageName, Amount, CloseDate FROM Opportunities WHERE IsClosed = false),
+           (SELECT Subject, Status, Priority, CreatedDate FROM Cases ORDER BY CreatedDate DESC LIMIT 20)
+    FROM Account
+    WHERE Id = '${accountId}'
+ai: |
+  You are reviewing the health of a single Salesforce account.
+
+  Using the gathered data below, write a short report covering:
+  1. A one-line summary of the account.
+  2. Open pipeline: total open opportunity amount and any deals closing soon or stuck in early stages.
+  3. Support signal: volume/severity of recent cases and any concerning patterns (e.g. many high-priority or unresolved cases).
+  4. An overall health rating (Green / Amber / Red) with a one-sentence justification.
+
+  Keep it concise and skimmable. If you need extra context (e.g. owner or contact details), use the read-only query tool.
+allow-followup-queries: true

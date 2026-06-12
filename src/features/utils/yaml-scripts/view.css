@@ -49,6 +49,30 @@
   border: 1px solid color-mix(in srgb, var(--vscode-charts-green, #89d185) 40%, transparent);
 }
 
+.script-type-badge--ai {
+  background: color-mix(in srgb, var(--vscode-charts-orange, #d18616) 18%, transparent);
+  color: var(--vscode-charts-orange, #d18616);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-orange, #d18616) 40%, transparent);
+}
+
+/* AI form: gather textarea + model hint */
+.yaml-form-gather-content {
+  width: 100%;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  /* flex:none so the column-flex form row doesn't override the dragged height */
+  flex: none;
+  min-height: 96px;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.yaml-form-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
 .yaml-log-viewer {
   margin-top: 10px;
 }

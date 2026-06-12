@@ -30,3 +30,24 @@ export function isSalesforceRecordId(value: unknown): value is string {
   if (!/^[a-zA-Z0-9]{15}[A-Z0-5]{3}$/.test(value)) return false;
   return computeIdSuffix(value.slice(0, 15)) === value.slice(15);
 }
+
+/**
+ * Recursively removes jsforce's `attributes` metadata ({ type, url }) from a
+ * query record (or array of records, including nested subquery records),
+ * returning a clean copy. The metadata is noise for display and wastes tokens
+ * when records are handed to a language model.
+ */
+export function stripRecordAttributes<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(stripRecordAttributes) as unknown as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value)) {
+      if (key === 'attributes') continue;
+      out[key] = stripRecordAttributes(val);
+    }
+    return out as T;
+  }
+  return value;
+}

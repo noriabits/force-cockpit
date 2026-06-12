@@ -74,7 +74,12 @@ export function createLogViewer(ctx) {
    */
   function buildLogViewer(script) {
     const fragment = document.createDocumentFragment();
-    const isApex = script.type !== 'command' && script.type !== 'js';
+    // Apex shows the USER_DEBUG + Format-JSON filter bar. AI shows only the
+    // Format-JSON toggle (default-on, so SOQL records render as a table; the
+    // user can untick it to see raw JSON). Command/JS get no filter bar.
+    const isApex = script.type === 'apex';
+    const isAi = script.type === 'ai';
+    const showFilterBar = isApex || isAi;
 
     const statusHint = document.createElement('span');
     statusHint.className = 'status-hint yaml-status';
@@ -99,23 +104,30 @@ export function createLogViewer(ctx) {
       }
     });
 
-    if (isApex) {
+    if (showFilterBar) {
       const filterBar = document.createElement('div');
       filterBar.className = 'yaml-log-filter-bar';
 
-      const filterCheckbox = document.createElement('input');
-      filterCheckbox.type = 'checkbox';
-      filterCheckbox.className = 'yaml-log-filter-checkbox';
-      filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
-      const filterLabel = document.createElement('label');
-      filterLabel.className = 'yaml-log-filter-label';
-      filterLabel.appendChild(filterCheckbox);
-      filterLabel.appendChild(document.createTextNode(labels.checkboxUserDebugOnly));
+      // USER_DEBUG-only filter — apex scripts only (AI output has no debug log).
+      /** @type {HTMLInputElement | null} */
+      let filterCheckbox = null;
+      if (isApex) {
+        filterCheckbox = document.createElement('input');
+        filterCheckbox.type = 'checkbox';
+        filterCheckbox.className = 'yaml-log-filter-checkbox';
+        filterCheckbox.checked = !!(script.filterUserDebug || script.formatJson);
+        const filterLabel = document.createElement('label');
+        filterLabel.className = 'yaml-log-filter-label';
+        filterLabel.appendChild(filterCheckbox);
+        filterLabel.appendChild(document.createTextNode(labels.checkboxUserDebugOnly));
+        filterBar.appendChild(filterLabel);
+      }
 
       const jsonCheckbox = document.createElement('input');
       jsonCheckbox.type = 'checkbox';
       jsonCheckbox.className = 'yaml-log-json-checkbox';
-      jsonCheckbox.checked = script.formatJson ?? false;
+      // Default-on for AI so SOQL records render as a table out of the box.
+      jsonCheckbox.checked = isAi ? true : (script.formatJson ?? false);
       const jsonLabel = document.createElement('label');
       jsonLabel.className = 'yaml-log-filter-label';
       jsonLabel.appendChild(jsonCheckbox);
@@ -124,21 +136,22 @@ export function createLogViewer(ctx) {
       function refresh() {
         const raw = logOutput.getAttribute('data-raw-log') ?? '';
         const filtered = logOutput.getAttribute('data-filtered-log') ?? '';
-        const text = filterCheckbox.checked && filtered ? filtered : raw;
+        const text = filterCheckbox?.checked && filtered ? filtered : raw;
         logOutput.innerHTML = jsonCheckbox.checked
           ? renderLogWithJsonTables(text)
           : renderLogWithLinks(text);
       }
 
-      filterCheckbox.addEventListener('change', refresh);
       jsonCheckbox.addEventListener('change', () => {
-        if (jsonCheckbox.checked && !filterCheckbox.checked) {
+        // Apex: Format JSON operates on the USER_DEBUG-filtered view, so ticking
+        // it implies the filter. AI has no filter checkbox — nothing to couple.
+        if (jsonCheckbox.checked && filterCheckbox && !filterCheckbox.checked) {
           filterCheckbox.checked = true;
         }
         refresh();
       });
+      filterCheckbox?.addEventListener('change', refresh);
 
-      filterBar.appendChild(filterLabel);
       filterBar.appendChild(jsonLabel);
       logViewer.appendChild(filterBar);
     }

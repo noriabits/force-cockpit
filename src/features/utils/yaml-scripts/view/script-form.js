@@ -89,6 +89,34 @@ export function createScriptForm(ctx) {
     document.getElementById('yaml-form-inputs-label')
   );
 
+  // ── AI refs ───────────────────────────────────────────────────────────────
+  // The model/gather/follow-up *rows* are shown/hidden via the `.yaml-form-ai-only`
+  // class (see updateAiVisibility), so only the interactive controls need refs.
+  const formModel = /** @type {HTMLSelectElement} */ (document.getElementById('yaml-form-model'));
+  const formModelHint = /** @type {HTMLElement} */ (
+    document.getElementById('yaml-form-model-hint')
+  );
+  const formGatherType = /** @type {HTMLSelectElement} */ (
+    document.getElementById('yaml-form-gather-type')
+  );
+  const formGatherContent = /** @type {HTMLTextAreaElement} */ (
+    document.getElementById('yaml-form-gather-content')
+  );
+  const formGatherFileRow = /** @type {HTMLElement} */ (
+    document.getElementById('yaml-form-gather-file-row')
+  );
+  const formGatherFilePath = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-gather-file-path')
+  );
+  const formGatherBrowseBtn = /** @type {HTMLButtonElement} */ (
+    document.getElementById('yaml-form-gather-browse-btn')
+  );
+  const formAllowFollowup = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-allow-followup')
+  );
+  /** Which file picker is in flight: the prompt file, or the gather Apex file. */
+  let pendingBrowseTarget = 'prompt';
+
   // Hide form immediately via JS — the CSP blocks inline style="display:none" attributes
   newForm.style.display = 'none';
   formDeleteBtn.style.display = 'none';
@@ -115,6 +143,7 @@ export function createScriptForm(ctx) {
   formType.options[0].text = L.typeApex;
   formType.options[1].text = L.typeCommand;
   formType.options[2].text = L.typeJs;
+  formType.options[3].text = L.typeAi;
   const labelName = document.querySelector('label[for="yaml-form-name"]');
   const labelDescription = document.querySelector('label[for="yaml-form-description"]');
   const labelType = document.querySelector('label[for="yaml-form-type"]');
@@ -146,6 +175,20 @@ export function createScriptForm(ctx) {
   if (filterUserDebugLabel) filterUserDebugLabel.textContent = L.labelDefaultFilterUserDebug;
   if (formatJsonLabel) formatJsonLabel.textContent = L.labelDefaultFormatJson;
 
+  // ── AI field labels ───────────────────────────────────────────────────────
+  const modelLabel = document.getElementById('yaml-form-model-label');
+  if (modelLabel) modelLabel.textContent = L.labelModel;
+  formModel.options[0].text = L.modelAuto;
+  const gatherLabel = document.getElementById('yaml-form-gather-label');
+  if (gatherLabel) gatherLabel.textContent = L.labelGather;
+  formGatherType.options[0].text = L.gatherTypeSoql;
+  formGatherType.options[1].text = L.gatherTypeApex;
+  formGatherType.options[2].text = L.gatherTypeApexFile;
+  formGatherFilePath.placeholder = L.placeholderFilePath;
+  formGatherBrowseBtn.textContent = L.btnBrowse;
+  const followupLabel = document.getElementById('yaml-form-followup-label');
+  if (followupLabel) followupLabel.textContent = L.labelAllowFollowup;
+
   // ── Form inputs management ───────────────────────────────────────────────
 
   const inputsEditor = createFormInputsEditor({
@@ -161,11 +204,80 @@ export function createScriptForm(ctx) {
       apex: L.placeholderApexContent,
       command: L.placeholderCommandContent,
       js: L.placeholderJsContent,
+      ai: L.placeholderAiContent,
     };
     editor.setPlaceholder(
-      placeholders[/** @type {'apex'|'command'|'js'} */ (formType.value)] ??
+      placeholders[/** @type {'apex'|'command'|'js'|'ai'} */ (formType.value)] ??
         L.placeholderApexContent,
     );
+    const contentLabelEl = document.getElementById('yaml-form-content-label');
+    if (contentLabelEl) {
+      contentLabelEl.textContent = formType.value === 'ai' ? L.labelAiPrompt : L.labelContent;
+    }
+  }
+
+  /** Show/hide the AI-only rows and the apex-defaults row based on the type. */
+  function updateAiVisibility() {
+    const isAi = formType.value === 'ai';
+    const aiRows = document.querySelectorAll('.yaml-form-ai-only');
+    aiRows.forEach((row) => {
+      /** @type {HTMLElement} */ (row).style.display = isAi ? '' : 'none';
+    });
+    if (isAi) updateGatherMode();
+  }
+
+  /** Within an AI gather step, toggle the inline textarea vs the Apex-file picker. */
+  function updateGatherMode() {
+    const isFile = formGatherType.value === 'apex-file';
+    formGatherContent.style.display = isFile ? 'none' : '';
+    formGatherFileRow.style.display = isFile ? '' : 'none';
+    formGatherContent.placeholder =
+      formGatherType.value === 'soql' ? L.placeholderGatherSoql : L.placeholderGatherApex;
+  }
+
+  // ── Model picker (populated from the async listChatModels round-trip) ──────
+  let pendingModelSelection = 'auto';
+
+  function applyPendingModel() {
+    const has = Array.from(formModel.options).some((o) => o.value === pendingModelSelection);
+    formModel.value = has ? pendingModelSelection : 'auto';
+  }
+
+  /** @param {Array<{ id: string; name?: string; family?: string }>} models */
+  function setModels(models) {
+    pendingModelSelection = formModel.value || pendingModelSelection || 'auto';
+    while (formModel.options.length > 1) formModel.remove(1);
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.text = m.name || m.id;
+      formModel.appendChild(opt);
+    }
+    applyPendingModel();
+    if (formModelHint) {
+      const none = models.length === 0;
+      formModelHint.style.display = none ? '' : 'none';
+      formModelHint.textContent = none ? L.modelHintNone : '';
+    }
+  }
+
+  /** Build the ai-only save payload fields (model + gather + follow-up flag). */
+  function buildAiFields() {
+    const kind = formGatherType.value;
+    /** @type {{ kind: 'soql' | 'apex' | 'apex-file'; value: string; file?: string }} */
+    let gather;
+    if (kind === 'apex-file') {
+      gather = { kind: 'apex-file', value: '', file: formGatherFilePath.value.trim() };
+    } else if (kind === 'apex') {
+      gather = { kind: 'apex', value: formGatherContent.value };
+    } else {
+      gather = { kind: 'soql', value: formGatherContent.value };
+    }
+    return {
+      model: formModel.value || 'auto',
+      gather,
+      ...(formAllowFollowup.checked ? { allowFollowupQueries: true } : {}),
+    };
   }
 
   function updateSourceMode() {
@@ -175,13 +287,20 @@ export function createScriptForm(ctx) {
     formFileRow.style.display = isFile ? '' : 'none';
   }
 
+  function gatherFilled() {
+    return formGatherType.value === 'apex-file'
+      ? formGatherFilePath.value.trim() !== ''
+      : formGatherContent.value.trim() !== '';
+  }
+
   function updateSaveBtn() {
     const isFile = formSource.value === 'file';
     const hasContent = isFile
       ? formFilePath.value.trim() !== ''
       : editor.getContent().trim() !== '';
+    const gatherOk = formType.value !== 'ai' || gatherFilled();
     formSaveBtn.disabled =
-      formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent;
+      formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent || !gatherOk;
   }
 
   function updateApexDefaultsVisibility() {
@@ -205,13 +324,19 @@ export function createScriptForm(ctx) {
     editor.setContent('');
     formError.textContent = '';
     inputsEditor.clear();
+    formModel.value = 'auto';
+    formGatherType.value = 'soql';
+    formGatherContent.value = '';
+    formGatherFilePath.value = '';
+    formAllowFollowup.checked = false;
     updateContentPlaceholder();
-    editor.setLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+    editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateSourceMode();
     updateSaveBtn();
     if (formFilterUserDebug) formFilterUserDebug.checked = false;
     if (formFormatJson) formFormatJson.checked = false;
     updateApexDefaultsVisibility();
+    updateAiVisibility();
   }
 
   const folderCombobox = createFolderCombobox({
@@ -244,7 +369,7 @@ export function createScriptForm(ctx) {
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
@@ -258,6 +383,13 @@ export function createScriptForm(ctx) {
     formFilePath.value = script.scriptFile ?? '';
     editor.setContent(script.scriptFile ? '' : (script.script ?? ''));
     editor.setLanguage(script.type);
+    // ── AI fields ──
+    formModel.value = script.model ?? 'auto';
+    const gather = script.gather;
+    formGatherType.value = gather?.kind ?? 'soql';
+    formGatherContent.value = gather && gather.kind !== 'apex-file' ? gather.value : '';
+    formGatherFilePath.value = gather?.kind === 'apex-file' ? (gather.file ?? '') : '';
+    formAllowFollowup.checked = !!script.allowFollowupQueries;
     formError.textContent = '';
     inputsEditor.setInputs(
       (script.inputs || []).map((/** @type {any} */ inp) => ({
@@ -278,6 +410,12 @@ export function createScriptForm(ctx) {
     if (formFilterUserDebug) formFilterUserDebug.checked = script.filterUserDebug ?? false;
     if (formFormatJson) formFormatJson.checked = script.formatJson ?? false;
     updateApexDefaultsVisibility();
+    updateAiVisibility();
+    // Re-apply the model once the (async) model list arrives, in case the
+    // saved model isn't in the dropdown yet.
+    pendingModelSelection = script.model ?? 'auto';
+    applyPendingModel();
+    if (formType.value === 'ai') vscode.postMessage({ type: 'listChatModels' });
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
     folderCombobox.refresh();
@@ -296,10 +434,14 @@ export function createScriptForm(ctx) {
 
   updateContentPlaceholder();
   updateSourceMode();
+  updateAiVisibility();
   formType.addEventListener('change', () => {
     updateContentPlaceholder();
-    editor.setLanguage(/** @type {'apex' | 'command' | 'js'} */ (formType.value));
+    editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateApexDefaultsVisibility();
+    updateAiVisibility();
+    updateSaveBtn();
+    if (formType.value === 'ai') vscode.postMessage({ type: 'listChatModels' });
   });
   formSource.addEventListener('change', updateSourceMode);
   formSource.addEventListener('change', updateSaveBtn);
@@ -308,6 +450,18 @@ export function createScriptForm(ctx) {
   formContent.addEventListener('input', updateSaveBtn);
   formFilePath.addEventListener('input', updateSaveBtn);
   formBrowseBtn.addEventListener('click', () => {
+    pendingBrowseTarget = 'prompt';
+    vscode.postMessage({ type: 'browseForScriptFile' });
+  });
+  // ── AI gather wiring ──
+  formGatherType.addEventListener('change', () => {
+    updateGatherMode();
+    updateSaveBtn();
+  });
+  formGatherContent.addEventListener('input', updateSaveBtn);
+  formGatherFilePath.addEventListener('input', updateSaveBtn);
+  formGatherBrowseBtn.addEventListener('click', () => {
+    pendingBrowseTarget = 'gather';
     vscode.postMessage({ type: 'browseForScriptFile' });
   });
   newBtn.addEventListener('click', showNewForm);
@@ -340,6 +494,11 @@ export function createScriptForm(ctx) {
     if (isFile && !filePathVal) {
       formError.textContent = L.errorFilePathRequired;
       formFilePath.focus();
+      return;
+    }
+    if (formType.value === 'ai' && !gatherFilled()) {
+      formError.textContent = L.errorGatherRequired;
+      (formGatherType.value === 'apex-file' ? formGatherFilePath : formGatherContent).focus();
       return;
     }
     // Validate inputs
@@ -398,6 +557,7 @@ export function createScriptForm(ctx) {
         ? { filterUserDebug: true }
         : {}),
       ...(formType.value === 'apex' && formFormatJson?.checked ? { formatJson: true } : {}),
+      ...(formType.value === 'ai' ? buildAiFields() : {}),
     };
 
     const isPrivate = formPrivate.checked;
@@ -443,8 +603,16 @@ export function createScriptForm(ctx) {
     },
     /** @param {string} filePath */
     setFilePath(filePath) {
-      formFilePath.value = filePath;
+      if (pendingBrowseTarget === 'gather') {
+        formGatherFilePath.value = filePath;
+      } else {
+        formFilePath.value = filePath;
+      }
       updateSaveBtn();
+    },
+    /** @param {Array<{ id: string; name?: string; family?: string }>} models */
+    setModels(models) {
+      setModels(models);
     },
   };
 }

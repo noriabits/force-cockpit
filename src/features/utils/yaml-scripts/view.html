@@ -26,6 +26,7 @@
           <option value="apex"></option>
           <option value="command"></option>
           <option value="js"></option>
+          <option value="ai"></option>
         </select>
       </div>
       <div class="yaml-form-col">
@@ -45,6 +46,13 @@
           <option value="file"></option>
         </select>
       </div>
+    </div>
+    <div class="yaml-form-row yaml-form-ai-only" id="yaml-form-model-row" style="display: none">
+      <label class="yaml-form-label" for="yaml-form-model" id="yaml-form-model-label"></label>
+      <select class="text-input" id="yaml-form-model">
+        <option value="auto"></option>
+      </select>
+      <div class="yaml-form-hint" id="yaml-form-model-hint" style="display: none"></div>
     </div>
     <div class="yaml-form-row yaml-form-row--inline">
       <label class="yaml-form-label" for="yaml-form-private" id="yaml-form-private-label"></label>
@@ -77,6 +85,24 @@
       <div id="yaml-form-inputs-list" class="yaml-form-inputs-list"></div>
       <button type="button" class="btn yaml-add-input-btn" id="yaml-add-input-btn"></button>
     </div>
+    <div class="yaml-form-row yaml-form-ai-only" id="yaml-form-gather-row" style="display: none">
+      <label class="yaml-form-label yaml-form-label--required" id="yaml-form-gather-label"></label>
+      <select class="text-input" id="yaml-form-gather-type">
+        <option value="soql"></option>
+        <option value="apex"></option>
+        <option value="apex-file"></option>
+      </select>
+      <textarea
+        class="text-input yaml-form-gather-content"
+        id="yaml-form-gather-content"
+        rows="3"
+        spellcheck="false"
+      ></textarea>
+      <div class="input-with-paste" id="yaml-form-gather-file-row" style="display: none">
+        <input type="text" class="text-input" id="yaml-form-gather-file-path" autocomplete="off" />
+        <button type="button" class="btn yaml-browse-btn" id="yaml-form-gather-browse-btn"></button>
+      </div>
+    </div>
     <div class="yaml-form-row" id="yaml-form-content-row">
       <label class="yaml-form-label yaml-form-label--required" id="yaml-form-content-label"></label>
       <div class="yaml-code-editor">
@@ -94,6 +120,18 @@
           ></textarea>
         </div>
       </div>
+    </div>
+    <div
+      class="yaml-form-row yaml-form-row--inline yaml-form-ai-only"
+      id="yaml-form-followup-row"
+      style="display: none"
+    >
+      <label
+        class="yaml-form-label"
+        for="yaml-form-allow-followup"
+        id="yaml-form-followup-label"
+      ></label>
+      <input type="checkbox" id="yaml-form-allow-followup" />
     </div>
     <div class="error-box" id="yaml-form-error"></div>
     <div class="feature-actions">

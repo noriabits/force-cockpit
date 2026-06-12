@@ -152,17 +152,17 @@ export function createAccordionBuilder(ctx) {
 
   /** @param {any} script @returns {HTMLElement} */
   function createTypeBadge(script) {
-    const isJs = script.type === 'js';
-    const isCmd = script.type === 'command';
+    /** @type {Record<string, { cls: string; text: string }>} */
+    const byType = {
+      js: { cls: 'script-type-badge--js', text: labels.badgeJs },
+      command: { cls: 'script-type-badge--command', text: labels.badgeCommand },
+      ai: { cls: 'script-type-badge--ai', text: labels.badgeAi },
+      apex: { cls: 'script-type-badge--apex', text: labels.badgeApex },
+    };
+    const meta = byType[script.type] || byType.apex;
     const span = document.createElement('span');
-    span.className =
-      'script-type-badge ' +
-      (isJs
-        ? 'script-type-badge--js'
-        : isCmd
-          ? 'script-type-badge--command'
-          : 'script-type-badge--apex');
-    span.textContent = isJs ? labels.badgeJs : isCmd ? labels.badgeCommand : labels.badgeApex;
+    span.className = 'script-type-badge ' + meta.cls;
+    span.textContent = meta.text;
     return span;
   }
 
