@@ -59,7 +59,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const handler = feature.routes['runMonitoringQuery'].handler;
@@ -99,7 +99,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     // Trigger a query for the "expired" config — should NOT be suppressed
@@ -134,7 +134,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const handler = feature.routes['runMonitoringQuery'].handler;
@@ -179,7 +179,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const handler = feature.routes['runMonitoringQuery'].handler;
@@ -224,7 +224,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
@@ -261,7 +261,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
@@ -296,7 +296,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const handler = feature.routes['runMonitoringQuery'].handler;
@@ -329,7 +329,7 @@ describe('monitoring snooze persistence', () => {
       privatePath: '',
       workspaceState: memento as any,
     });
-    const cm = { query: vi.fn() } as any;
+    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
     const feature = factory(cm);
 
     const handler = feature.routes['runMonitoringQuery'].handler;

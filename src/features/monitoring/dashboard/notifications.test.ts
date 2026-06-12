@@ -108,7 +108,13 @@ describe('notifications', () => {
         [{ data: [1234.5] }],
         [vf({ threshold: 1000, format: 'currency' })],
       );
-      expect(cur[0].message).toContain('1,234.50');
+      // Derive from the same toLocaleString options the formatter uses so the
+      // assertion holds under any host locale ("1,234.50" vs "1234,50").
+      const expectedCurrency = (1234.5).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      expect(cur[0].message).toContain(expectedCurrency);
 
       const pct = checkThresholds(
         'b',
@@ -199,44 +205,66 @@ describe('notifications', () => {
   describe('checkRowCountIncrease', () => {
     it('establishes the baseline silently on first call', async () => {
       const { checkRowCountIncrease } = await load();
-      expect(checkRowCountIncrease('id', 'n', 5, true)).toEqual([]);
+      expect(checkRowCountIncrease('id', 'org', 'n', 5, true)).toEqual([]);
     });
 
     it('fires on growth with a delta message, then updates the baseline', async () => {
       const { checkRowCountIncrease } = await load();
-      checkRowCountIncrease('id', 'n', 5, true); // baseline
-      const msgs = checkRowCountIncrease('id', 'n', 8, true);
+      checkRowCountIncrease('id', 'org', 'n', 5, true); // baseline
+      const msgs = checkRowCountIncrease('id', 'org', 'n', 8, true);
       expect(msgs).toHaveLength(1);
       expect(msgs[0]).toContain('3 new records');
       expect(msgs[0]).toContain('(5 → 8)');
       // baseline now 8 → another check at 8 does not fire
-      expect(checkRowCountIncrease('id', 'n', 8, true)).toEqual([]);
+      expect(checkRowCountIncrease('id', 'org', 'n', 8, true)).toEqual([]);
     });
 
     it('uses singular "record" for a delta of 1', async () => {
       const { checkRowCountIncrease } = await load();
-      checkRowCountIncrease('id', 'n', 5, true);
-      expect(checkRowCountIncrease('id', 'n', 6, true)[0]).toContain('1 new record (');
+      checkRowCountIncrease('id', 'org', 'n', 5, true);
+      expect(checkRowCountIncrease('id', 'org', 'n', 6, true)[0]).toContain('1 new record (');
     });
 
     it('does not fire when the count shrinks', async () => {
       const { checkRowCountIncrease } = await load();
-      checkRowCountIncrease('id', 'n', 10, true);
-      expect(checkRowCountIncrease('id', 'n', 4, true)).toEqual([]);
+      checkRowCountIncrease('id', 'org', 'n', 10, true);
+      expect(checkRowCountIncrease('id', 'org', 'n', 4, true)).toEqual([]);
     });
 
     it('does not fire when notifyOnIncrease is false but still tracks the baseline', async () => {
       const { checkRowCountIncrease } = await load();
-      expect(checkRowCountIncrease('id', 'n', 5, false)).toEqual([]);
+      expect(checkRowCountIncrease('id', 'org', 'n', 5, false)).toEqual([]);
       // enabling later: baseline is 5, growth to 9 fires
-      expect(checkRowCountIncrease('id', 'n', 9, true)).toHaveLength(1);
+      expect(checkRowCountIncrease('id', 'org', 'n', 9, true)).toHaveLength(1);
     });
 
-    it('clearRowCountBaseline resets so the next call re-establishes silently', async () => {
+    it('tracks baselines per org — one org does not leak into another', async () => {
+      const { checkRowCountIncrease } = await load();
+      // orgA establishes a baseline of 5
+      expect(checkRowCountIncrease('id', 'orgA', 'n', 5, true)).toEqual([]);
+      // switching to orgB with a higher count must NOT fire — it starts fresh
+      expect(checkRowCountIncrease('id', 'orgB', 'n', 100, true)).toEqual([]);
+      // orgB growth fires against orgB's own baseline, not orgA's
+      expect(checkRowCountIncrease('id', 'orgB', 'n', 105, true)).toHaveLength(1);
+    });
+
+    it('compares against the same org when switching back', async () => {
+      const { checkRowCountIncrease } = await load();
+      checkRowCountIncrease('id', 'orgA', 'n', 5, true); // orgA baseline 5
+      checkRowCountIncrease('id', 'orgB', 'n', 100, true); // orgB baseline 100
+      // back to orgA: growth from 5 → 9 fires against orgA's retained baseline
+      const msgs = checkRowCountIncrease('id', 'orgA', 'n', 9, true);
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0]).toContain('(5 → 9)');
+    });
+
+    it('clearRowCountBaseline resets every org so the next call re-establishes silently', async () => {
       const { checkRowCountIncrease, clearRowCountBaseline } = await load();
-      checkRowCountIncrease('id', 'n', 5, true);
+      checkRowCountIncrease('id', 'orgA', 'n', 5, true);
+      checkRowCountIncrease('id', 'orgB', 'n', 50, true);
       clearRowCountBaseline('id');
-      expect(checkRowCountIncrease('id', 'n', 100, true)).toEqual([]);
+      expect(checkRowCountIncrease('id', 'orgA', 'n', 100, true)).toEqual([]);
+      expect(checkRowCountIncrease('id', 'orgB', 'n', 100, true)).toEqual([]);
     });
   });
 

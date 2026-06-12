@@ -76,6 +76,7 @@ export function createMonitoringDashboardFeature(opts: {
       routes: buildMonitoringRoutes({
         service,
         refresher,
+        connectionManager,
         workspaceState: opts.workspaceState,
         outputChannel: opts.outputChannel,
       }),

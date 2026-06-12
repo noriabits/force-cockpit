@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { RouteDescriptor } from '../../FeatureModule';
+import type { ConnectionManager } from '../../../salesforce/connection';
 import type { MonitoringDashboardService } from './MonitoringDashboardService';
 import type { MonitoringConfig, MonitoringValueField } from './types';
 import type { BackgroundRefresher } from './BackgroundRefresher';
@@ -27,6 +28,7 @@ function persistHiddenBuiltins(workspaceState: vscode.Memento, ids: Set<string>)
 export interface MonitoringRoutesDeps {
   service: MonitoringDashboardService;
   refresher: BackgroundRefresher;
+  connectionManager: ConnectionManager;
   workspaceState: vscode.Memento;
   outputChannel?: vscode.OutputChannel;
 }
@@ -49,7 +51,14 @@ function fireQueryNotifications(
     checkThresholds(configId, configName, datasets, valueFields),
     deps.workspaceState,
   );
-  const rowCountMessages = checkRowCountIncrease(configId, configName, totalRows, notifyOnIncrease);
+  const orgKey = deps.connectionManager.getCurrentOrg()?.username ?? '';
+  const rowCountMessages = checkRowCountIncrease(
+    configId,
+    orgKey,
+    configName,
+    totalRows,
+    notifyOnIncrease,
+  );
   fireRowCountNotifications(rowCountMessages, deps.outputChannel);
   return rowCountMessages.length > 0;
 }

@@ -5,7 +5,7 @@ import * as yaml from 'js-yaml';
 import xmlFormat from 'xml-formatter';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { createContext, Script } from 'vm';
-import type { ConnectionManager } from '../../../../salesforce/connection';
+import type { ConnectionManager, DebuggingOptions } from '../../../../salesforce/connection';
 import { runTerminalCommand } from '../../../../utils/terminalCommand';
 import { xml } from './XmlHelper';
 import { input } from './InputHelper';
@@ -54,6 +54,8 @@ export class JsExecutor {
         connection: this.connectionManager.getConnection(),
         org: this.connectionManager.getCurrentOrg(),
         query: (soql: string) => this.connectionManager.query(soql),
+        executeApex: (apexBody: string, options?: DebuggingOptions) =>
+          this.connectionManager.executeAnonymousWithDebugLog(apexBody, options),
         log: logFn,
         error: errorFn,
         workspaceRoot: this.workspaceRoot,

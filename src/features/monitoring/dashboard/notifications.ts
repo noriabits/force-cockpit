@@ -8,8 +8,8 @@ const STORAGE_KEY = 'monitoring.notificationCooldowns';
 
 /** Maps cooldownKey → "silence until" timestamp */
 const notificationCooldowns = new Map<string, number>();
-/** Maps configId → most recent totalRows seen, for "notify on increase" detection */
-const previousRowCounts = new Map<string, number>();
+/** configId → (orgKey → most recent totalRows seen), for "notify on increase" detection */
+const previousRowCounts = new Map<string, Map<string, number>>();
 
 export function loadPersistedSnoozes(workspaceState: vscode.Memento): void {
   const persisted: Record<string, number> = workspaceState.get(STORAGE_KEY, {});
@@ -125,12 +125,18 @@ export function fireBreachNotifications(
 
 export function checkRowCountIncrease(
   configId: string,
+  orgKey: string,
   configName: string,
   totalRows: number,
   notifyOnIncrease: boolean,
 ): string[] {
-  const prev = previousRowCounts.get(configId);
-  previousRowCounts.set(configId, totalRows);
+  let perOrg = previousRowCounts.get(configId);
+  if (!perOrg) {
+    perOrg = new Map();
+    previousRowCounts.set(configId, perOrg);
+  }
+  const prev = perOrg.get(orgKey);
+  perOrg.set(orgKey, totalRows);
   if (!notifyOnIncrease || prev === undefined || totalRows <= prev) return [];
   const delta = totalRows - prev;
   return [`[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`];

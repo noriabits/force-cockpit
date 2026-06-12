@@ -71,6 +71,10 @@ export class BackgroundRefresher {
     return Array.from(this._timers.keys());
   }
 
+  private currentOrgKey(): string {
+    return this.opts.connectionManager.getCurrentOrg()?.username ?? '';
+  }
+
   private async _tick(cfg: MonitoringConfig): Promise<void> {
     if (!this.opts.connectionManager.isConnected) return;
     try {
@@ -99,6 +103,7 @@ export class BackgroundRefresher {
     );
     const rowCountMessages = checkRowCountIncrease(
       cfg.id,
+      this.currentOrgKey(),
       cfg.name,
       result.totalRows,
       Boolean(cfg.notifyOnIncrease),
@@ -132,6 +137,7 @@ export class BackgroundRefresher {
     );
     const rowCountMessages = checkRowCountIncrease(
       cfg.id,
+      this.currentOrgKey(),
       cfg.name,
       result.totalRows,
       Boolean(cfg.notifyOnIncrease),

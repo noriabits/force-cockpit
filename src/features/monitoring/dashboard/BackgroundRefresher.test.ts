@@ -72,7 +72,10 @@ describe('BackgroundRefresher', () => {
     const { BackgroundRefresher } =
       (await import('./BackgroundRefresher')) as BackgroundRefresherModule;
     const service = opts.service ?? makeService();
-    const cm = { isConnected: opts.isConnected ?? true } as any;
+    const cm = {
+      isConnected: opts.isConnected ?? true,
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+    } as any;
     const postToWebview = opts.postToWebview ?? vi.fn();
     const refresher = new BackgroundRefresher({
       service: service as any,
