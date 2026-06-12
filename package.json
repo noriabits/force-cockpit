@@ -75,7 +75,7 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap && esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --sourcemap && esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --sourcemap && esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --sourcemap",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p ./tsconfig.webview.json",
     "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch & esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --sourcemap --watch & esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --sourcemap --watch & esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --sourcemap --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",

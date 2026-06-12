@@ -5,7 +5,7 @@
  * case-insensitive substring filter can be unit-tested directly.
  */
 
-type Cell = string | null | undefined;
+type Cell = string | null;
 type Row = Cell[];
 
 /**

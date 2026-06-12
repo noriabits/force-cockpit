@@ -82,7 +82,9 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
   // ── Filtering ─────────────────────────────────────────────────────────────
 
   function applyFilters() {
-    const accordions = scriptsList.querySelectorAll('.accordion');
+    const accordions = /** @type {NodeListOf<HTMLElement>} */ (
+      scriptsList.querySelectorAll('.accordion')
+    );
     const visible = applyListFilter({
       elements: accordions,
       getAttrs: (el) => ({

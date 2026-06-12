@@ -90,7 +90,11 @@ export function createAutocomplete(ctx) {
     return candidate.toLowerCase().includes(token.toLowerCase());
   }
 
-  /** Walk a relationship path from the FROM object to the object to complete against. */
+  /**
+   * Walk a relationship path from the FROM object to the object to complete against.
+   * @param {string} fromObject
+   * @param {string[]} relationshipPath
+   */
   async function resolveObject(fromObject, relationshipPath) {
     let obj = await describeCache.getSObject(fromObject);
     for (const seg of relationshipPath) {

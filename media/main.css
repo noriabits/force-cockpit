@@ -757,11 +757,33 @@ body {
 }
 
 .query-sortable-th {
-  cursor: pointer;
   user-select: none;
 }
 
-.query-sortable-th:hover {
+.query-sortable-th > .query-th-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.query-sortable-th > .query-th-label:hover {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.query-col-copy {
+  margin-left: 6px;
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.5;
+}
+
+.query-col-copy:hover {
+  opacity: 1;
   color: var(--vscode-textLink-activeForeground);
 }
 

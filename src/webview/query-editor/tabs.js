@@ -21,12 +21,17 @@
  * @property {(tab: QueryTab) => void} onActivate  Render the activated tab's results (or clear).
  */
 
+// Pre-fill new tabs so the user doesn't retype the boilerplate; the trailing
+// "FROM " puts autocomplete straight into object-suggestion mode. Keep in sync
+// with DEFAULT_QUERY in src/services/QueryStateStore.ts (separate bundle).
+const DEFAULT_QUERY = 'SELECT Id FROM ';
+
 /** @param {QueryTabsCtx} ctx */
 export function createQueryTabs(ctx) {
   const { tabBarEl, textarea, toolingCheckbox, vscode, onActivate } = ctx;
 
   /** @type {QueryTab[]} */
-  let tabs = [{ name: 'Query 1', query: '', useToolingApi: false, results: null }];
+  let tabs = [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false, results: null }];
   let activeIndex = 0;
   /** @type {number | undefined} */
   let persistTimer;
@@ -49,6 +54,9 @@ export function createQueryTabs(ctx) {
     if (!tab) return;
     textarea.value = tab.query;
     toolingCheckbox.checked = tab.useToolingApi;
+    // Caret at the end so a default "SELECT Id FROM " lands ready for an object.
+    const len = textarea.value.length;
+    textarea.setSelectionRange(len, len);
   }
 
   function persist() {
@@ -156,7 +164,7 @@ export function createQueryTabs(ctx) {
 
   function addTab() {
     syncActiveFromUI();
-    tabs.push({ name: nextName(), query: '', useToolingApi: false, results: null });
+    tabs.push({ name: nextName(), query: DEFAULT_QUERY, useToolingApi: false, results: null });
     activeIndex = tabs.length - 1;
     loadActiveIntoUI();
     renderBar();
@@ -181,12 +189,14 @@ export function createQueryTabs(ctx) {
   /** @param {{ tabs?: QueryTab[], activeTab?: number }} state */
   function load(state) {
     const loaded = Array.isArray(state.tabs) && state.tabs.length > 0 ? state.tabs : null;
-    tabs = (loaded || [{ name: 'Query 1', query: '', useToolingApi: false }]).map((t) => ({
-      name: t.name,
-      query: t.query || '',
-      useToolingApi: !!t.useToolingApi,
-      results: null,
-    }));
+    tabs = (loaded || [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false }]).map(
+      (t) => ({
+        name: t.name,
+        query: t.query || '',
+        useToolingApi: !!t.useToolingApi,
+        results: null,
+      }),
+    );
     activeIndex =
       typeof state.activeTab === 'number' && state.activeTab >= 0 && state.activeTab < tabs.length
         ? state.activeTab

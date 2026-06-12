@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toCsv, toJson } from './export-format';
+import { toCsv, toJson, toQuotedInList } from './export-format';
 
 describe('toCsv', () => {
   it('builds a header row and data rows with CRLF endings', () => {
@@ -47,5 +47,28 @@ describe('toJson', () => {
 
   it('returns an empty array for no rows', () => {
     expect(JSON.parse(toJson(['A'], []))).toEqual([]);
+  });
+});
+
+describe('toQuotedInList', () => {
+  it('single-quotes and comma-joins values', () => {
+    expect(toQuotedInList(['001', '002', '003'])).toBe("'001', '002', '003'");
+  });
+
+  it('dedupes preserving first-seen order', () => {
+    expect(toQuotedInList(['a', 'b', 'a', 'c', 'b'])).toBe("'a', 'b', 'c'");
+  });
+
+  it('skips null and empty values', () => {
+    expect(toQuotedInList(['a', null, '', 'b'])).toBe("'a', 'b'");
+  });
+
+  it('escapes backslash then single-quote', () => {
+    expect(toQuotedInList(["O'Brien"])).toBe("'O\\'Brien'");
+    expect(toQuotedInList(['a\\b'])).toBe("'a\\\\b'");
+  });
+
+  it('returns an empty string for no usable values', () => {
+    expect(toQuotedInList([null, ''])).toBe('');
   });
 });

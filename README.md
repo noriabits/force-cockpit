@@ -66,7 +66,7 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 
 The editor supports:
 
-- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
+- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
 - **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
 - **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
 - **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
@@ -75,6 +75,7 @@ The results table supports:
 
 - **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
 - **Sort** — click any column header to sort; click again to reverse.
+- **Copy column as IN-list** — click the **⧉** button on a column header to copy that column's values (deduped, as `'a', 'b', 'c'`) to the clipboard, ready to paste into another query's `IN (…)` clause. Respects the current filter.
 - **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
 - **Record counts** — `SELECT COUNT() FROM …` queries show the count instead of "0 records".
 - **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.

@@ -94,9 +94,9 @@ Extension settings are managed via YAML config files, not VSCode's `settings.jso
   - `org-lifecycle.js` — `orgConnecting` / `orgConnected` / `orgDisconnected` handlers. Renders status dot, org info card, sensitive-org banner, broadcasts to `win.__featureHandlers[*].onOrgConnected/onOrgDisconnected`. Sets `win.__orgConnected` and `win.__currentOrg` globals for other modules. Also wires the Open-in-Browser button + `openInBrowserDone` handler.
   - `storage-bars.js` — `storageLimits` handler → renders Data/File storage bars.
   - `dist/webview/query-editor.js` — SOQL Quick Query. **Not a `media/modules/` IIFE** — it is an esbuild-bundled ES module whose source lives at `src/webview/query-editor/` (so it can `import` shared TS helpers). Entry `index.js` is an orchestrator that wires the sub-modules below, owns the run/clear/export handlers, the Tooling-API checkbox, and the message handler registrations; posts `loadQueryState` on load; exposes `win.__clearQueryResults` (clears results + the describe cache) for org-lifecycle to call on disconnect. Sub-modules:
-    - `results-table.js` — `createResultsTable(...)` owns the render state (cols/rows/filter/sort) and reuses `filterRows`/`sortRows` (`src/features/shared/view/table-sort.ts`) + `isSalesforceRecordId` (`src/utils/salesforce.ts`) for the global filter (`X of Y` counter), sortable columns, and clickable record-Id links. `SELECT COUNT()` (no rows, real `totalSize`) renders as `Count: N`.
-    - `export-format.ts` — pure `toCsv`/`toJson` over the current filtered+sorted view → `index.js` posts `exportQueryResult` to the host.
-    - `tabs.js` — `createQueryTabs(...)`: the query tab bar (`+ New`, per-tab `×`, double-click rename) with one shared textarea + Tooling checkbox per active tab. Result rows are **in-memory per tab**; name/query/useToolingApi persist via `saveQueryTabs`. Hydrated from `queryStateLoaded`. Uses `.query-tab*` classes (NOT the top-level `.tab`/`tabs.js` switcher).
+    - `results-table.js` — `createResultsTable(...)` owns the render state (cols/rows/filter/sort) and reuses `filterRows`/`sortRows` (`src/features/shared/view/table-sort.ts`) + `isSalesforceRecordId` (`src/utils/salesforce.ts`) for the global filter (`X of Y` counter), sortable columns, and clickable record-Id links. `SELECT COUNT()` (no rows, real `totalSize`) renders as `Count: N`. Each column header also has a `⧉` copy button (`.query-col-copy`, stops propagation so it doesn't sort) that copies that column's current view values as a quoted IN-list via `toQuotedInList` + `navigator.clipboard.writeText`.
+    - `export-format.ts` — pure `toCsv`/`toJson` over the current filtered+sorted view (→ `index.js` posts `exportQueryResult`), plus `toQuotedInList(values)` (`'a', 'b'` for an `IN (…)` clause: dedup, skip null/empty, escape `\`+`'`) used by the per-column copy button.
+    - `tabs.js` — `createQueryTabs(...)`: the query tab bar (`+ New`, per-tab `×`, double-click rename) with one shared textarea + Tooling checkbox per active tab. Result rows are **in-memory per tab**; name/query/useToolingApi persist via `saveQueryTabs`. Hydrated from `queryStateLoaded`. Uses `.query-tab*` classes (NOT the top-level `.tab`/`tabs.js` switcher). New tabs (and the first-load default) pre-fill `DEFAULT_QUERY = 'SELECT Id FROM '` with the caret at end — kept in sync with the same constant in `QueryStateStore.ts` (separate bundle).
     - `history.js` — `createQueryHistory(...)`: the `History ▾` dropdown (Recent auto-recorded + Saved named/removable) and `★ Save`. Posts `addQueryHistory` (after a successful run) / `saveSavedQueries`; re-renders on `queryHistoryUpdated` / `savedQueriesUpdated`.
     - `autocomplete/soql-context.ts` — pure `analyzeSoql(text, cursor)` → `{ kind: 'object'|'field'|'picklist'|'none', fromObject?, relationshipPath?, pickField?, token, replaceStart, replaceEnd }`. Unit-tested.
     - `autocomplete/describe-cache.js` — `createDescribeCache(...)`: coalesces `describeGlobal`/`describeSObject` host requests, caches projections, resolves the promise when `describeGlobalResult`/`describeSObjectResult` arrives (`onError` unblocks on `describeError`); `clear()` on disconnect.
@@ -170,7 +170,7 @@ The webview and extension host communicate via `postMessage`:
 
 | Tab | Status | Description |
 |-----|--------|-------------|
-| **Overview** | Working | Org info card, storage bars, SOQL Quick Query editor: multiple query tabs, recent + saved query history, SOQL autocomplete (objects/fields/relationships/picklists), Tooling-API toggle, and a filterable + sortable results table (clickable record-Id links, `SELECT COUNT()` support, export to CSV/JSON) |
+| **Overview** | Working | Org info card, storage bars, SOQL Quick Query editor: multiple query tabs (pre-filled `SELECT Id FROM `), recent + saved query history, SOQL autocomplete (objects/fields/relationships/picklists), Tooling-API toggle, and a filterable + sortable results table (clickable record-Id links, per-column copy-as-IN-list, `SELECT COUNT()` support, export to CSV/JSON) |
 | **Utils** | Active | Two sub-tabs: **Built-in** (Clone User, Reactivate OmniScript) + **Scripts** (YAML-loaded scripts from `force-cockpit/`) |
 | **Monitoring** | Active | SOQL-powered Chart.js dashboards loaded from `force-cockpit/monitoring/` YAML configs |
 
@@ -427,9 +427,13 @@ refreshInterval: 0         # seconds; 0 = manual refresh only
 ```bash
 npm run build        # copy-feature-assets + copy-vendor-assets + build-highlightjs + esbuild (extension.ts → dist/extension.js) + esbuild (yaml-scripts/view/index.js → ...) + esbuild (dashboard/view/index.js → ...)
 npm run watch        # same as build but in watch mode (for development)
-npm run compile      # tsc type-check only
+npm run compile      # tsc type-check only — runs BOTH configs (see below)
 npm run package      # build + vsce package → .vsix file
 ```
+
+**Two type-check configs** — `npm run compile` runs `tsc -p ./` then `tsc -p ./tsconfig.webview.json`:
+- `tsconfig.json` — the Node host (`src/**/*.ts`), `lib: ["ES2020"]`, no `allowJs`. It never sees the webview `.js` files.
+- `tsconfig.webview.json` — the browser-context webview/feature-view JS (`src/**/*.js`). `allowJs: true` + DOM lib + `types: []` (no `@types/node`, so `setTimeout` etc. resolve to the DOM signatures). `checkJs: false`, so only files carrying a `// @ts-check` pragma are actually checked (`labels.js`/bootstrap files are intentionally left unchecked) — this mirrors how the IDE checks these files. Without this second config, `// @ts-check` errors in webview JS would only surface in the editor, never in `npm run compile` or CI. Excluded from the VSIX via `.vscodeignore` (`**/tsconfig.*.json`).
 
 The extension uses **esbuild** to bundle all dependencies (including `jsforce`, `js-yaml`) into a single `dist/extension.js`. `chart.js` and `highlight.js` are NOT bundled by esbuild — they are webview vendor files served via `dist/vendor/` and loaded in the webview sandbox separately. This is critical — without bundling, the VSIX won't include `node_modules` and the extension fails to activate silently.
 

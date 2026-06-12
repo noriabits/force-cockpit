@@ -18,6 +18,7 @@
  * @param {number} idx
  * @param {FormInput[]} inputs
  * @param {any} labels
+ * @param {() => void} onChanged
  * @returns {{ nameInput: HTMLInputElement, labelInput: HTMLInputElement, typeSelect: HTMLSelectElement, reqLabel: HTMLLabelElement, removeBtn: HTMLButtonElement }}
  */
 function buildSharedInputHeader(input, idx, inputs, labels, onChanged) {

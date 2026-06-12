@@ -35,6 +35,9 @@ const KEY_SAVED = 'quickQuery.savedQueries';
 const HISTORY_CAP = 50;
 const SAVED_CAP = 50;
 
+// Keep in sync with DEFAULT_QUERY in src/webview/query-editor/tabs.js (separate bundle).
+const DEFAULT_QUERY = 'SELECT Id FROM ';
+
 /**
  * Persists Quick Query tabs, recent history, and saved queries in workspaceState.
  * Pure logic over an injected `Memento` so it can be unit-tested with a fake store.
@@ -46,7 +49,8 @@ export class QueryStateStore {
     const tabs = this.memento.get<QueryTab[]>(KEY_TABS, []);
     const activeTab = this.memento.get<number>(KEY_ACTIVE, 0);
     return {
-      tabs: tabs.length > 0 ? tabs : [{ name: 'Query 1', query: '', useToolingApi: false }],
+      tabs:
+        tabs.length > 0 ? tabs : [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false }],
       activeTab: tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length ? activeTab : 0,
       history: this.memento.get<QueryHistoryEntry[]>(KEY_HISTORY, []),
       savedQueries: this.memento.get<SavedQuery[]>(KEY_SAVED, []),

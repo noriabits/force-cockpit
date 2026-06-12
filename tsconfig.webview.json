@@ -1,0 +1,26 @@
+{
+  // Type-checks the browser-context webview / feature-view JS the same way the
+  // IDE does: DOM lib available + `allowJs` so the files are seen, but
+  // `checkJs: false` so only files with a `// @ts-check` pragma are actually
+  // checked (labels.js / bootstrap files are intentionally left unchecked).
+  // The base tsconfig.json (Node host, no DOM, no allowJs) never sees these
+  // files, which is why `// @ts-check` errors only showed up in the editor.
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // No ambient @types (e.g. @types/node) — these run in the browser sandbox,
+    // so setTimeout/etc. resolve to the DOM signatures, matching the IDE.
+    "types": [],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules", ".vscode-test", "src/**/*.test.ts"]
+}

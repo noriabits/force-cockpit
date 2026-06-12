@@ -27,6 +27,24 @@ export function toCsv(cols: string[], rows: Cell[][]): string {
   return lines.join('\r\n');
 }
 
+/**
+ * Build a single-quoted, comma-separated list of a column's values for pasting
+ * into a SOQL `IN (...)` clause, e.g. `'a', 'b'`. Skips null/empty, dedupes
+ * (first-seen order), and escapes backslash then single-quote (`\\`, `\'`).
+ */
+export function toQuotedInList(values: Cell[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    if (v == null || v === '') continue;
+    if (seen.has(v)) continue;
+    seen.add(v);
+    const escaped = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    out.push(`'${escaped}'`);
+  }
+  return out.join(', ');
+}
+
 /** Build a pretty-printed JSON array of `{ col: value }` objects. */
 export function toJson(cols: string[], rows: Cell[][]): string {
   const objects = rows.map((row) => {

@@ -5,6 +5,7 @@
 // gets the same sort + filter + clickable-Id behaviour as the monitoring tables.
 import { filterRows, sortRows } from '../../features/shared/view/table-sort';
 import { isSalesforceRecordId } from '../../utils/salesforce';
+import { toQuotedInList } from './export-format';
 
 /**
  * @typedef {Object} ResultsTableCtx
@@ -38,8 +39,11 @@ export function createResultsTable(ctx) {
     if (isSalesforceRecordId(cell)) {
       return `<a href="#" class="query-record-link" data-record-id="${escapeHtml(cell)}">${escapeHtml(cell)}</a>`;
     }
-    // JSON.stringify output of relationship objects/subquery arrays.
-    const trimmed = cell.trim();
+    // JSON.stringify output of relationship objects/subquery arrays. Re-wrap via
+    // String() because isSalesforceRecordId's `value is string` predicate narrows
+    // `cell` to `never` in this else branch (it subtracts `string` from the
+    // already-`string` `cell`) — a // @ts-check quirk; the value is still a string.
+    const trimmed = String(cell).trim();
     if (
       (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
       (trimmed.startsWith('[') && trimmed.endsWith(']'))
@@ -50,14 +54,37 @@ export function createResultsTable(ctx) {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  /**
+   * Copy a column's current (filtered + sorted) values as a quoted IN-list.
+   * @param {number} colIndex
+   * @param {HTMLButtonElement} btn
+   */
+  function copyColumn(colIndex, btn) {
+    const view = getView();
+    const list = toQuotedInList(view.rows.map((r) => r[colIndex]));
+    navigator.clipboard
+      .writeText(list)
+      .then(() => {
+        const prev = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => {
+          btn.textContent = prev;
+        }, 1200);
+      })
+      .catch(() => {});
+  }
+
   function renderHeader() {
     const tr = document.createElement('tr');
     cols.forEach((col, i) => {
       const th = document.createElement('th');
       th.className = 'query-sortable-th';
+
+      const label = document.createElement('span');
+      label.className = 'query-th-label';
       const arrow = sortCol === i ? (sortAsc ? ' ▲' : ' ▼') : '';
-      th.textContent = col + arrow;
-      th.addEventListener('click', () => {
+      label.textContent = col + arrow;
+      label.addEventListener('click', () => {
         if (sortCol === i) {
           sortAsc = !sortAsc;
         } else {
@@ -67,6 +94,19 @@ export function createResultsTable(ctx) {
         renderHeader();
         applyFilterAndSort();
       });
+
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'query-col-copy';
+      copyBtn.textContent = '⧉';
+      copyBtn.title = "Copy column as 'a', 'b', … for an IN (…) clause";
+      copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyColumn(i, copyBtn);
+      });
+
+      th.appendChild(label);
+      th.appendChild(copyBtn);
       tr.appendChild(th);
     });
     thead.innerHTML = '';

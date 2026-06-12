@@ -14,6 +14,7 @@ node_modules/**
 webpack.config.js
 vsc-extension-quickstart.md
 **/tsconfig.json
+**/tsconfig.*.json
 **/.eslintrc.json
 eslint.config.mjs
 .prettierrc

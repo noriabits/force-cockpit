@@ -23,7 +23,7 @@ export function createTableRenderer(ctx) {
 
   /**
    * @param {HTMLElement} tbody
-   * @param {string[][]} rows
+   * @param {(string | null)[][]} rows
    * @param {number} sortCol
    * @param {boolean} sortAsc
    */
