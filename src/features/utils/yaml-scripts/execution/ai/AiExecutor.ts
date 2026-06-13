@@ -51,7 +51,7 @@ const READ_SKILL_TOOL: ToolSpec = {
 const RUN_SOQL_TOOL: ToolSpec = {
   name: 'run_soql',
   description:
-    'Run a read-only SOQL query against the connected Salesforce org and get the matching ' +
+    'Run a SOQL query against the connected Salesforce org and get the matching ' +
     'records back as JSON. Use this only when you need additional data to complete the ' +
     'analysis. Only SELECT/SOQL queries are supported — no data can be modified.',
   inputSchema: {
@@ -71,7 +71,7 @@ const SYSTEM_PREAMBLE =
   'You are given the result of a fixed data-gathering step and a task. Analyse the data ' +
   'and respond with a clear, concise written analysis. You cannot modify data. ' +
   'Before writing any SOQL query, call describe_object to verify which fields are available ' +
-  '— never invent or guess field API names. If a read-only follow-up query tool is ' +
+  '— never invent or guess field API names. If a follow-up query tool is ' +
   'provided and you genuinely need more data, you may call it; otherwise answer directly ' +
   'from the data given. ' +
   `You have a hard budget of ${MAX_TOOL_ROUNDS} tool-call rounds for this task; spend them ` +
@@ -87,7 +87,7 @@ const SYSTEM_PREAMBLE =
  * Executes an `ai` script: runs the fixed gather step via ConnectionManager,
  * then drives the language model (through the injected gateway) to analyse the
  * result. The model never executes anything itself — it can only propose a
- * read-only `run_soql` follow-up which this executor runs on its behalf.
+ * `run_soql` follow-up which this executor runs on its behalf.
  */
 export class AiExecutor {
   constructor(
@@ -286,11 +286,11 @@ export class AiExecutor {
   private async runSoqlCall(soql: string, append: (s: string) => void): Promise<string> {
     const query = soql.trim();
     if (!query) return 'Error: no SOQL query provided.';
-    // Defense in depth: ConnectionManager.query only runs SOQL (read-only),
-    // but reject anything that does not look like a SELECT so the model cannot
-    // be coaxed into a non-query payload.
+    // Defense in depth: ConnectionManager.query only runs SOQL, but reject
+    // anything that does not look like a SELECT so the model cannot be coaxed
+    // into a non-query payload.
     if (!/^select\b/i.test(query)) {
-      return 'Error: only read-only SELECT/SOQL queries are allowed.';
+      return 'Error: only SELECT/SOQL queries are allowed.';
     }
     append(`\n\n[run_soql] ${query}\n`);
     try {

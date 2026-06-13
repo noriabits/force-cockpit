@@ -21,5 +21,5 @@ ai: |
   3. Support signal: volume/severity of recent cases and any concerning patterns (e.g. many high-priority or unresolved cases).
   4. An overall health rating (Green / Amber / Red) with a one-sentence justification.
 
-  Keep it concise and skimmable. If you need extra context (e.g. owner or contact details), use the read-only query tool.
+  Keep it concise and skimmable. If you need extra context (e.g. owner or contact details), use the follow-up query tool.
 allow-followup-queries: true

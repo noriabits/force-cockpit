@@ -195,7 +195,7 @@ gather:                             # the fixed data step — exactly one of soq
   soql: SELECT Id, Name, AnnualRevenue FROM Account WHERE Industry = '${industry}'
 ai: |                               # the analysis prompt (use ai-file: to load it from a file)
   Summarise the accounts below and flag anything unusual about their revenue.
-allow-followup-queries: true        # optional — lets the model run read-only SOQL for extra context
+allow-followup-queries: true        # optional — lets the model run follow-up SOQL for extra context
 skills:                             # optional — ids of skills the model may read on demand
   - data-quality-checklist
 ```
@@ -204,9 +204,9 @@ How it works and why it's safe:
 
 - **You control the data step.** The `gather` SOQL/Apex is yours and runs exactly as written — the model never writes or chooses Apex, so there is **no risk of it modifying data**.
 - **The model only analyses.** It receives the gathered data + your prompt and replies with text.
-- **Optional read-only follow-up.** With `allow-followup-queries: true`, the model may run additional **read-only SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
+- **Optional follow-up queries.** With `allow-followup-queries: true`, the model may run additional **SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
 - **Model picker.** Choose a specific model in the form (populated from the models Copilot offers) or leave it on **Auto**. Note: some models don't support follow-up queries — gather + analyse still works regardless.
-- **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a read-only tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
+- **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
 - **Schema is cached locally.** Before querying, the model checks object fields via a `describe_object` tool. Results are cached per workspace under `force-cockpit/.describe-cache/` (git-ignored, 2-week expiry) and shared with the Overview Quick Query autocomplete, so repeated lookups don't hit the org. Click the 🔄 refresh button next to the connection status to clear the cache and re-pull the latest schema.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.

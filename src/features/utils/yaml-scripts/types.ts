@@ -40,9 +40,9 @@ export interface YamlScript {
   model?: string;
   /** Fixed data-gathering step run before the analysis prompt. */
   gather?: GatherSpec;
-  /** When true, the model may call the read-only `run_soql` follow-up tool. */
+  /** When true, the model may call the `run_soql` follow-up tool. */
   allowFollowupQueries?: boolean;
-  /** Skill ids the model may pull in via the read-only `read_skill` tool. */
+  /** Skill ids the model may pull in via the `read_skill` tool. */
   skills?: string[];
   invalid?: true;
   error?: string;

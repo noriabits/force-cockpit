@@ -131,7 +131,7 @@ describe('AiExecutor', () => {
     expect(result.message).toContain('bad apex');
   });
 
-  it('offers and runs the read-only run_soql tool when follow-up is allowed', async () => {
+  it('offers and runs the run_soql tool when follow-up is allowed', async () => {
     const cm = makeCM();
     const gw = new FakeGateway([
       [
@@ -202,7 +202,9 @@ describe('AiExecutor', () => {
 
     expect(cm.query).toHaveBeenCalledTimes(1); // gather only — the DELETE never ran
     const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
-    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(/read-only/i);
+    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(
+      /only SELECT\/SOQL queries are allowed/i,
+    );
   });
 
   it('injects the skills catalogue + read_skill tool only when skills are selected', async () => {
