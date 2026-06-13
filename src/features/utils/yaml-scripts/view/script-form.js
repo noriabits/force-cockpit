@@ -278,11 +278,18 @@ export function createScriptForm(ctx) {
     );
   }
 
-  /** @param {Array<{ id: string; name?: string; description?: string }>} skills */
-  function setSkills(skills) {
-    // Preserve any in-progress checks across a re-fetch (mirrors the model picker).
-    const current = checkedSkillIds();
-    if (current.length) pendingSkillSelection = current;
+  /**
+   * @param {Array<{ id: string; name?: string; description?: string }>} skills
+   * @param {boolean} [preserve] When true (default), promote any in-progress DOM
+   *   checks to `pendingSkillSelection` (mirrors the model picker's re-fetch). Pass
+   *   `false` when initializing the form so a previously edited script's stale
+   *   checkboxes don't clobber the freshly assigned `pendingSkillSelection`.
+   */
+  function setSkills(skills, preserve = true) {
+    if (preserve) {
+      const current = checkedSkillIds();
+      if (current.length) pendingSkillSelection = current;
+    }
     formSkills.textContent = '';
     for (const s of skills) {
       const label = document.createElement('label');
@@ -377,7 +384,7 @@ export function createScriptForm(ctx) {
     formGatherFilePath.value = '';
     formAllowFollowup.checked = false;
     pendingSkillSelection = [];
-    setSkills([]);
+    setSkills([], false);
     updateContentPlaceholder();
     editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateSourceMode();
@@ -465,7 +472,7 @@ export function createScriptForm(ctx) {
     pendingModelSelection = script.model ?? 'auto';
     applyPendingModel();
     pendingSkillSelection = Array.isArray(script.skills) ? script.skills.slice() : [];
-    setSkills([]);
+    setSkills([], false);
     if (formType.value === 'ai') {
       vscode.postMessage({ type: 'listChatModels' });
       vscode.postMessage({ type: 'listSkills' });
