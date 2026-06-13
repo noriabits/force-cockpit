@@ -5,7 +5,7 @@ import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository'
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';
 import type { ChatMessage, LmGateway, ToolCall, ToolSpec } from './types';
 
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 10;
 
 function recordsToJson(records: unknown[]): string {
   return JSON.stringify(stripRecordAttributes(records), null, 2);
@@ -72,7 +72,15 @@ const SYSTEM_PREAMBLE =
   'Before writing any SOQL query, call describe_object to verify which fields are available ' +
   '— never invent or guess field API names. If a read-only follow-up query tool is ' +
   'provided and you genuinely need more data, you may call it; otherwise answer directly ' +
-  'from the data given.';
+  'from the data given. ' +
+  `You have a hard budget of ${MAX_TOOL_ROUNDS} tool-call rounds for this task; spend them ` +
+  'sparingly and prioritise the queries that matter most, because once the budget is ' +
+  'exhausted you must answer with whatever data you already have. ' +
+  'Finally, whenever you needed an on-demand follow-up query to complete the analysis, ' +
+  'end your response with a short "## Suggested gather improvements" section: describe how ' +
+  'the fixed gather step (its SOQL or Apex) could be extended so that the same data would ' +
+  'be available up front next time, avoiding the extra round trip. Omit this section if no ' +
+  'follow-up queries were needed.';
 
 /**
  * Executes an `ai` script: runs the fixed gather step via ConnectionManager,
