@@ -16,13 +16,22 @@ function makeExecutor(
   return new AiExecutor(cm, gw, skills, new DescribeService(cm), workspaceSearch);
 }
 
-/** A WorkspaceSearch stub returning canned results keyed by class name. */
-function fakeWorkspaceSearch(
-  results: Record<string, { path: string; content: string } | { error: string }> = {},
-): WorkspaceSearch {
+/**
+ * A WorkspaceSearch stub. `files` maps a relative path → content; searchFiles
+ * regex-matches the file name, readFile looks one up.
+ */
+function fakeWorkspaceSearch(files: Record<string, string> = {}): WorkspaceSearch {
+  const baseName = (p: string) => p.split('/').pop() ?? p;
   return {
-    findApexClass: async (className: string) =>
-      results[className] ?? { error: `no Apex class or trigger named "${className}" found` },
+    searchFiles: async (pattern: string) => {
+      const re = new RegExp(pattern, 'i');
+      const paths = Object.keys(files).filter((p) => re.test(baseName(p)));
+      return { paths, truncated: false };
+    },
+    readFile: async (relPath: string) =>
+      relPath in files
+        ? { path: relPath, content: files[relPath] }
+        : { error: `"${relPath}" not found` },
   };
 }
 
@@ -280,32 +289,44 @@ describe('AiExecutor', () => {
     );
   });
 
-  it('does not offer read_apex_class unless the flag and a workspace search are present', async () => {
+  it('does not offer the workspace-file tools unless the flag and a workspace search are present', async () => {
     // Flag off, search present → absent.
     const gw1 = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
     await makeExecutor(makeCM(), gw1, fakeSkills(), fakeWorkspaceSearch()).execute(aiScript());
-    expect(gw1.sends[0].tools.map((t) => t.name)).not.toContain('read_apex_class');
+    const names1 = gw1.sends[0].tools.map((t) => t.name);
+    expect(names1).not.toContain('search_workspace_files');
+    expect(names1).not.toContain('read_workspace_file');
 
     // Flag on, no search wired → still absent (cannot run without it).
     const gw2 = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
     await makeExecutor(makeCM(), gw2, fakeSkills()).execute(
       aiScript({ allowReadWorkspaceFiles: true }),
     );
-    expect(gw2.sends[0].tools.map((t) => t.name)).not.toContain('read_apex_class');
+    const names2 = gw2.sends[0].tools.map((t) => t.name);
+    expect(names2).not.toContain('search_workspace_files');
+    expect(names2).not.toContain('read_workspace_file');
   });
 
-  it('offers read_apex_class and feeds the class source back as a tool result', async () => {
+  it('offers the workspace-file tools and feeds search results + file source back', async () => {
     const search = fakeWorkspaceSearch({
-      OrderService: {
-        path: 'force-app/main/default/classes/OrderService.cls',
-        content: 'public class OrderService {}',
-      },
+      'force-app/main/default/classes/OrderSelector.cls': 'public class OrderSelector {}',
+      'force-app/main/default/classes/AccountSelector.cls': 'public class AccountSelector {}',
     });
     const gw = new FakeGateway([
       [
         {
           kind: 'toolCall',
-          call: { callId: 'a1', name: 'read_apex_class', input: { className: 'OrderService' } },
+          call: { callId: 's1', name: 'search_workspace_files', input: { pattern: 'Selector' } },
+        },
+      ],
+      [
+        {
+          kind: 'toolCall',
+          call: {
+            callId: 'r1',
+            name: 'read_workspace_file',
+            input: { path: 'force-app/main/default/classes/OrderSelector.cls' },
+          },
         },
       ],
       [{ kind: 'text', text: 'done' }],
@@ -314,20 +335,59 @@ describe('AiExecutor', () => {
       aiScript({ allowReadWorkspaceFiles: true }),
     );
 
-    expect(gw.sends[0].tools.map((t) => t.name)).toContain('read_apex_class');
-    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
-    const content = toolResult && 'content' in toolResult ? toolResult.content : '';
-    expect(content).toContain('public class OrderService {}');
-    expect(content).toContain('OrderService.cls');
+    const names = gw.sends[0].tools.map((t) => t.name);
+    expect(names).toContain('search_workspace_files');
+    expect(names).toContain('read_workspace_file');
+
+    // Round 2: the search result lists both matching paths.
+    const searchResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    const searchContent = searchResult && 'content' in searchResult ? searchResult.content : '';
+    expect(searchContent).toContain('OrderSelector.cls');
+    expect(searchContent).toContain('AccountSelector.cls');
+
+    // Round 3: the read result carries the file content.
+    const readResult = gw.sends[2].messages.find(
+      (m) => m.role === 'toolResult' && m.callId === 'r1',
+    );
+    const readContent = readResult && 'content' in readResult ? readResult.content : '';
+    expect(readContent).toContain('public class OrderSelector {}');
     expect(result.success).toBe(true);
   });
 
-  it('feeds back an error when the requested class is not found', async () => {
+  it('matches workspace files by regex against the file name', async () => {
+    const search = fakeWorkspaceSearch({
+      'classes/OrderSelector.cls': 'a',
+      'classes/OrderService.cls': 'b',
+    });
     const gw = new FakeGateway([
       [
         {
           kind: 'toolCall',
-          call: { callId: 'a1', name: 'read_apex_class', input: { className: 'Nope' } },
+          call: {
+            callId: 's1',
+            name: 'search_workspace_files',
+            input: { pattern: 'Selector\\.cls$' },
+          },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    await makeExecutor(makeCM(), gw, fakeSkills(), search).execute(
+      aiScript({ allowReadWorkspaceFiles: true }),
+    );
+
+    const searchResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    const content = searchResult && 'content' in searchResult ? searchResult.content : '';
+    expect(content).toContain('OrderSelector.cls');
+    expect(content).not.toContain('OrderService.cls');
+  });
+
+  it('feeds back an error when the requested file is not found', async () => {
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 'r1', name: 'read_workspace_file', input: { path: 'Nope.cls' } },
         },
       ],
       [{ kind: 'text', text: 'done' }],
@@ -337,9 +397,7 @@ describe('AiExecutor', () => {
     );
 
     const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
-    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(
-      /not found|no Apex/i,
-    );
+    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(/not found/i);
   });
 
   it('returns cancelled when the signal is already aborted', async () => {

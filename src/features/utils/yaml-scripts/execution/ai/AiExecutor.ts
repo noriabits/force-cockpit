@@ -66,22 +66,47 @@ const RUN_SOQL_TOOL: ToolSpec = {
   },
 };
 
-const READ_APEX_CLASS_TOOL: ToolSpec = {
-  name: 'read_apex_class',
+const SEARCH_WORKSPACE_FILES_TOOL: ToolSpec = {
+  name: 'search_workspace_files',
   description:
-    'Reads the source of an Apex class or trigger from the workspace by name. ' +
-    'Use this to inspect code referenced in stack traces. ' +
-    'Pass the class name exactly as it appears in the stack trace (without file extension).',
+    'Search the workspace for files by name. `pattern` is a case-insensitive ' +
+    'JavaScript regular expression matched against the file name — a plain word ' +
+    'works as a substring match (e.g. "Selector" finds OrderSelector.cls, ' +
+    'AccountSelector.cls), or use regex syntax for more control (e.g. ' +
+    '"^Account.*\\.cls$"). Returns a capped list of matching file paths (Apex ' +
+    'classes/triggers, objects, fields, flows, LWC, permission sets — any ' +
+    'Salesforce metadata or source file, excluding anything in .gitignore). Use ' +
+    'this to discover files before reading them with read_workspace_file.',
   inputSchema: {
     type: 'object',
     properties: {
-      className: {
+      pattern: {
         type: 'string',
         description:
-          'The Apex class or trigger name without extension, e.g. "OrderService" or "AccountTrigger".',
+          'A case-insensitive regular expression matched against the file name, e.g. "Selector" or "^Account.*\\.cls$".',
       },
     },
-    required: ['className'],
+    required: ['pattern'],
+  },
+};
+
+const READ_WORKSPACE_FILE_TOOL: ToolSpec = {
+  name: 'read_workspace_file',
+  description:
+    'Read the full content of a single workspace file by its workspace-relative ' +
+    'path (typically one returned by search_workspace_files). Use this to inspect ' +
+    'code referenced in stack traces or any Salesforce metadata file you need. ' +
+    'Files excluded by .gitignore cannot be read.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      path: {
+        type: 'string',
+        description:
+          'The workspace-relative path to the file, e.g. "force-app/main/default/classes/OrderSelector.cls".',
+      },
+    },
+    required: ['path'],
   },
 };
 
@@ -151,7 +176,9 @@ export class AiExecutor {
         DESCRIBE_OBJECT_TOOL,
         ...(selectedSkills.length ? [READ_SKILL_TOOL] : []),
         ...(script.allowFollowupQueries ? [RUN_SOQL_TOOL] : []),
-        ...(script.allowReadWorkspaceFiles && this.workspaceSearch ? [READ_APEX_CLASS_TOOL] : []),
+        ...(script.allowReadWorkspaceFiles && this.workspaceSearch
+          ? [SEARCH_WORKSPACE_FILES_TOOL, READ_WORKSPACE_FILE_TOOL]
+          : []),
       ];
 
       append('# Analysis\n');
@@ -264,27 +291,47 @@ export class AiExecutor {
     if (call.name === 'read_skill') {
       return this.runReadSkillCall(String(call.input.skillId ?? ''), append);
     }
-    if (call.name === 'read_apex_class') {
-      return this.runReadApexClassCall(String(call.input.className ?? ''), append);
+    if (call.name === 'search_workspace_files') {
+      return this.runSearchWorkspaceFilesCall(String(call.input.pattern ?? ''), append);
+    }
+    if (call.name === 'read_workspace_file') {
+      return this.runReadWorkspaceFileCall(String(call.input.path ?? ''), append);
     }
     return `Error: unknown tool "${call.name}".`;
   }
 
-  private async runReadApexClassCall(
-    className: string,
+  private async runSearchWorkspaceFilesCall(
+    pattern: string,
     append: (s: string) => void,
   ): Promise<string> {
-    const name = className.trim();
-    if (!name) return 'Error: no class name provided.';
+    const p = pattern.trim();
+    if (!p) return 'Error: no search pattern provided.';
     if (!this.workspaceSearch) return 'Error: workspace file access is not available.';
-    append(`\n\n[read_apex_class] ${name}\n`);
-    const result = await this.workspaceSearch.findApexClass(name);
+    append(`\n\n[search_workspace_files] /${p}/\n`);
+    const result = await this.workspaceSearch.searchFiles(p);
     if ('error' in result) {
       append(`→ error: ${result.error}\n\n`);
-      return `Error reading Apex class: ${result.error}`;
+      return `Error searching workspace files: ${result.error}`;
+    }
+    append(`→ ${result.paths.length} match(es)${result.truncated ? ' (truncated)' : ''}\n\n`);
+    return JSON.stringify({ pattern: p, paths: result.paths, truncated: result.truncated });
+  }
+
+  private async runReadWorkspaceFileCall(
+    filePath: string,
+    append: (s: string) => void,
+  ): Promise<string> {
+    const rel = filePath.trim();
+    if (!rel) return 'Error: no file path provided.';
+    if (!this.workspaceSearch) return 'Error: workspace file access is not available.';
+    append(`\n\n[read_workspace_file] ${rel}\n`);
+    const result = await this.workspaceSearch.readFile(rel);
+    if ('error' in result) {
+      append(`→ error: ${result.error}\n\n`);
+      return `Error reading workspace file: ${result.error}`;
     }
     append(`→ ${result.content.length} char(s) from ${result.path}\n\n`);
-    return JSON.stringify({ className: name, path: result.path, content: result.content });
+    return JSON.stringify({ path: result.path, content: result.content });
   }
 
   private runReadSkillCall(skillId: string, append: (s: string) => void): string {

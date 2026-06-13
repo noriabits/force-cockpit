@@ -54,5 +54,14 @@ export interface LmGateway {
 }
 
 export interface WorkspaceSearch {
-  findApexClass(className: string): Promise<{ path: string; content: string } | { error: string }>;
+  /**
+   * Find workspace files whose name matches `pattern` (a case-insensitive
+   * regular expression). Git-ignored files are never returned. `truncated` is
+   * set when the result list was capped.
+   */
+  searchFiles(
+    pattern: string,
+  ): Promise<{ paths: string[]; truncated: boolean } | { error: string }>;
+  /** Read a single workspace file by its relative path (git-ignored paths are refused). */
+  readFile(relPath: string): Promise<{ path: string; content: string } | { error: string }>;
 }
