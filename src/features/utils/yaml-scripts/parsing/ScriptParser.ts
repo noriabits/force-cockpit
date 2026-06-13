@@ -29,6 +29,7 @@ type ParsedYamlDoc = {
   model?: string;
   gather?: ParsedGather;
   'allow-followup-queries'?: boolean;
+  skills?: unknown;
 };
 
 interface InvalidBase {
@@ -97,7 +98,18 @@ export class ScriptParser {
         : {}),
       ...(gather ? { gather } : {}),
       ...(type === 'ai' && doc['allow-followup-queries'] ? { allowFollowupQueries: true } : {}),
+      ...(type === 'ai' && this.parseSkills(doc.skills).length
+        ? { skills: this.parseSkills(doc.skills) }
+        : {}),
     };
+  }
+
+  /** Normalise the `skills:` field to a list of non-empty string ids. */
+  private parseSkills(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
+      .map((s) => s.trim());
   }
 
   // ── Validation / detection / resolution ─────────────────────────────────

@@ -73,6 +73,31 @@
   color: var(--vscode-descriptionForeground);
 }
 
+.yaml-form-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+}
+
+.yaml-form-skill-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.yaml-form-skill-option input {
+  flex: 0 0 auto;
+}
+
 .yaml-log-viewer {
   margin-top: 10px;
 }

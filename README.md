@@ -196,6 +196,8 @@ gather:                             # the fixed data step — exactly one of soq
 ai: |                               # the analysis prompt (use ai-file: to load it from a file)
   Summarise the accounts below and flag anything unusual about their revenue.
 allow-followup-queries: true        # optional — lets the model run read-only SOQL for extra context
+skills:                             # optional — ids of skills the model may read on demand
+  - data-quality-checklist
 ```
 
 How it works and why it's safe:
@@ -204,6 +206,7 @@ How it works and why it's safe:
 - **The model only analyses.** It receives the gathered data + your prompt and replies with text.
 - **Optional read-only follow-up.** With `allow-followup-queries: true`, the model may run additional **read-only SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
 - **Model picker.** Choose a specific model in the form (populated from the models Copilot offers) or leave it on **Auto**. Note: some models don't support follow-up queries — gather + analyse still works regardless.
+- **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a read-only tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
 
@@ -416,16 +419,20 @@ Only keys present in a layer override the previous layer — omitted keys keep t
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `apiVersion` | string | `"65.0"` | Salesforce API version for all API calls |
+| `apiVersion` | string | `"66.0"` | Salesforce API version for all API calls |
 | `protectedSandboxes` | string[] | `[]` | Sandbox org names that require confirmation before destructive actions |
+| `skillsPaths` | string[] | `[".claude/skills", ".github/skills"]` | Workspace-relative folders scanned for Agent Skills attachable to AI scripts |
 
 ### Example `force-cockpit/config.yaml`
 
 ```yaml
-apiVersion: "65.0"
+apiVersion: "66.0"
 protectedSandboxes:
   - staging
   - uat
+skillsPaths:
+  - .claude/skills
+  - .github/skills
 ```
 
 ### VSCode setting

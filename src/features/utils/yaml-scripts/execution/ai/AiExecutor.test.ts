@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionManager } from '../../../../../salesforce/connection';
+import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { YamlScript } from '../../types';
 import { AiExecutor } from './AiExecutor';
 import type { ChatEvent, ChatRequest, LmGateway } from './types';
+
+/** A SkillsRepository stub: a catalogue + a body lookup, no filesystem. */
+function fakeSkills(list: SkillInfo[] = [], bodies: Record<string, string> = {}): SkillsRepository {
+  return {
+    listSkills: () => list,
+    readSkill: (id: string) => bodies[id] ?? null,
+  } as unknown as SkillsRepository;
+}
 
 /** A scriptable LmGateway: each entry in `scripted` is the events for one send() call. */
 class FakeGateway implements LmGateway {
@@ -74,7 +83,7 @@ describe('AiExecutor', () => {
       ],
     ]);
     const chunks: string[] = [];
-    const result = await new AiExecutor(cm, gw).execute(aiScript(), undefined, (c) =>
+    const result = await new AiExecutor(cm, gw, fakeSkills()).execute(aiScript(), undefined, (c) =>
       chunks.push(c),
     );
 
@@ -90,7 +99,7 @@ describe('AiExecutor', () => {
   it('runs an apex gather and surfaces its debug output', async () => {
     const cm = makeCM();
     const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
-    const result = await new AiExecutor(cm, gw).execute(
+    const result = await new AiExecutor(cm, gw, fakeSkills()).execute(
       aiScript({ gather: { kind: 'apex', value: 'System.debug(1);' } }),
     );
     expect(cm.executeAnonymousWithDebugLog).toHaveBeenCalled();
@@ -109,7 +118,7 @@ describe('AiExecutor', () => {
         debugLog: '',
       })),
     } as unknown as Partial<ConnectionManager>);
-    const result = await new AiExecutor(cm, new FakeGateway([[]])).execute(
+    const result = await new AiExecutor(cm, new FakeGateway([[]]), fakeSkills()).execute(
       aiScript({ gather: { kind: 'apex', value: 'x' } }),
     );
     expect(result.success).toBe(false);
@@ -127,7 +136,9 @@ describe('AiExecutor', () => {
       ],
       [{ kind: 'text', text: 'done' }],
     ]);
-    const result = await new AiExecutor(cm, gw).execute(aiScript({ allowFollowupQueries: true }));
+    const result = await new AiExecutor(cm, gw, fakeSkills()).execute(
+      aiScript({ allowFollowupQueries: true }),
+    );
 
     expect(cm.query).toHaveBeenCalledTimes(2); // gather + follow-up
     expect(cm.query).toHaveBeenLastCalledWith('SELECT Id FROM Contact');
@@ -144,7 +155,7 @@ describe('AiExecutor', () => {
 
   it('offers only describe_object when follow-up is disabled', async () => {
     const gw = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
-    await new AiExecutor(makeCM(), gw).execute(aiScript());
+    await new AiExecutor(makeCM(), gw, fakeSkills()).execute(aiScript());
     expect(gw.sends[0].tools).toHaveLength(1);
     expect(gw.sends[0].tools[0].name).toBe('describe_object');
   });
@@ -160,7 +171,7 @@ describe('AiExecutor', () => {
       ],
       [{ kind: 'text', text: 'done' }],
     ]);
-    const result = await new AiExecutor(cm, gw).execute(aiScript());
+    const result = await new AiExecutor(cm, gw, fakeSkills()).execute(aiScript());
 
     expect(cm.describeSObject).toHaveBeenCalledWith('Account');
     expect(result.success).toBe(true);
@@ -181,17 +192,75 @@ describe('AiExecutor', () => {
       ],
       [{ kind: 'text', text: 'understood' }],
     ]);
-    await new AiExecutor(cm, gw).execute(aiScript({ allowFollowupQueries: true }));
+    await new AiExecutor(cm, gw, fakeSkills()).execute(aiScript({ allowFollowupQueries: true }));
 
     expect(cm.query).toHaveBeenCalledTimes(1); // gather only — the DELETE never ran
     const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
     expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(/read-only/i);
   });
 
+  it('injects the skills catalogue + read_skill tool only when skills are selected', async () => {
+    const skills = fakeSkills(
+      [
+        { id: 'data-quality', name: 'Data Quality', description: 'check completeness' },
+        { id: 'naming', name: 'Naming', description: 'naming rules' },
+      ],
+      { 'data-quality': 'DQ body', naming: 'NAMING body' },
+    );
+    const gw = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
+    await new AiExecutor(makeCM(), gw, skills).execute(aiScript({ skills: ['data-quality'] }));
+
+    // Only the selected skill appears in the catalogue, with its description.
+    expect(gw.sends[0].messages[0].text).toContain('## Available skills');
+    expect(gw.sends[0].messages[0].text).toContain('data-quality: check completeness');
+    expect(gw.sends[0].messages[0].text).not.toContain('naming: naming rules');
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('read_skill');
+  });
+
+  it('does not offer read_skill when no skills are selected', async () => {
+    const gw = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
+    await new AiExecutor(makeCM(), gw, fakeSkills()).execute(aiScript());
+    expect(gw.sends[0].messages[0].text).not.toContain('## Available skills');
+    expect(gw.sends[0].tools.map((t) => t.name)).not.toContain('read_skill');
+  });
+
+  it('reads a skill body and feeds it back as a tool result', async () => {
+    const skills = fakeSkills([{ id: 'dq', name: 'DQ', description: 'd' }], {
+      dq: 'THE SKILL BODY',
+    });
+    const gw = new FakeGateway([
+      [{ kind: 'toolCall', call: { callId: 's1', name: 'read_skill', input: { skillId: 'dq' } } }],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    await new AiExecutor(makeCM(), gw, skills).execute(aiScript({ skills: ['dq'] }));
+
+    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toBe('THE SKILL BODY');
+  });
+
+  it('feeds back an error for an unknown skill id', async () => {
+    const skills = fakeSkills([{ id: 'dq', name: 'DQ', description: 'd' }], { dq: 'body' });
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 's1', name: 'read_skill', input: { skillId: 'nope' } },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    await new AiExecutor(makeCM(), gw, skills).execute(aiScript({ skills: ['dq'] }));
+
+    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(
+      /unknown skill/i,
+    );
+  });
+
   it('returns cancelled when the signal is already aborted', async () => {
     const ac = new AbortController();
     ac.abort();
-    const result = await new AiExecutor(makeCM(), new FakeGateway([[]])).execute(
+    const result = await new AiExecutor(makeCM(), new FakeGateway([[]]), fakeSkills()).execute(
       aiScript(),
       ac.signal,
     );

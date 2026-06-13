@@ -220,6 +220,14 @@ describe('ScriptParser', () => {
       expect(result?.gather).toEqual({ kind: 'apex', value: 'System.debug(1);' });
       expect(result?.model).toBeUndefined();
       expect(result?.allowFollowupQueries).toBeUndefined();
+      expect(result?.skills).toBeUndefined();
+    });
+
+    it('parses a skills list, trimming and dropping empty entries', () => {
+      const result = parseYaml(
+        `name: A\ngather:\n  soql: SELECT Id FROM Account\nai: Do it.\nskills:\n  - data-quality\n  - '  naming  '\n  - ''`,
+      );
+      expect(result?.skills).toEqual(['data-quality', 'naming']);
     });
 
     it('resolves an apex-file gather step and keeps the path', () => {

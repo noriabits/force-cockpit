@@ -52,6 +52,8 @@ window.YamlScriptsLabels = {
   placeholderGatherApex: 'System.debug(JSON.serialize([SELECT Id, Name FROM Account LIMIT 50]));',
   labelGatherFilePath: 'Apex file path',
   labelAllowFollowup: 'Allow read-only follow-up SOQL queries',
+  labelSkills: 'Skills',
+  skillsHintNone: 'No skills found in .claude/skills or .github/skills.',
   errorGatherRequired: 'The gather step (SOQL or Apex) is required for AI scripts.',
   btnEdit: '✏',
   btnDelete: 'Delete',

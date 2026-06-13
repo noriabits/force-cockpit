@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import type { LmGateway } from './execution/ai/types';
+import { SkillsRepository } from './skills/SkillsRepository';
+
+// These tests never execute AI scripts, so an empty skills repo suffices.
+function makeSkills(): SkillsRepository {
+  return new SkillsRepository('', []);
+}
 
 function makeMock(): ConnectionManager {
   return {
@@ -40,6 +46,7 @@ function makeService(
       workspaceRoot: paths.workspaceRoot ?? '',
     },
     makeGateway(),
+    makeSkills(),
   );
 }
 
@@ -325,6 +332,7 @@ describe('YamlScriptsService — executeScript orchestration', () => {
         workspaceRoot: '',
       },
       makeGateway(),
+      makeSkills(),
     );
     const scripts = [
       {

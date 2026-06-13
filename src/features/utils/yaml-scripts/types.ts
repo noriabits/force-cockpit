@@ -42,6 +42,8 @@ export interface YamlScript {
   gather?: GatherSpec;
   /** When true, the model may call the read-only `run_soql` follow-up tool. */
   allowFollowupQueries?: boolean;
+  /** Skill ids the model may pull in via the read-only `read_skill` tool. */
+  skills?: string[];
   invalid?: true;
   error?: string;
 }
@@ -69,4 +71,5 @@ export interface SaveScriptInput {
   model?: string;
   gather?: GatherSpec;
   allowFollowupQueries?: boolean;
+  skills?: string[];
 }

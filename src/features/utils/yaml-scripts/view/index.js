@@ -395,6 +395,8 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
     },
     listChatModelsResult: (data) => scriptForm.setModels(data?.models ?? []),
     listChatModelsError: () => scriptForm.setModels([]),
+    listSkillsResult: (data) => scriptForm.setSkills(data?.skills ?? []),
+    listSkillsError: () => scriptForm.setSkills([]),
   };
 
   // ── Feature registration ──────────────────────────────────────────────────

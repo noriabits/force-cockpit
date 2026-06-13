@@ -13,6 +13,7 @@ import { JsExecutor } from './execution/JsExecutor';
 import { AiExecutor } from './execution/ai/AiExecutor';
 import type { LmGateway } from './execution/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
+import type { SkillsRepository } from './skills/SkillsRepository';
 import type { ExecuteScriptResult, SaveScriptInput, YamlScript } from './types';
 
 export type { ExecuteScriptResult, SaveScriptInput, ScriptInput, YamlScript } from './types';
@@ -36,6 +37,7 @@ export class YamlScriptsService {
     private readonly connectionManager: ConnectionManager,
     private readonly paths: ServicePaths,
     gateway: LmGateway,
+    skills: SkillsRepository,
   ) {
     this.parser = new ScriptParser(paths.workspaceRoot);
     this.repo = new ScriptRepository({
@@ -46,7 +48,7 @@ export class YamlScriptsService {
     this.apex = new ApexExecutor(connectionManager);
     this.command = new CommandExecutor(paths.workspaceRoot);
     this.js = new JsExecutor(connectionManager, paths.workspaceRoot);
-    this.ai = new AiExecutor(connectionManager, gateway);
+    this.ai = new AiExecutor(connectionManager, gateway, skills);
   }
 
   async loadScripts(): Promise<YamlScript[]> {

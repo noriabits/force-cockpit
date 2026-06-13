@@ -5,11 +5,14 @@ import * as yaml from 'js-yaml';
 export interface CockpitConfig {
   apiVersion: string;
   protectedSandboxes: string[];
+  /** Workspace-relative dirs scanned for Agent Skills (AI scripts), in priority order. */
+  skillsPaths: string[];
 }
 
 const DEFAULTS: CockpitConfig = {
-  apiVersion: '65.0',
+  apiVersion: '66.0',
   protectedSandboxes: [],
+  skillsPaths: ['.claude/skills', '.github/skills'],
 };
 
 export function loadConfig(extensionPath: string, userBasePath: string): CockpitConfig {
@@ -40,6 +43,9 @@ function mergeFromFile(config: CockpitConfig, filePath: string): void {
       config.protectedSandboxes = obj.protectedSandboxes.filter(
         (s): s is string => typeof s === 'string',
       );
+    }
+    if (Array.isArray(obj.skillsPaths)) {
+      config.skillsPaths = obj.skillsPaths.filter((s): s is string => typeof s === 'string');
     }
   } catch {
     // Malformed YAML or read error — silently use existing config values

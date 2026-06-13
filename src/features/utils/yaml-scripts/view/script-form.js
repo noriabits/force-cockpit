@@ -114,6 +114,10 @@ export function createScriptForm(ctx) {
   const formAllowFollowup = /** @type {HTMLInputElement} */ (
     document.getElementById('yaml-form-allow-followup')
   );
+  const formSkills = /** @type {HTMLElement} */ (document.getElementById('yaml-form-skills'));
+  const formSkillsHint = /** @type {HTMLElement} */ (
+    document.getElementById('yaml-form-skills-hint')
+  );
   /** Which file picker is in flight: the prompt file, or the gather Apex file. */
   let pendingBrowseTarget = 'prompt';
 
@@ -188,6 +192,8 @@ export function createScriptForm(ctx) {
   formGatherBrowseBtn.textContent = L.btnBrowse;
   const followupLabel = document.getElementById('yaml-form-followup-label');
   if (followupLabel) followupLabel.textContent = L.labelAllowFollowup;
+  const skillsLabel = document.getElementById('yaml-form-skills-label');
+  if (skillsLabel) skillsLabel.textContent = L.labelSkills;
 
   // ── Form inputs management ───────────────────────────────────────────────
 
@@ -261,7 +267,46 @@ export function createScriptForm(ctx) {
     }
   }
 
-  /** Build the ai-only save payload fields (model + gather + follow-up flag). */
+  // ── Skills picker (populated from the async listSkills round-trip) ─────────
+  /** @type {string[]} */
+  let pendingSkillSelection = [];
+
+  /** Currently checked skill ids in the DOM. */
+  function checkedSkillIds() {
+    return Array.from(formSkills.querySelectorAll('input[type="checkbox"]:checked')).map(
+      (el) => /** @type {HTMLInputElement} */ (el).value,
+    );
+  }
+
+  /** @param {Array<{ id: string; name?: string; description?: string }>} skills */
+  function setSkills(skills) {
+    // Preserve any in-progress checks across a re-fetch (mirrors the model picker).
+    const current = checkedSkillIds();
+    if (current.length) pendingSkillSelection = current;
+    formSkills.textContent = '';
+    for (const s of skills) {
+      const label = document.createElement('label');
+      label.className = 'yaml-form-skill-option';
+      label.title = s.description || '';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = s.id;
+      cb.checked = pendingSkillSelection.includes(s.id);
+      const span = document.createElement('span');
+      span.textContent = s.name || s.id;
+      label.appendChild(cb);
+      label.appendChild(span);
+      formSkills.appendChild(label);
+    }
+    const none = skills.length === 0;
+    formSkills.style.display = none ? 'none' : '';
+    if (formSkillsHint) {
+      formSkillsHint.style.display = none ? '' : 'none';
+      formSkillsHint.textContent = none ? L.skillsHintNone : '';
+    }
+  }
+
+  /** Build the ai-only save payload fields (model + gather + skills + follow-up flag). */
   function buildAiFields() {
     const kind = formGatherType.value;
     /** @type {{ kind: 'soql' | 'apex' | 'apex-file'; value: string; file?: string }} */
@@ -273,9 +318,11 @@ export function createScriptForm(ctx) {
     } else {
       gather = { kind: 'soql', value: formGatherContent.value };
     }
+    const skills = checkedSkillIds();
     return {
       model: formModel.value || 'auto',
       gather,
+      ...(skills.length ? { skills } : {}),
       ...(formAllowFollowup.checked ? { allowFollowupQueries: true } : {}),
     };
   }
@@ -329,6 +376,8 @@ export function createScriptForm(ctx) {
     formGatherContent.value = '';
     formGatherFilePath.value = '';
     formAllowFollowup.checked = false;
+    pendingSkillSelection = [];
+    setSkills([]);
     updateContentPlaceholder();
     editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateSourceMode();
@@ -369,7 +418,7 @@ export function createScriptForm(ctx) {
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; skills?: string[]; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
@@ -411,11 +460,16 @@ export function createScriptForm(ctx) {
     if (formFormatJson) formFormatJson.checked = script.formatJson ?? false;
     updateApexDefaultsVisibility();
     updateAiVisibility();
-    // Re-apply the model once the (async) model list arrives, in case the
-    // saved model isn't in the dropdown yet.
+    // Re-apply the model + skills once the (async) lists arrive, in case the
+    // saved selections aren't rendered yet.
     pendingModelSelection = script.model ?? 'auto';
     applyPendingModel();
-    if (formType.value === 'ai') vscode.postMessage({ type: 'listChatModels' });
+    pendingSkillSelection = Array.isArray(script.skills) ? script.skills.slice() : [];
+    setSkills([]);
+    if (formType.value === 'ai') {
+      vscode.postMessage({ type: 'listChatModels' });
+      vscode.postMessage({ type: 'listSkills' });
+    }
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
     folderCombobox.refresh();
@@ -441,7 +495,10 @@ export function createScriptForm(ctx) {
     updateApexDefaultsVisibility();
     updateAiVisibility();
     updateSaveBtn();
-    if (formType.value === 'ai') vscode.postMessage({ type: 'listChatModels' });
+    if (formType.value === 'ai') {
+      vscode.postMessage({ type: 'listChatModels' });
+      vscode.postMessage({ type: 'listSkills' });
+    }
   });
   formSource.addEventListener('change', updateSourceMode);
   formSource.addEventListener('change', updateSaveBtn);
@@ -613,6 +670,10 @@ export function createScriptForm(ctx) {
     /** @param {Array<{ id: string; name?: string; family?: string }>} models */
     setModels(models) {
       setModels(models);
+    },
+    /** @param {Array<{ id: string; name?: string; description?: string }>} skills */
+    setSkills(skills) {
+      setSkills(skills);
     },
   };
 }

@@ -167,6 +167,7 @@ export class ScriptRepository {
     if (input.type === 'ai') {
       if (input.gather) data.gather = this.buildGatherYaml(input.gather);
       if (input.allowFollowupQueries) data['allow-followup-queries'] = true;
+      if (input.skills?.length) data.skills = input.skills;
     }
     if (input.type === 'apex' && input.filterUserDebug) data['filter-user-debug'] = true;
     if (input.type === 'apex' && input.formatJson) data['format-json'] = true;
@@ -221,6 +222,7 @@ export class ScriptRepository {
         : {}),
       ...(input.gather ? { gather: input.gather } : {}),
       ...(input.type === 'ai' && input.allowFollowupQueries ? { allowFollowupQueries: true } : {}),
+      ...(input.type === 'ai' && input.skills?.length ? { skills: input.skills } : {}),
     };
   }
 

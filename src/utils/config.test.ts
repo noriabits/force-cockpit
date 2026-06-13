@@ -24,9 +24,19 @@ describe('loadConfig', () => {
   it('returns defaults when no files exist', () => {
     const config = loadConfig(extensionDir, userDir);
     expect(config).toEqual({
-      apiVersion: '65.0',
+      apiVersion: '66.0',
       protectedSandboxes: [],
+      skillsPaths: ['.claude/skills', '.github/skills'],
     });
+  });
+
+  it('reads a skillsPaths override from user config', () => {
+    fs.writeFileSync(
+      path.join(userDir, 'config.yaml'),
+      'skillsPaths:\n  - my/custom/skills\n  - other/skills',
+    );
+    const config = loadConfig(extensionDir, userDir);
+    expect(config.skillsPaths).toEqual(['my/custom/skills', 'other/skills']);
   });
 
   it('reads bundled config.yaml', () => {
@@ -54,7 +64,7 @@ describe('loadConfig', () => {
   it('returns defaults for malformed YAML', () => {
     fs.writeFileSync(path.join(userDir, 'config.yaml'), ': : invalid yaml {{[');
     const config = loadConfig(extensionDir, userDir);
-    expect(config.apiVersion).toBe('65.0');
+    expect(config.apiVersion).toBe('66.0');
   });
 
   it('ignores invalid field types', () => {
@@ -63,7 +73,7 @@ describe('loadConfig', () => {
       'apiVersion: 123\nprotectedSandboxes: "not-array"',
     );
     const config = loadConfig(extensionDir, userDir);
-    expect(config.apiVersion).toBe('65.0');
+    expect(config.apiVersion).toBe('66.0');
     expect(config.protectedSandboxes).toEqual([]);
   });
 
@@ -79,12 +89,12 @@ describe('loadConfig', () => {
   it('ignores empty or whitespace-only apiVersion', () => {
     fs.writeFileSync(path.join(userDir, 'config.yaml'), 'apiVersion: "  "');
     const config = loadConfig(extensionDir, userDir);
-    expect(config.apiVersion).toBe('65.0');
+    expect(config.apiVersion).toBe('66.0');
   });
 
   it('handles empty config file gracefully', () => {
     fs.writeFileSync(path.join(userDir, 'config.yaml'), '');
     const config = loadConfig(extensionDir, userDir);
-    expect(config.apiVersion).toBe('65.0');
+    expect(config.apiVersion).toBe('66.0');
   });
 });

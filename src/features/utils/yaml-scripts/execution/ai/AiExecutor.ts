@@ -1,6 +1,7 @@
 import type { ConnectionManager } from '../../../../../salesforce/connection';
 import { stripRecordAttributes } from '../../../../../utils/salesforce';
 import { assertApexSuccess, filterUserDebugLines } from '../../../../apexUtils';
+import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';
 import type { ChatMessage, LmGateway, ToolCall, ToolSpec } from './types';
 
@@ -25,6 +26,24 @@ const DESCRIBE_OBJECT_TOOL: ToolSpec = {
       },
     },
     required: ['objectName'],
+  },
+};
+
+const READ_SKILL_TOOL: ToolSpec = {
+  name: 'read_skill',
+  description:
+    'Read the full content of one of the available skills (a markdown playbook with ' +
+    'domain guidance) by its id. Call this when a listed skill is relevant to the task ' +
+    'before writing your analysis. Returns the skill body as markdown.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      skillId: {
+        type: 'string',
+        description: 'The id of the skill to read, taken from the "Available skills" list.',
+      },
+    },
+    required: ['skillId'],
   },
 };
 
@@ -65,6 +84,7 @@ export class AiExecutor {
   constructor(
     private readonly connectionManager: ConnectionManager,
     private readonly gateway: LmGateway,
+    private readonly skills: SkillsRepository,
   ) {}
 
   async execute(
@@ -88,14 +108,18 @@ export class AiExecutor {
       const gathered = await this.runGather(script.gather);
       append(gathered + '\n\n');
 
+      const selectedSkills = this.resolveSelectedSkills(script.skills);
+      const skillsSection = this.buildSkillsCatalogue(selectedSkills);
+
       const messages: ChatMessage[] = [
         {
           role: 'user',
-          text: `${SYSTEM_PREAMBLE}\n\n## Task\n${script.script}\n\n## Gathered data\n${gathered}`,
+          text: `${SYSTEM_PREAMBLE}\n\n## Task\n${script.script}${skillsSection}\n\n## Gathered data\n${gathered}`,
         },
       ];
       const tools: ToolSpec[] = [
         DESCRIBE_OBJECT_TOOL,
+        ...(selectedSkills.length ? [READ_SKILL_TOOL] : []),
         ...(script.allowFollowupQueries ? [RUN_SOQL_TOOL] : []),
       ];
 
@@ -133,6 +157,27 @@ export class AiExecutor {
     const debugLog = apexResult.debugLog ?? '';
     const userDebug = filterUserDebugLines(debugLog);
     return userDebug.trim() ? userDebug : debugLog;
+  }
+
+  // ── Skills ──────────────────────────────────────────────────────────────
+
+  /** The catalogue entries for the script's selected skills that still exist on disk. */
+  private resolveSelectedSkills(skillIds: string[] | undefined): SkillInfo[] {
+    if (!skillIds?.length) return [];
+    const available = new Map(this.skills.listSkills().map((s) => [s.id, s]));
+    return skillIds.map((id) => available.get(id)).filter((s): s is SkillInfo => !!s);
+  }
+
+  /** A markdown section listing the available skills, or '' when there are none. */
+  private buildSkillsCatalogue(selected: SkillInfo[]): string {
+    if (!selected.length) return '';
+    const lines = selected.map((s) => `- ${s.id}: ${s.description || s.name}`);
+    return (
+      `\n\n## Available skills\n` +
+      `Reusable playbooks you may consult. If one is relevant to the task, call ` +
+      `read_skill with its id to read its full guidance before writing your analysis.\n` +
+      lines.join('\n')
+    );
   }
 
   // ── Analysis loop ───────────────────────────────────────────────────────
@@ -185,7 +230,23 @@ export class AiExecutor {
     if (call.name === 'run_soql') {
       return this.runSoqlCall(String(call.input.soql ?? ''), append);
     }
+    if (call.name === 'read_skill') {
+      return this.runReadSkillCall(String(call.input.skillId ?? ''), append);
+    }
     return `Error: unknown tool "${call.name}".`;
+  }
+
+  private runReadSkillCall(skillId: string, append: (s: string) => void): string {
+    const id = skillId.trim();
+    if (!id) return 'Error: no skill id provided.';
+    append(`\n\n[read_skill] ${id}\n`);
+    const body = this.skills.readSkill(id);
+    if (body === null) {
+      append(`→ error: unknown skill\n\n`);
+      return `Error: unknown skill "${id}".`;
+    }
+    append(`→ ${body.length} char(s)\n\n`);
+    return body;
   }
 
   private async runDescribeCall(objectName: string, append: (s: string) => void): Promise<string> {

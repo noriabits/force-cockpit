@@ -4,6 +4,7 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import { VsCodeLmGateway } from './execution/ai/LmGateway';
+import { SkillsRepository } from './skills/SkillsRepository';
 
 export function createYamlScriptsFeature(paths: {
   builtInPath: string;
@@ -11,10 +12,12 @@ export function createYamlScriptsFeature(paths: {
   privatePath: string;
   workspaceRoot: string;
   workspaceState: vscode.Memento;
+  skillsPaths: string[];
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
     const gateway = new VsCodeLmGateway();
-    const service = new YamlScriptsService(connectionManager, paths, gateway);
+    const skillsRepo = new SkillsRepository(paths.workspaceRoot, paths.skillsPaths);
+    const service = new YamlScriptsService(connectionManager, paths, gateway, skillsRepo);
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {
       id: 'yaml-scripts',
@@ -33,6 +36,11 @@ export function createYamlScriptsFeature(paths: {
           handler: async () => ({ models: await gateway.listModels() }),
           successType: 'listChatModelsResult',
           errorType: 'listChatModelsError',
+        },
+        listSkills: {
+          handler: async () => ({ skills: skillsRepo.listSkills() }),
+          successType: 'listSkillsResult',
+          errorType: 'listSkillsError',
         },
         executeYamlScript: {
           handler: async (msg, signal, onChunk) => {

@@ -83,6 +83,7 @@ export function activate(context: vscode.ExtensionContext): void {
       privatePath: path.join(userBasePath, 'private', 'scripts'),
       workspaceRoot,
       workspaceState: context.workspaceState,
+      skillsPaths: cockpitConfig.skillsPaths,
     }),
     monitoringFeature.factory,
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),
