@@ -11,6 +11,7 @@
  * @property {HTMLElement} logViewer
  * @property {HTMLPreElement} logOutput
  * @property {HTMLButtonElement} openInEditorBtn
+ * @property {HTMLButtonElement | null} openAsMarkdownBtn
  * @property {HTMLButtonElement} copyToClipboardBtn
  */
 
@@ -40,6 +41,25 @@ export function createLogViewer(ctx) {
     button.addEventListener('click', () => {
       const content = logOutput.textContent || '';
       vscode.postMessage({ type: 'openScriptResult', content });
+    });
+    return button;
+  }
+
+  /**
+   * Opens the raw AI output (Markdown source) in VSCode's native Markdown preview.
+   * Reads `data-raw-log` rather than `textContent` so the clean Markdown source is
+   * used — not the JSON-table-rendered HTML the inline viewer shows for AI scripts.
+   * @param {HTMLPreElement} logOutput
+   * @returns {HTMLButtonElement}
+   */
+  function buildOpenAsMarkdownButton(logOutput) {
+    const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    button.className = 'yaml-open-markdown-btn';
+    button.textContent = 'Open as markdown';
+    button.style.display = 'none';
+    button.addEventListener('click', () => {
+      const content = logOutput.getAttribute('data-raw-log') || logOutput.textContent || '';
+      vscode.postMessage({ type: 'openScriptResultMarkdown', content });
     });
     return button;
   }
@@ -161,6 +181,11 @@ export function createLogViewer(ctx) {
     const openInEditorBtn = buildOpenInEditorButton(logOutput);
     logViewer.appendChild(openInEditorBtn);
 
+    // AI scripts emit Markdown — offer to open the raw output in VSCode's
+    // native Markdown preview. Other script types don't get this button.
+    const openAsMarkdownBtn = isAi ? buildOpenAsMarkdownButton(logOutput) : null;
+    if (openAsMarkdownBtn) logViewer.appendChild(openAsMarkdownBtn);
+
     const copyToClipboardBtn = buildCopyToClipboardButton(logOutput);
     logViewer.appendChild(copyToClipboardBtn);
 
@@ -170,7 +195,15 @@ export function createLogViewer(ctx) {
 
     return {
       fragment,
-      refs: { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn },
+      refs: {
+        statusHint,
+        errorBox,
+        logViewer,
+        logOutput,
+        openInEditorBtn,
+        openAsMarkdownBtn,
+        copyToClipboardBtn,
+      },
     };
   }
 

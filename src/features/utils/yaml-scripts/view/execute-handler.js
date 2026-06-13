@@ -42,8 +42,15 @@ export function createExecuteHandler(ctx) {
    * }} params
    */
   function attachExecuteHandler({ script, section, executeBtn, needsOrg, inputFields, refs }) {
-    const { statusHint, errorBox, logViewer, logOutput, openInEditorBtn, copyToClipboardBtn } =
-      refs;
+    const {
+      statusHint,
+      errorBox,
+      logViewer,
+      logOutput,
+      openInEditorBtn,
+      openAsMarkdownBtn,
+      copyToClipboardBtn,
+    } = refs;
 
     executeBtn.addEventListener('click', () => {
       if (needsOrg && !getConnected()) return;
@@ -70,6 +77,7 @@ export function createExecuteHandler(ctx) {
         logOutput.removeAttribute('data-filtered-log');
         logOutput.classList.remove('yaml-log-output--success', 'yaml-log-output--error');
         openInEditorBtn.style.display = 'none';
+        if (openAsMarkdownBtn) openAsMarkdownBtn.style.display = 'none';
         copyToClipboardBtn.style.display = 'none';
 
         const filterCheckbox = /** @type {HTMLInputElement | null} */ (

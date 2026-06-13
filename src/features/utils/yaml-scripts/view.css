@@ -207,24 +207,10 @@
   border-color: var(--vscode-inputValidation-errorBorder, #be1100);
 }
 
-.yaml-open-editor-btn {
-  margin-top: 6px;
-  font-size: 11px;
-  padding: 2px 8px;
-  cursor: pointer;
-  background: none;
-  border: 1px solid var(--vscode-button-secondaryBackground);
-  color: var(--vscode-foreground);
-  border-radius: 3px;
-}
-
-.yaml-open-editor-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
-}
-
+.yaml-open-editor-btn,
+.yaml-open-markdown-btn,
 .yaml-copy-output-btn {
   margin-top: 6px;
-  margin-left: 6px;
   font-size: 11px;
   padding: 2px 8px;
   cursor: pointer;
@@ -234,6 +220,13 @@
   border-radius: 3px;
 }
 
+.yaml-open-markdown-btn,
+.yaml-copy-output-btn {
+  margin-left: 6px;
+}
+
+.yaml-open-editor-btn:hover,
+.yaml-open-markdown-btn:hover,
 .yaml-copy-output-btn:hover {
   background: var(--vscode-button-secondaryHoverBackground);
 }

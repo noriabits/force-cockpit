@@ -253,6 +253,9 @@ import {
     const openInEditorBtn = /** @type {HTMLElement} */ (
       accordion.querySelector('.yaml-open-editor-btn')
     );
+    const openAsMarkdownBtn = /** @type {HTMLElement | null} */ (
+      accordion.querySelector('.yaml-open-markdown-btn')
+    );
     const copyToClipboardBtn = /** @type {HTMLElement} */ (
       accordion.querySelector('.yaml-copy-output-btn')
     );
@@ -274,9 +277,11 @@ import {
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
       openInEditorBtn.style.display = '';
+      if (openAsMarkdownBtn) openAsMarkdownBtn.style.display = '';
       copyToClipboardBtn.style.display = '';
     } else {
       openInEditorBtn.style.display = 'none';
+      if (openAsMarkdownBtn) openAsMarkdownBtn.style.display = 'none';
       copyToClipboardBtn.style.display = 'none';
       logViewer.style.display = 'none';
     }

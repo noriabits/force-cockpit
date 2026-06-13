@@ -174,7 +174,10 @@ export class AiExecutor {
       if (script.gather) {
         append('# Gathering data\n');
         const gathered = await this.runGather(script.gather);
-        append(gathered + '\n\n');
+        // Fence the raw data dump so it renders as a clean code block in the
+        // Markdown preview (SOQL → pretty JSON; apex → debug-log text).
+        const fenceLang = script.gather.kind === 'soql' ? 'json' : '';
+        append('```' + fenceLang + '\n' + gathered + '\n```\n\n');
         gatheredSection = `\n\n## Gathered data\n${gathered}`;
       }
 

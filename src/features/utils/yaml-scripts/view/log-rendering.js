@@ -129,6 +129,12 @@ function renderJsonAsTable(value) {
  * @returns {string}
  */
 export function renderLogWithJsonTables(text) {
+  // AI output fences its injected data dump (```json … ```) so it renders as a
+  // code block in the Markdown preview. Inline, the JSON inside is already
+  // table-rendered below, so drop the lone fence-marker lines to avoid showing
+  // literal backticks around the table.
+  text = text.replace(/^```[^\n]*\n/gm, '').replace(/^```\s*$/gm, '');
+
   let html = '';
   let cursor = 0;
   let textStart = 0;

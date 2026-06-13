@@ -179,9 +179,9 @@ apex: |
 
 ### AI scripts
 
-An **AI script** gathers Salesforce data with a *fixed, author-defined* step and then uses a language model (via VS Code's built-in [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model), powered by GitHub Copilot) to **analyse** it. The analysis streams into the script's output.
+An **AI script** optionally gathers Salesforce data with a *fixed, author-defined* step and then uses a language model (via VS Code's built-in [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model), powered by GitHub Copilot) to **analyse** it. The analysis streams into the script's output. The gather step is optional — omit it (uncheck "Gather data first" in the form) for a script driven purely by its prompt + inputs.
 
-**Requirements:** GitHub Copilot must be enabled in VS Code (the first run shows a one-time consent prompt), and an org must be connected (the data step runs against it).
+**Requirements:** GitHub Copilot must be enabled in VS Code (the first run shows a one-time consent prompt), and an org must be connected.
 
 ```yaml
 name: Energy account analysis
@@ -191,7 +191,7 @@ inputs:
   - name: industry
     label: Industry
     required: true
-gather:                             # the fixed data step — exactly one of soql / apex / apex-file
+gather:                             # OPTIONAL fixed data step — exactly one of soql / apex / apex-file (omit for a prompt-only script)
   soql: SELECT Id, Name, AnnualRevenue FROM Account WHERE Industry = '${industry}'
 ai: |                               # the analysis prompt (use ai-file: to load it from a file)
   Summarise the accounts below and flag anything unusual about their revenue.
@@ -210,6 +210,7 @@ How it works and why it's safe:
 - **Model picker.** Choose a specific model in the form (populated from the models Copilot offers) or leave it on **Auto**. Note: some models don't support follow-up queries — gather + analyse still works regardless.
 - **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
 - **Schema is cached locally.** Before querying, the model checks object fields via a `describe_object` tool. Results are cached per workspace under `force-cockpit/.describe-cache/` (git-ignored, 2-week expiry) and shared with the Overview Quick Query autocomplete, so repeated lookups don't hit the org. Click the 🔄 refresh button next to the connection status to clear the cache and re-pull the latest schema.
+- **Open as markdown.** AI analysis is written in Markdown. Once a run finishes, an **Open as markdown** button (next to *Open in editor* / *Copy to clipboard*) opens the output in VSCode's built-in Markdown preview — headings, lists, tables, and code blocks rendered nicely. Nothing is written to disk; it opens an in-memory untitled document. The gathered data is shown as a code block in the preview.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
 

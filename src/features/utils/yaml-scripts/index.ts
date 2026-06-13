@@ -125,6 +125,16 @@ export function createYamlScriptsFeature(paths: {
           successType: 'openScriptResultDone',
           errorType: 'openScriptResultError',
         },
+        openScriptResultMarkdown: {
+          handler: async (msg) => {
+            const content = msg.content as string;
+            const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
+            await vscode.commands.executeCommand('markdown.showPreview', doc.uri);
+            return {};
+          },
+          successType: 'openScriptResultMarkdownDone',
+          errorType: 'openScriptResultMarkdownError',
+        },
         loadFavorites: {
           handler: async () => {
             const favorites: string[] = paths.workspaceState.get('yamlScripts.favorites', []);

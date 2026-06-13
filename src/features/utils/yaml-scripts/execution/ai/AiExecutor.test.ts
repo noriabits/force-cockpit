@@ -137,6 +137,23 @@ describe('AiExecutor', () => {
     expect(gw.sends[0].messages[0].text).toContain('payload-from-apex');
   });
 
+  it('fences the gathered data dump in the transcript (```json for soql)', async () => {
+    const cm = makeCM();
+    const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
+    const result = await makeExecutor(cm, gw, fakeSkills()).execute(aiScript());
+    expect(result.debugLog).toMatch(/```json\n[\s\S]*Acme[\s\S]*\n```/);
+  });
+
+  it('fences the apex gather data dump with a plain ``` block', async () => {
+    const cm = makeCM();
+    const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
+    const result = await makeExecutor(cm, gw, fakeSkills()).execute(
+      aiScript({ gather: { kind: 'apex', value: 'System.debug(1);' } }),
+    );
+    expect(result.debugLog).toMatch(/```\n[\s\S]*payload-from-apex[\s\S]*\n```/);
+    expect(result.debugLog).not.toContain('```json');
+  });
+
   it('runs an input/prompt-only script with no gather step', async () => {
     const cm = makeCM();
     const gw = new FakeGateway([[{ kind: 'text', text: 'answer' }]]);
