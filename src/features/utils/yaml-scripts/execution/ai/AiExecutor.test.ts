@@ -37,6 +37,14 @@ function makeCM(overrides: Partial<ConnectionManager> = {}): ConnectionManager {
       exceptionStackTrace: null,
       debugLog: '12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|payload-from-apex',
     })),
+    describeSObject: vi.fn(async (name: string) => ({
+      name,
+      label: name,
+      fields: [
+        { name: 'Id', label: 'Record ID', type: 'id', referenceTo: [] },
+        { name: 'Name', label: `${name} Name`, type: 'string', referenceTo: [] },
+      ],
+    })),
     getCurrentOrg: () => ({ username: 'u@example.com' }),
     ...overrides,
   } as unknown as ConnectionManager;
@@ -75,7 +83,8 @@ describe('AiExecutor', () => {
     expect(result.debugLog).toContain('Hello world');
     expect(chunks.join('')).toContain('Hello world');
     expect(gw.sends[0].messages[0].text).toContain('Acme'); // gather data in the prompt
-    expect(gw.sends[0].tools).toEqual([]); // no follow-up tool by default
+    expect(gw.sends[0].tools).toHaveLength(1); // describe_object only, no follow-up
+    expect(gw.sends[0].tools[0].name).toBe('describe_object');
   });
 
   it('runs an apex gather and surfaces its debug output', async () => {
@@ -122,8 +131,9 @@ describe('AiExecutor', () => {
 
     expect(cm.query).toHaveBeenCalledTimes(2); // gather + follow-up
     expect(cm.query).toHaveBeenLastCalledWith('SELECT Id FROM Contact');
-    expect(gw.sends[0].tools).toHaveLength(1);
-    expect(gw.sends[0].tools[0].name).toBe('run_soql');
+    expect(gw.sends[0].tools).toHaveLength(2);
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('describe_object');
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('run_soql');
     const round2 = gw.sends[1].messages;
     expect(round2.some((m) => m.role === 'assistant' && 'toolCalls' in m && m.toolCalls)).toBe(
       true,
@@ -132,10 +142,32 @@ describe('AiExecutor', () => {
     expect(result.success).toBe(true);
   });
 
-  it('does not offer any tool when follow-up is disabled', async () => {
+  it('offers only describe_object when follow-up is disabled', async () => {
     const gw = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
     await new AiExecutor(makeCM(), gw).execute(aiScript());
-    expect(gw.sends[0].tools).toEqual([]);
+    expect(gw.sends[0].tools).toHaveLength(1);
+    expect(gw.sends[0].tools[0].name).toBe('describe_object');
+  });
+
+  it('calls describeSObject and returns a compact field list', async () => {
+    const cm = makeCM();
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 'd1', name: 'describe_object', input: { objectName: 'Account' } },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    const result = await new AiExecutor(cm, gw).execute(aiScript());
+
+    expect(cm.describeSObject).toHaveBeenCalledWith('Account');
+    expect(result.success).toBe(true);
+    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    const content = toolResult && 'content' in toolResult ? toolResult.content : '';
+    expect(content).toContain('"objectName": "Account"');
+    expect(content).toContain('"name": "Id"');
   });
 
   it('blocks a non-SELECT follow-up query and feeds the rejection back', async () => {

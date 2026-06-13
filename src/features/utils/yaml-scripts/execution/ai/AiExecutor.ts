@@ -10,6 +10,24 @@ function recordsToJson(records: unknown[]): string {
   return JSON.stringify(stripRecordAttributes(records), null, 2);
 }
 
+const DESCRIBE_OBJECT_TOOL: ToolSpec = {
+  name: 'describe_object',
+  description:
+    'Get the list of available fields for a Salesforce object. Call this before writing ' +
+    'any SOQL query to confirm which fields exist — never invent or guess field API names.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      objectName: {
+        type: 'string',
+        description:
+          'The API name of the Salesforce object, e.g. "Account", "Opportunity", "My_Object__c".',
+      },
+    },
+    required: ['objectName'],
+  },
+};
+
 const RUN_SOQL_TOOL: ToolSpec = {
   name: 'run_soql',
   description:
@@ -31,9 +49,11 @@ const RUN_SOQL_TOOL: ToolSpec = {
 const SYSTEM_PREAMBLE =
   'You are a Salesforce data analyst embedded in the Force Cockpit VS Code extension. ' +
   'You are given the result of a fixed data-gathering step and a task. Analyse the data ' +
-  'and respond with a clear, concise written analysis. You cannot modify data. If a ' +
-  'read-only follow-up query tool is provided and you genuinely need more data, you may ' +
-  'call it; otherwise answer directly from the data given.';
+  'and respond with a clear, concise written analysis. You cannot modify data. ' +
+  'Before writing any SOQL query, call describe_object to verify which fields are available ' +
+  '— never invent or guess field API names. If a read-only follow-up query tool is ' +
+  'provided and you genuinely need more data, you may call it; otherwise answer directly ' +
+  'from the data given.';
 
 /**
  * Executes an `ai` script: runs the fixed gather step via ConnectionManager,
@@ -74,7 +94,10 @@ export class AiExecutor {
           text: `${SYSTEM_PREAMBLE}\n\n## Task\n${script.script}\n\n## Gathered data\n${gathered}`,
         },
       ];
-      const tools = script.allowFollowupQueries ? [RUN_SOQL_TOOL] : [];
+      const tools: ToolSpec[] = [
+        DESCRIBE_OBJECT_TOOL,
+        ...(script.allowFollowupQueries ? [RUN_SOQL_TOOL] : []),
+      ];
 
       append('# Analysis\n');
       await this.runAnalysisLoop(script, messages, tools, signal, append);
@@ -156,22 +179,51 @@ export class AiExecutor {
   }
 
   private async runToolCall(call: ToolCall, append: (s: string) => void): Promise<string> {
-    if (call.name !== 'run_soql') {
-      return `Error: unknown tool "${call.name}".`;
+    if (call.name === 'describe_object') {
+      return this.runDescribeCall(String(call.input.objectName ?? ''), append);
     }
-    const soql = String(call.input.soql ?? '').trim();
-    if (!soql) {
-      return 'Error: no SOQL query provided.';
+    if (call.name === 'run_soql') {
+      return this.runSoqlCall(String(call.input.soql ?? ''), append);
     }
+    return `Error: unknown tool "${call.name}".`;
+  }
+
+  private async runDescribeCall(objectName: string, append: (s: string) => void): Promise<string> {
+    const name = objectName.trim();
+    if (!name) return 'Error: no object name provided.';
+    append(`\n\n[describe_object] ${name}\n`);
+    try {
+      const describe = await this.connectionManager.describeSObject(name);
+      const fields = describe.fields.map((f) => {
+        const proj: { name: string; label: string; type: string; referenceTo?: string[] } = {
+          name: f.name,
+          label: f.label,
+          type: f.type as string,
+        };
+        if (f.referenceTo?.length) proj.referenceTo = Array.from(f.referenceTo) as string[];
+        return proj;
+      });
+      append(`→ ${fields.length} field(s)\n\n`);
+      return JSON.stringify({ objectName: describe.name, label: describe.label, fields }, null, 2);
+    } catch (err) {
+      const msg = (err as Error).message;
+      append(`→ error: ${msg}\n\n`);
+      return `Error describing object: ${msg}`;
+    }
+  }
+
+  private async runSoqlCall(soql: string, append: (s: string) => void): Promise<string> {
+    const query = soql.trim();
+    if (!query) return 'Error: no SOQL query provided.';
     // Defense in depth: ConnectionManager.query only runs SOQL (read-only),
     // but reject anything that does not look like a SELECT so the model cannot
     // be coaxed into a non-query payload.
-    if (!/^select\b/i.test(soql)) {
+    if (!/^select\b/i.test(query)) {
       return 'Error: only read-only SELECT/SOQL queries are allowed.';
     }
-    append(`\n\n[run_soql] ${soql}\n`);
+    append(`\n\n[run_soql] ${query}\n`);
     try {
-      const result = await this.connectionManager.query(soql);
+      const result = await this.connectionManager.query(query);
       append(`→ ${result.records.length} record(s)\n\n`);
       return recordsToJson(result.records);
     } catch (err) {
