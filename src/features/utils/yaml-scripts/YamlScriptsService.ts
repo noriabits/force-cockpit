@@ -1,4 +1,5 @@
 import type { ConnectionManager } from '../../../salesforce/connection';
+import type { DescribeService } from '../../../services/DescribeService';
 import { loadYamlItems } from '../../../utils/yaml-loader';
 import { ScriptParser } from './parsing/ScriptParser';
 import {
@@ -38,6 +39,7 @@ export class YamlScriptsService {
     private readonly paths: ServicePaths,
     gateway: LmGateway,
     skills: SkillsRepository,
+    describeService: DescribeService,
   ) {
     this.parser = new ScriptParser(paths.workspaceRoot);
     this.repo = new ScriptRepository({
@@ -48,7 +50,7 @@ export class YamlScriptsService {
     this.apex = new ApexExecutor(connectionManager);
     this.command = new CommandExecutor(paths.workspaceRoot);
     this.js = new JsExecutor(connectionManager, paths.workspaceRoot);
-    this.ai = new AiExecutor(connectionManager, gateway, skills);
+    this.ai = new AiExecutor(connectionManager, gateway, skills, describeService);
   }
 
   async loadScripts(): Promise<YamlScript[]> {

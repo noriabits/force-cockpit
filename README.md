@@ -207,6 +207,7 @@ How it works and why it's safe:
 - **Optional read-only follow-up.** With `allow-followup-queries: true`, the model may run additional **read-only SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
 - **Model picker.** Choose a specific model in the form (populated from the models Copilot offers) or leave it on **Auto**. Note: some models don't support follow-up queries — gather + analyse still works regardless.
 - **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a read-only tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
+- **Schema is cached locally.** Before querying, the model checks object fields via a `describe_object` tool. Results are cached per workspace under `force-cockpit/.describe-cache/` (git-ignored, 2-week expiry) and shared with the Overview Quick Query autocomplete, so repeated lookups don't hit the org. Click the 🔄 refresh button next to the connection status to clear the cache and re-pull the latest schema.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
 

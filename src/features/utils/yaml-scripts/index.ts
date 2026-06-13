@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { ConnectionManager } from '../../../salesforce/connection';
+import type { DescribeService } from '../../../services/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import { VsCodeLmGateway } from './execution/ai/LmGateway';
@@ -13,11 +14,18 @@ export function createYamlScriptsFeature(paths: {
   workspaceRoot: string;
   workspaceState: vscode.Memento;
   skillsPaths: string[];
+  describeService: DescribeService;
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
     const gateway = new VsCodeLmGateway();
     const skillsRepo = new SkillsRepository(paths.workspaceRoot, paths.skillsPaths);
-    const service = new YamlScriptsService(connectionManager, paths, gateway, skillsRepo);
+    const service = new YamlScriptsService(
+      connectionManager,
+      paths,
+      gateway,
+      skillsRepo,
+      paths.describeService,
+    );
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {
       id: 'yaml-scripts',

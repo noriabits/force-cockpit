@@ -4,8 +4,14 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
+import { DescribeService } from '../../../services/DescribeService';
 import type { LmGateway } from './execution/ai/types';
 import { SkillsRepository } from './skills/SkillsRepository';
+
+// These tests never execute AI scripts, so a memory-only DescribeService suffices.
+function makeDescribe(cm: ConnectionManager): DescribeService {
+  return new DescribeService(cm);
+}
 
 // These tests never execute AI scripts, so an empty skills repo suffices.
 function makeSkills(): SkillsRepository {
@@ -37,8 +43,9 @@ function makeService(
     workspaceRoot: string;
   }> = {},
 ): YamlScriptsService {
+  const cm = makeMock();
   return new YamlScriptsService(
-    makeMock(),
+    cm,
     {
       builtInPath: paths.builtInPath ?? '',
       userPath: paths.userPath ?? '',
@@ -47,6 +54,7 @@ function makeService(
     },
     makeGateway(),
     makeSkills(),
+    makeDescribe(cm),
   );
 }
 
@@ -333,6 +341,7 @@ describe('YamlScriptsService — executeScript orchestration', () => {
       },
       makeGateway(),
       makeSkills(),
+      makeDescribe(mock),
     );
     const scripts = [
       {

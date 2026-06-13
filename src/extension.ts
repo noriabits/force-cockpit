@@ -14,6 +14,8 @@ import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
 import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
 import { OrgConnectionController } from './services/OrgConnectionController';
+import { DescribeService } from './services/DescribeService';
+import { DescribeDiskCache } from './services/DescribeDiskCache';
 
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
@@ -42,6 +44,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   let cockpitConfig = loadConfig(context.extensionPath, userBasePath);
   connectionManager.setApiVersion(cockpitConfig.apiVersion);
+
+  // Persistent, per-workspace describe cache shared by Quick Query autocomplete and
+  // AI scripts. The disk layer survives reloads; each consumer keeps a cheap in-memory
+  // map on top. Cleared on manual org refresh so schema is re-pulled on demand.
+  const describeDiskCache = new DescribeDiskCache(path.join(userBasePath, '.describe-cache'));
+  const describeService = new DescribeService(connectionManager, describeDiskCache);
 
   // Status bar item: shows Sandbox / Production indicator
   setupOrgTypeStatusBar(context, connectionManager, () => cockpitConfig);
@@ -84,6 +92,7 @@ export function activate(context: vscode.ExtensionContext): void {
       workspaceRoot,
       workspaceState: context.workspaceState,
       skillsPaths: cockpitConfig.skillsPaths,
+      describeService,
     }),
     monitoringFeature.factory,
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),
@@ -147,14 +156,28 @@ export function activate(context: vscode.ExtensionContext): void {
   sidebarView.title = ` v${context.extension.packageJSON.version}`;
   sidebarView.onDidChangeVisibility(({ visible }) => {
     if (visible)
-      MainPanel.createOrShow(context, connectionManager, allFeatures, cockpitConfig, outputChannel);
+      MainPanel.createOrShow(
+        context,
+        connectionManager,
+        allFeatures,
+        cockpitConfig,
+        describeService,
+        outputChannel,
+      );
   });
   context.subscriptions.push(sidebarView);
 
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(context, connectionManager, allFeatures, cockpitConfig, outputChannel);
+      MainPanel.createOrShow(
+        context,
+        connectionManager,
+        allFeatures,
+        cockpitConfig,
+        describeService,
+        outputChannel,
+      );
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {
@@ -197,9 +220,11 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(watcher);
 
     context.subscriptions.push(
-      vscode.commands.registerCommand('forceCockpit.refreshOrg', () =>
-        orgController.connectFromConfig({ force: true }),
-      ),
+      vscode.commands.registerCommand('forceCockpit.refreshOrg', () => {
+        // A manual refresh should always re-pull schema (memory + disk).
+        describeService.clearCache();
+        return orgController.connectFromConfig({ force: true });
+      }),
     );
 
     // Auto-connect on activation — reuses connectFromConfig() with retry and race-guards

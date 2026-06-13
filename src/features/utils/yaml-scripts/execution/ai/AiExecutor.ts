@@ -1,11 +1,12 @@
 import type { ConnectionManager } from '../../../../../salesforce/connection';
+import type { DescribeService } from '../../../../../services/DescribeService';
 import { stripRecordAttributes } from '../../../../../utils/salesforce';
 import { assertApexSuccess, filterUserDebugLines } from '../../../../apexUtils';
 import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';
 import type { ChatMessage, LmGateway, ToolCall, ToolSpec } from './types';
 
-const MAX_TOOL_ROUNDS = 10;
+const MAX_TOOL_ROUNDS = 50;
 
 function recordsToJson(records: unknown[]): string {
   return JSON.stringify(stripRecordAttributes(records), null, 2);
@@ -93,6 +94,7 @@ export class AiExecutor {
     private readonly connectionManager: ConnectionManager,
     private readonly gateway: LmGateway,
     private readonly skills: SkillsRepository,
+    private readonly describeService: DescribeService,
   ) {}
 
   async execute(
@@ -262,18 +264,18 @@ export class AiExecutor {
     if (!name) return 'Error: no object name provided.';
     append(`\n\n[describe_object] ${name}\n`);
     try {
-      const describe = await this.connectionManager.describeSObject(name);
+      const describe = await this.describeService.describeSObject(name);
       const fields = describe.fields.map((f) => {
         const proj: { name: string; label: string; type: string; referenceTo?: string[] } = {
           name: f.name,
           label: f.label,
-          type: f.type as string,
+          type: f.type,
         };
-        if (f.referenceTo?.length) proj.referenceTo = Array.from(f.referenceTo) as string[];
+        if (f.referenceTo.length) proj.referenceTo = f.referenceTo;
         return proj;
       });
       append(`→ ${fields.length} field(s)\n\n`);
-      return JSON.stringify({ objectName: describe.name, label: describe.label, fields }, null, 2);
+      return JSON.stringify({ objectName: describe.name, fields }, null, 2);
     } catch (err) {
       const msg = (err as Error).message;
       append(`→ error: ${msg}\n\n`);

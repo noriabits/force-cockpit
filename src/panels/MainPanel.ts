@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
 import { QueryStateStore } from '../services/QueryStateStore';
-import { DescribeService } from '../services/DescribeService';
+import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
 import type { CockpitConfig } from '../utils/config';
 import { WebviewAssets } from './WebviewAssets';
@@ -56,6 +56,7 @@ export class MainPanel {
     connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
     config: CockpitConfig,
+    describeService: DescribeService,
     outputChannel?: vscode.OutputChannel,
   ): MainPanel {
     const column = vscode.window.activeTextEditor
@@ -90,6 +91,7 @@ export class MainPanel {
       connectionManager,
       featureFactories,
       config,
+      describeService,
       outputChannel,
     );
     return MainPanel.currentPanel;
@@ -101,6 +103,7 @@ export class MainPanel {
     private readonly connectionManager: ConnectionManager,
     featureFactories: FeatureModuleFactory[],
     private config: CockpitConfig,
+    describeService: DescribeService,
     private readonly outputChannel?: vscode.OutputChannel,
   ) {
     this._panel = panel;
@@ -111,7 +114,7 @@ export class MainPanel {
       connectionManager,
       queryService: new QueryService(connectionManager),
       queryStateStore: new QueryStateStore(context.workspaceState),
-      describeService: new DescribeService(connectionManager),
+      describeService,
       features: this._features,
       operations: this._operations,
       onReady: () => this._sendOrgInfo(),
