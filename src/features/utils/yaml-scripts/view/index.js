@@ -6,7 +6,11 @@ import { createLogViewer } from './log-viewer.js';
 import { createExecuteHandler } from './execute-handler.js';
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
 import { applyListFilter } from '../../../shared/view/list-filter';
-import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
+import {
+  scrollAndHighlight,
+  isScrolledToBottom,
+  stickToBottom,
+} from '../../../shared/view/scroll-highlight.js';
 
 (function () {
   const win = /** @type {any} */ (window);
@@ -259,11 +263,14 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
       }
       const logText =
         filterCheckbox?.checked && data.filteredDebugLog ? data.filteredDebugLog : data.debugLog;
+      // Keep the view pinned to the bottom through the final swap if following.
+      const wasAtBottom = isScrolledToBottom(logOutput);
       // The "Format JSON" checkbox drives table rendering (default-checked for AI
       // scripts — see log-viewer.js — so SOQL records render as a table).
       logOutput.innerHTML = jsonCheckbox?.checked
         ? renderLogWithJsonTables(logText)
         : renderLogWithLinks(logText);
+      stickToBottom(logOutput, wasAtBottom);
       logOutput.classList.add(data.success ? 'yaml-log-output--success' : 'yaml-log-output--error');
       logViewer.style.display = 'block';
       openInEditorBtn.style.display = '';
@@ -293,7 +300,10 @@ import { scrollAndHighlight } from '../../../shared/view/scroll-highlight.js';
     // Store log text in memory (not DOM) to avoid O(n²) string copying
     const next = (scriptLogContent.get(opId) || '') + chunk;
     scriptLogContent.set(opId, next);
+    // Follow new lines only when the user is already at the bottom (sticky).
+    const wasAtBottom = isScrolledToBottom(output);
     output.textContent = next;
+    stickToBottom(output, wasAtBottom);
   }
 
   /** @param {any} data */

@@ -20,3 +20,24 @@ export function scrollAndHighlight(container, selector, highlightClass, duration
     setTimeout(() => el.classList.remove(highlightClass), durationMs);
   });
 }
+
+/**
+ * Returns true when `el` is scrolled to (or within `threshold` px of) its
+ * bottom. Use to decide whether to keep an auto-following log pinned.
+ * @param {HTMLElement} el
+ * @param {number} [threshold]
+ */
+export function isScrolledToBottom(el, threshold = 24) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+/**
+ * Pins `el` to its bottom only if it was already at the bottom before its
+ * content changed. Capture `wasAtBottom` BEFORE mutating content, then call
+ * this AFTER.
+ * @param {HTMLElement} el
+ * @param {boolean} wasAtBottom
+ */
+export function stickToBottom(el, wasAtBottom) {
+  if (wasAtBottom) el.scrollTop = el.scrollHeight;
+}
