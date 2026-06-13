@@ -29,6 +29,7 @@ type ParsedYamlDoc = {
   model?: string;
   gather?: ParsedGather;
   'allow-followup-queries'?: boolean;
+  'allow-read-workspace-files'?: boolean;
   skills?: unknown;
 };
 
@@ -98,6 +99,9 @@ export class ScriptParser {
         : {}),
       ...(gather ? { gather } : {}),
       ...(type === 'ai' && doc['allow-followup-queries'] ? { allowFollowupQueries: true } : {}),
+      ...(type === 'ai' && doc['allow-read-workspace-files']
+        ? { allowReadWorkspaceFiles: true }
+        : {}),
       ...(type === 'ai' && this.parseSkills(doc.skills).length
         ? { skills: this.parseSkills(doc.skills) }
         : {}),

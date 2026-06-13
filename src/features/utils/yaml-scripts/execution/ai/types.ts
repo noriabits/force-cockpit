@@ -52,3 +52,7 @@ export interface LmGateway {
   listModels(): Promise<ChatModelInfo[]>;
   send(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent>;
 }
+
+export interface WorkspaceSearch {
+  findApexClass(className: string): Promise<{ path: string; content: string } | { error: string }>;
+}

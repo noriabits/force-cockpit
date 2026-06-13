@@ -114,6 +114,9 @@ export function createScriptForm(ctx) {
   const formAllowFollowup = /** @type {HTMLInputElement} */ (
     document.getElementById('yaml-form-allow-followup')
   );
+  const formAllowReadFiles = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-allow-read-files')
+  );
   const formSkills = /** @type {HTMLElement} */ (document.getElementById('yaml-form-skills'));
   const formSkillsHint = /** @type {HTMLElement} */ (
     document.getElementById('yaml-form-skills-hint')
@@ -192,6 +195,8 @@ export function createScriptForm(ctx) {
   formGatherBrowseBtn.textContent = L.btnBrowse;
   const followupLabel = document.getElementById('yaml-form-followup-label');
   if (followupLabel) followupLabel.textContent = L.labelAllowFollowup;
+  const readFilesLabel = document.getElementById('yaml-form-read-files-label');
+  if (readFilesLabel) readFilesLabel.textContent = L.labelAllowReadFiles;
   const skillsLabel = document.getElementById('yaml-form-skills-label');
   if (skillsLabel) skillsLabel.textContent = L.labelSkills;
 
@@ -331,6 +336,7 @@ export function createScriptForm(ctx) {
       gather,
       ...(skills.length ? { skills } : {}),
       ...(formAllowFollowup.checked ? { allowFollowupQueries: true } : {}),
+      ...(formAllowReadFiles.checked ? { allowReadWorkspaceFiles: true } : {}),
     };
   }
 
@@ -383,6 +389,7 @@ export function createScriptForm(ctx) {
     formGatherContent.value = '';
     formGatherFilePath.value = '';
     formAllowFollowup.checked = false;
+    formAllowReadFiles.checked = false;
     pendingSkillSelection = [];
     setSkills([], false);
     updateContentPlaceholder();
@@ -446,6 +453,7 @@ export function createScriptForm(ctx) {
     formGatherContent.value = gather && gather.kind !== 'apex-file' ? gather.value : '';
     formGatherFilePath.value = gather?.kind === 'apex-file' ? (gather.file ?? '') : '';
     formAllowFollowup.checked = !!script.allowFollowupQueries;
+    formAllowReadFiles.checked = !!script.allowReadWorkspaceFiles;
     formError.textContent = '';
     inputsEditor.setInputs(
       (script.inputs || []).map((/** @type {any} */ inp) => ({

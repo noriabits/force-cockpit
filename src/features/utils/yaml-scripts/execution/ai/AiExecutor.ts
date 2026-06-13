@@ -4,9 +4,9 @@ import { stripRecordAttributes } from '../../../../../utils/salesforce';
 import { assertApexSuccess, filterUserDebugLines } from '../../../../apexUtils';
 import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';
-import type { ChatMessage, LmGateway, ToolCall, ToolSpec } from './types';
+import type { ChatMessage, LmGateway, ToolCall, ToolSpec, WorkspaceSearch } from './types';
 
-const MAX_TOOL_ROUNDS = 50;
+const MAX_TOOL_ROUNDS = 150;
 
 function recordsToJson(records: unknown[]): string {
   return JSON.stringify(stripRecordAttributes(records), null, 2);
@@ -66,6 +66,25 @@ const RUN_SOQL_TOOL: ToolSpec = {
   },
 };
 
+const READ_APEX_CLASS_TOOL: ToolSpec = {
+  name: 'read_apex_class',
+  description:
+    'Reads the source of an Apex class or trigger from the workspace by name. ' +
+    'Use this to inspect code referenced in stack traces. ' +
+    'Pass the class name exactly as it appears in the stack trace (without file extension).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      className: {
+        type: 'string',
+        description:
+          'The Apex class or trigger name without extension, e.g. "OrderService" or "AccountTrigger".',
+      },
+    },
+    required: ['className'],
+  },
+};
+
 const SYSTEM_PREAMBLE =
   'You are a Salesforce data analyst embedded in the Force Cockpit VS Code extension. ' +
   'You are given the result of a fixed data-gathering step and a task. Analyse the data ' +
@@ -81,7 +100,7 @@ const SYSTEM_PREAMBLE =
   'end your response with a short "## Suggested gather improvements" section: describe how ' +
   'the fixed gather step (its SOQL or Apex) could be extended so that the same data would ' +
   'be available up front next time, avoiding the extra round trip. Omit this section if no ' +
-  'follow-up queries were needed.';
+  'follow-up queries were needed, otherwise provide the suggestions.';
 
 /**
  * Executes an `ai` script: runs the fixed gather step via ConnectionManager,
@@ -95,6 +114,7 @@ export class AiExecutor {
     private readonly gateway: LmGateway,
     private readonly skills: SkillsRepository,
     private readonly describeService: DescribeService,
+    private readonly workspaceSearch?: WorkspaceSearch,
   ) {}
 
   async execute(
@@ -131,6 +151,7 @@ export class AiExecutor {
         DESCRIBE_OBJECT_TOOL,
         ...(selectedSkills.length ? [READ_SKILL_TOOL] : []),
         ...(script.allowFollowupQueries ? [RUN_SOQL_TOOL] : []),
+        ...(script.allowReadWorkspaceFiles && this.workspaceSearch ? [READ_APEX_CLASS_TOOL] : []),
       ];
 
       append('# Analysis\n');
@@ -243,7 +264,27 @@ export class AiExecutor {
     if (call.name === 'read_skill') {
       return this.runReadSkillCall(String(call.input.skillId ?? ''), append);
     }
+    if (call.name === 'read_apex_class') {
+      return this.runReadApexClassCall(String(call.input.className ?? ''), append);
+    }
     return `Error: unknown tool "${call.name}".`;
+  }
+
+  private async runReadApexClassCall(
+    className: string,
+    append: (s: string) => void,
+  ): Promise<string> {
+    const name = className.trim();
+    if (!name) return 'Error: no class name provided.';
+    if (!this.workspaceSearch) return 'Error: workspace file access is not available.';
+    append(`\n\n[read_apex_class] ${name}\n`);
+    const result = await this.workspaceSearch.findApexClass(name);
+    if ('error' in result) {
+      append(`→ error: ${result.error}\n\n`);
+      return `Error reading Apex class: ${result.error}`;
+    }
+    append(`→ ${result.content.length} char(s) from ${result.path}\n\n`);
+    return JSON.stringify({ className: name, path: result.path, content: result.content });
   }
 
   private runReadSkillCall(skillId: string, append: (s: string) => void): string {

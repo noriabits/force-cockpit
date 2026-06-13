@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -313,7 +314,10 @@ describe('MessageRouter built-in routes', () => {
 
     expect(writeFile).toHaveBeenCalledOnce();
     const [filePath, content] = writeFile.mock.calls[0];
-    expect(filePath).toMatch(/\/ws\/query-result-\d{8}-\d{6}\.csv$/);
+    // Assert directory + filename separately so the test passes regardless of
+    // the platform's path separator (path.join yields '\' on Windows, '/' on POSIX).
+    expect(path.dirname(filePath)).toBe(path.join('/ws'));
+    expect(path.basename(filePath)).toMatch(/^query-result-\d{8}-\d{6}\.csv$/);
     expect(content).toBe('a,b\r\n1,2');
     expect(showTextDocument).toHaveBeenCalledOnce();
     expect(showTextDocument.mock.calls[0][0].fsPath).toBe(filePath);

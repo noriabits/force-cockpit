@@ -5,6 +5,7 @@ import type { DescribeService } from '../../../services/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import { VsCodeLmGateway } from './execution/ai/LmGateway';
+import { VsCodeWorkspaceSearch } from './execution/ai/WorkspaceSearch';
 import { SkillsRepository } from './skills/SkillsRepository';
 
 export function createYamlScriptsFeature(paths: {
@@ -19,12 +20,14 @@ export function createYamlScriptsFeature(paths: {
   return (connectionManager: ConnectionManager): FeatureModule => {
     const gateway = new VsCodeLmGateway();
     const skillsRepo = new SkillsRepository(paths.workspaceRoot, paths.skillsPaths);
+    const workspaceSearch = new VsCodeWorkspaceSearch();
     const service = new YamlScriptsService(
       connectionManager,
       paths,
       gateway,
       skillsRepo,
       paths.describeService,
+      workspaceSearch,
     );
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {

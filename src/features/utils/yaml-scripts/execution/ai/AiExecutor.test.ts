@@ -4,11 +4,26 @@ import { DescribeService } from '../../../../../services/DescribeService';
 import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { YamlScript } from '../../types';
 import { AiExecutor } from './AiExecutor';
-import type { ChatEvent, ChatRequest, LmGateway } from './types';
+import type { ChatEvent, ChatRequest, LmGateway, WorkspaceSearch } from './types';
 
 /** Build an AiExecutor whose describe path goes through a real (memory-only) DescribeService over the same cm. */
-function makeExecutor(cm: ConnectionManager, gw: LmGateway, skills: SkillsRepository): AiExecutor {
-  return new AiExecutor(cm, gw, skills, new DescribeService(cm));
+function makeExecutor(
+  cm: ConnectionManager,
+  gw: LmGateway,
+  skills: SkillsRepository,
+  workspaceSearch?: WorkspaceSearch,
+): AiExecutor {
+  return new AiExecutor(cm, gw, skills, new DescribeService(cm), workspaceSearch);
+}
+
+/** A WorkspaceSearch stub returning canned results keyed by class name. */
+function fakeWorkspaceSearch(
+  results: Record<string, { path: string; content: string } | { error: string }> = {},
+): WorkspaceSearch {
+  return {
+    findApexClass: async (className: string) =>
+      results[className] ?? { error: `no Apex class or trigger named "${className}" found` },
+  };
 }
 
 /** A SkillsRepository stub: a catalogue + a body lookup, no filesystem. */
@@ -262,6 +277,68 @@ describe('AiExecutor', () => {
     const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
     expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(
       /unknown skill/i,
+    );
+  });
+
+  it('does not offer read_apex_class unless the flag and a workspace search are present', async () => {
+    // Flag off, search present → absent.
+    const gw1 = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
+    await makeExecutor(makeCM(), gw1, fakeSkills(), fakeWorkspaceSearch()).execute(aiScript());
+    expect(gw1.sends[0].tools.map((t) => t.name)).not.toContain('read_apex_class');
+
+    // Flag on, no search wired → still absent (cannot run without it).
+    const gw2 = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
+    await makeExecutor(makeCM(), gw2, fakeSkills()).execute(
+      aiScript({ allowReadWorkspaceFiles: true }),
+    );
+    expect(gw2.sends[0].tools.map((t) => t.name)).not.toContain('read_apex_class');
+  });
+
+  it('offers read_apex_class and feeds the class source back as a tool result', async () => {
+    const search = fakeWorkspaceSearch({
+      OrderService: {
+        path: 'force-app/main/default/classes/OrderService.cls',
+        content: 'public class OrderService {}',
+      },
+    });
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 'a1', name: 'read_apex_class', input: { className: 'OrderService' } },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    const result = await makeExecutor(makeCM(), gw, fakeSkills(), search).execute(
+      aiScript({ allowReadWorkspaceFiles: true }),
+    );
+
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('read_apex_class');
+    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    const content = toolResult && 'content' in toolResult ? toolResult.content : '';
+    expect(content).toContain('public class OrderService {}');
+    expect(content).toContain('OrderService.cls');
+    expect(result.success).toBe(true);
+  });
+
+  it('feeds back an error when the requested class is not found', async () => {
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 'a1', name: 'read_apex_class', input: { className: 'Nope' } },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    await makeExecutor(makeCM(), gw, fakeSkills(), fakeWorkspaceSearch()).execute(
+      aiScript({ allowReadWorkspaceFiles: true }),
+    );
+
+    const toolResult = gw.sends[1].messages.find((m) => m.role === 'toolResult');
+    expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(
+      /not found|no Apex/i,
     );
   });
 

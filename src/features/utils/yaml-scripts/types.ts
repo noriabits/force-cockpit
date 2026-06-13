@@ -42,6 +42,8 @@ export interface YamlScript {
   gather?: GatherSpec;
   /** When true, the model may call the `run_soql` follow-up tool. */
   allowFollowupQueries?: boolean;
+  /** When true, the model may call the `read_apex_class` tool to read workspace source files. */
+  allowReadWorkspaceFiles?: boolean;
   /** Skill ids the model may pull in via the `read_skill` tool. */
   skills?: string[];
   invalid?: true;
@@ -71,5 +73,6 @@ export interface SaveScriptInput {
   model?: string;
   gather?: GatherSpec;
   allowFollowupQueries?: boolean;
+  allowReadWorkspaceFiles?: boolean;
   skills?: string[];
 }

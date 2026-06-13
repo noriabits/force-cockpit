@@ -2,6 +2,9 @@ node_modules/
 out/
 dist/
 *.vsix
+# Stale compiled artifacts of the TS config (vitest resolves .js before .ts).
+vitest.config.js
+vitest.config.js.map
 .sfdx/
 .sf/
 .DS_Store

@@ -204,7 +204,7 @@ describe('ScriptParser', () => {
 
     it('parses an ai script with a soql gather step', () => {
       const result = parseYaml(
-        `name: Analyse\nmodel: claude-3.5-sonnet\ngather:\n  soql: SELECT Id FROM Account\nai: |\n  Summarise the data.\nallow-followup-queries: true`,
+        `name: Analyse\nmodel: claude-3.5-sonnet\ngather:\n  soql: SELECT Id FROM Account\nai: |\n  Summarise the data.\nallow-followup-queries: true\nallow-read-workspace-files: true`,
       );
       expect(result?.invalid).toBeUndefined();
       expect(result?.type).toBe('ai');
@@ -212,6 +212,7 @@ describe('ScriptParser', () => {
       expect(result?.model).toBe('claude-3.5-sonnet');
       expect(result?.gather).toEqual({ kind: 'soql', value: 'SELECT Id FROM Account' });
       expect(result?.allowFollowupQueries).toBe(true);
+      expect(result?.allowReadWorkspaceFiles).toBe(true);
     });
 
     it('defaults model/allowFollowupQueries to undefined when omitted', () => {
@@ -220,6 +221,7 @@ describe('ScriptParser', () => {
       expect(result?.gather).toEqual({ kind: 'apex', value: 'System.debug(1);' });
       expect(result?.model).toBeUndefined();
       expect(result?.allowFollowupQueries).toBeUndefined();
+      expect(result?.allowReadWorkspaceFiles).toBeUndefined();
       expect(result?.skills).toBeUndefined();
     });
 
