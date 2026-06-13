@@ -1,8 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { toSlug } from '../../../../utils/slug';
-import { checkDuplicateId, deleteYamlItem } from '../../../../utils/yamlRepository';
+import { checkDuplicateId, deleteYamlItem, dumpYaml } from '../../../../utils/yamlRepository';
 import type { GatherSpec, SaveScriptInput, ScriptInput, YamlScript } from '../types';
 
 interface RepositoryPaths {
@@ -37,7 +36,7 @@ export class ScriptRepository {
     fs.mkdirSync(targetDir, { recursive: true });
 
     const data = this.buildYamlData(input);
-    fs.writeFileSync(targetPath, yaml.dump(data), 'utf8');
+    fs.writeFileSync(targetPath, dumpYaml(data), 'utf8');
 
     return this.toResult(id, folder, input, isPrivate);
   }
@@ -71,7 +70,7 @@ export class ScriptRepository {
     }
 
     fs.mkdirSync(newDir, { recursive: true });
-    fs.writeFileSync(newPath, yaml.dump(this.buildYamlData(input)), 'utf8');
+    fs.writeFileSync(newPath, dumpYaml(this.buildYamlData(input)), 'utf8');
 
     if (oldScriptId !== newId || isPrivate !== wasPrivate) {
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);

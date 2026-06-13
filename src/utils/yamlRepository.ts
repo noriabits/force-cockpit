@@ -1,11 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 /**
  * Shared YAML-repository helpers for feature persistence layers (yaml-scripts,
  * monitoring). Both store items as `{basePath}/{folder}/{basename}.yaml` keyed
  * by an id of the form `{folder}/{basename}` (folder may itself be nested).
  */
+
+/**
+ * Serialize a value to YAML with line wrapping disabled. js-yaml's default
+ * lineWidth (80) folds long lines into a `>-` scalar that encodes each real
+ * line break as a blank line — disastrous for code/SOQL. `lineWidth: -1`
+ * keeps a clean `|-` literal block with exact line breaks.
+ */
+export function dumpYaml(data: unknown): string {
+  return yaml.dump(data, { lineWidth: -1 });
+}
 
 /** Split an item id (`"parent/sub/name"`) into its folder + basename parts. */
 export function splitItemId(id: string): { folder: string; basename: string } {

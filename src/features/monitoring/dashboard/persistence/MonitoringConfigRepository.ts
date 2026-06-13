@@ -5,6 +5,7 @@ import { toSlug } from '../../../../utils/slug';
 import {
   checkDuplicateId,
   deleteYamlItem,
+  dumpYaml,
   resolveYamlPath,
   splitItemId,
 } from '../../../../utils/yamlRepository';
@@ -41,7 +42,7 @@ export class MonitoringConfigRepository {
     fs.mkdirSync(targetDir, { recursive: true });
     fs.writeFileSync(
       path.join(targetDir, `${slug}.yaml`),
-      yaml.dump(this.buildYamlData(config)),
+      dumpYaml(this.buildYamlData(config)),
       'utf8',
     );
 
@@ -72,7 +73,7 @@ export class MonitoringConfigRepository {
         const doc = yaml.load(content) as Record<string, unknown>;
         if (!doc || typeof doc !== 'object') return;
         doc.position = entry.position;
-        await fs.promises.writeFile(filePath, yaml.dump(doc), 'utf8');
+        await fs.promises.writeFile(filePath, dumpYaml(doc), 'utf8');
       } catch {
         // Skip files that can't be updated
       }

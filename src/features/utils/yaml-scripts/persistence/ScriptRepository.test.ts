@@ -262,6 +262,37 @@ describe('ScriptRepository', () => {
       expect(doc['format-json']).toBeUndefined();
     });
 
+    it('keeps long-line content as a clean literal block (no folded blank lines)', () => {
+      const userDir = path.join(tmpDir, 'user');
+      const repo = new ScriptRepository({
+        userPath: userDir,
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      // A line well over js-yaml's default 80-col wrap, plus a second line.
+      const script =
+        'System.debug(LoggingLevel.ERROR, ' +
+        "'a very long diagnostic line that easily exceeds eighty characters total');" +
+        "\nSystem.debug('second line');";
+      repo.save({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script,
+        folder: 'cat',
+      });
+      const content = fs.readFileSync(path.join(userDir, 'cat', 's.yaml'), 'utf8');
+      // Must use a literal block, never a folded scalar (which inserts blank lines).
+      expect(content).toContain('apex: |-');
+      expect(content).not.toContain('apex: >-');
+      expect(content).not.toContain('apex: >');
+      // No blank line inserted between the two real code lines.
+      expect(content).not.toMatch(/\n[ \t]*\n[ \t]*System\.debug\('second line'\);/);
+      // Round-trips back to the exact original.
+      const doc = yaml.load(content) as Record<string, unknown>;
+      expect(doc.apex).toBe(script);
+    });
+
     it('serializes textarea inputs correctly', () => {
       const userDir = path.join(tmpDir, 'user');
       const repo = new ScriptRepository({
