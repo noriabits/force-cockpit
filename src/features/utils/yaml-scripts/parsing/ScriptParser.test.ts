@@ -251,8 +251,15 @@ describe('ScriptParser', () => {
       expect(result?.script).toContain('Analyse everything.');
     });
 
-    it('is invalid when gather is missing', () => {
+    it('is valid without a gather step (input/prompt-only script)', () => {
       const result = parseYaml(`name: A\nai: Do it.`);
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.type).toBe('ai');
+      expect(result?.gather).toBeUndefined();
+    });
+
+    it('is invalid when gather is set but not an object', () => {
+      const result = parseYaml(`name: A\ngather: nope\nai: Do it.`);
       expect(result?.invalid).toBe(true);
       expect(result?.error).toContain('gather');
     });

@@ -75,8 +75,10 @@ export class ScriptParser {
     );
     if ('invalid' in resolved) return resolved.invalid;
 
+    // The gather (data) step is optional for AI scripts: a script may rely
+    // solely on its prompt + user inputs. Only validate gather when one is set.
     let gather: GatherSpec | undefined;
-    if (type === 'ai') {
+    if (type === 'ai' && doc.gather != null) {
       const gatherOutcome = this.resolveGather(doc, id, folder, source, doc.name!, parsedInputs);
       if ('invalid' in gatherOutcome) return gatherOutcome.invalid;
       gather = gatherOutcome.gather;
@@ -285,7 +287,7 @@ export class ScriptParser {
       return {
         invalid: this.makeInvalidScript(
           base,
-          "AI scripts require a 'gather' step with one of 'apex', 'apex-file', or 'soql'",
+          "AI 'gather' step, when set, must be an object with one of 'apex', 'apex-file', or 'soql'",
         ),
       };
     }

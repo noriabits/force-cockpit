@@ -86,21 +86,35 @@
       <button type="button" class="btn yaml-add-input-btn" id="yaml-add-input-btn"></button>
     </div>
     <div class="yaml-form-row yaml-form-ai-only" id="yaml-form-gather-row" style="display: none">
-      <label class="yaml-form-label yaml-form-label--required" id="yaml-form-gather-label"></label>
-      <select class="text-input" id="yaml-form-gather-type">
-        <option value="soql"></option>
-        <option value="apex"></option>
-        <option value="apex-file"></option>
-      </select>
-      <textarea
-        class="text-input yaml-form-gather-content"
-        id="yaml-form-gather-content"
-        rows="3"
-        spellcheck="false"
-      ></textarea>
-      <div class="input-with-paste" id="yaml-form-gather-file-row" style="display: none">
-        <input type="text" class="text-input" id="yaml-form-gather-file-path" autocomplete="off" />
-        <button type="button" class="btn yaml-browse-btn" id="yaml-form-gather-browse-btn"></button>
+      <label class="yaml-log-filter-label">
+        <input type="checkbox" id="yaml-form-gather-enabled" />
+        <span id="yaml-form-gather-label"></span>
+      </label>
+      <div id="yaml-form-gather-body" style="display: none">
+        <select class="text-input" id="yaml-form-gather-type">
+          <option value="soql"></option>
+          <option value="apex"></option>
+          <option value="apex-file"></option>
+        </select>
+        <textarea
+          class="text-input yaml-form-gather-content"
+          id="yaml-form-gather-content"
+          rows="3"
+          spellcheck="false"
+        ></textarea>
+        <div class="input-with-paste" id="yaml-form-gather-file-row" style="display: none">
+          <input
+            type="text"
+            class="text-input"
+            id="yaml-form-gather-file-path"
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            class="btn yaml-browse-btn"
+            id="yaml-form-gather-browse-btn"
+          ></button>
+        </div>
       </div>
     </div>
     <div class="yaml-form-row" id="yaml-form-content-row">

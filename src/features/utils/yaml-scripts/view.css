@@ -55,6 +55,13 @@
   border: 1px solid color-mix(in srgb, var(--vscode-charts-orange, #d18616) 40%, transparent);
 }
 
+/* AI form: optional gather body (revealed by the checkbox) stacks its controls */
+#yaml-form-gather-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* AI form: gather textarea + model hint */
 .yaml-form-gather-content {
   width: 100%;

@@ -110,22 +110,34 @@ const READ_WORKSPACE_FILE_TOOL: ToolSpec = {
   },
 };
 
-const SYSTEM_PREAMBLE =
-  'You are a Salesforce data analyst embedded in the Force Cockpit VS Code extension. ' +
-  'You are given the result of a fixed data-gathering step and a task. Analyse the data ' +
-  'and respond with a clear, concise written analysis. You cannot modify data. ' +
+const COMMON_GUIDANCE =
+  'You cannot modify data. ' +
   'Before writing any SOQL query, call describe_object to verify which fields are available ' +
   '— never invent or guess field API names. If a follow-up query tool is ' +
-  'provided and you genuinely need more data, you may call it; otherwise answer directly ' +
-  'from the data given. ' +
+  'provided and you genuinely need more data, you may call it. ' +
   `You have a hard budget of ${MAX_TOOL_ROUNDS} tool-call rounds for this task; spend them ` +
   'sparingly and prioritise the queries that matter most, because once the budget is ' +
-  'exhausted you must answer with whatever data you already have. ' +
+  'exhausted you must answer with whatever data you already have.';
+
+// Used when the script defines a fixed gather (data) step.
+const GATHER_PREAMBLE =
+  'You are a Salesforce data analyst embedded in the Force Cockpit VS Code extension. ' +
+  'You are given the result of a fixed data-gathering step and a task. Analyse the data ' +
+  'and respond with a clear, concise written analysis. ' +
+  COMMON_GUIDANCE +
+  ' Otherwise answer directly from the data given. ' +
   'Finally, whenever you needed an on-demand follow-up query to complete the analysis, ' +
   'end your response with a short "## Suggested gather improvements" section: describe how ' +
   'the fixed gather step (its SOQL or Apex) could be extended so that the same data would ' +
   'be available up front next time, avoiding the extra round trip. Omit this section if no ' +
   'follow-up queries were needed, otherwise provide the suggestions.';
+
+// Used for input/prompt-only scripts that have no gather step.
+const NO_GATHER_PREAMBLE =
+  'You are a Salesforce assistant embedded in the Force Cockpit VS Code extension. ' +
+  'You are given a task to complete using the tools provided and the connected Salesforce ' +
+  'org. Respond with a clear, concise written answer. ' +
+  COMMON_GUIDANCE;
 
 /**
  * Executes an `ai` script: runs the fixed gather step via ConnectionManager,
@@ -154,22 +166,26 @@ export class AiExecutor {
     };
 
     try {
-      if (!script.gather) {
-        throw new Error('AI script has no gather step.');
-      }
-
       this.throwIfAborted(signal);
-      append('# Gathering data\n');
-      const gathered = await this.runGather(script.gather);
-      append(gathered + '\n\n');
+
+      // The gather (data) step is optional — a script may be driven purely by
+      // its prompt and user inputs.
+      let gatheredSection = '';
+      if (script.gather) {
+        append('# Gathering data\n');
+        const gathered = await this.runGather(script.gather);
+        append(gathered + '\n\n');
+        gatheredSection = `\n\n## Gathered data\n${gathered}`;
+      }
 
       const selectedSkills = this.resolveSelectedSkills(script.skills);
       const skillsSection = this.buildSkillsCatalogue(selectedSkills);
+      const preamble = script.gather ? GATHER_PREAMBLE : NO_GATHER_PREAMBLE;
 
       const messages: ChatMessage[] = [
         {
           role: 'user',
-          text: `${SYSTEM_PREAMBLE}\n\n## Task\n${script.script}${skillsSection}\n\n## Gathered data\n${gathered}`,
+          text: `${preamble}\n\n## Task\n${script.script}${skillsSection}${gatheredSection}`,
         },
       ];
       const tools: ToolSpec[] = [

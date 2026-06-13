@@ -96,6 +96,12 @@ export function createScriptForm(ctx) {
   const formModelHint = /** @type {HTMLElement} */ (
     document.getElementById('yaml-form-model-hint')
   );
+  const formGatherEnabled = /** @type {HTMLInputElement} */ (
+    document.getElementById('yaml-form-gather-enabled')
+  );
+  const formGatherBody = /** @type {HTMLElement} */ (
+    document.getElementById('yaml-form-gather-body')
+  );
   const formGatherType = /** @type {HTMLSelectElement} */ (
     document.getElementById('yaml-form-gather-type')
   );
@@ -234,7 +240,13 @@ export function createScriptForm(ctx) {
     aiRows.forEach((row) => {
       /** @type {HTMLElement} */ (row).style.display = isAi ? '' : 'none';
     });
-    if (isAi) updateGatherMode();
+    if (isAi) updateGatherEnabled();
+  }
+
+  /** The gather step is optional: reveal its controls only when the box is checked. */
+  function updateGatherEnabled() {
+    formGatherBody.style.display = formGatherEnabled.checked ? '' : 'none';
+    if (formGatherEnabled.checked) updateGatherMode();
   }
 
   /** Within an AI gather step, toggle the inline textarea vs the Apex-file picker. */
@@ -318,22 +330,24 @@ export function createScriptForm(ctx) {
     }
   }
 
-  /** Build the ai-only save payload fields (model + gather + skills + follow-up flag). */
+  /** Build the ai-only save payload fields (model + optional gather + skills + flags). */
   function buildAiFields() {
     const kind = formGatherType.value;
-    /** @type {{ kind: 'soql' | 'apex' | 'apex-file'; value: string; file?: string }} */
+    /** @type {{ kind: 'soql' | 'apex' | 'apex-file'; value: string; file?: string } | undefined} */
     let gather;
-    if (kind === 'apex-file') {
-      gather = { kind: 'apex-file', value: '', file: formGatherFilePath.value.trim() };
-    } else if (kind === 'apex') {
-      gather = { kind: 'apex', value: formGatherContent.value };
-    } else {
-      gather = { kind: 'soql', value: formGatherContent.value };
+    if (formGatherEnabled.checked) {
+      if (kind === 'apex-file') {
+        gather = { kind: 'apex-file', value: '', file: formGatherFilePath.value.trim() };
+      } else if (kind === 'apex') {
+        gather = { kind: 'apex', value: formGatherContent.value };
+      } else {
+        gather = { kind: 'soql', value: formGatherContent.value };
+      }
     }
     const skills = checkedSkillIds();
     return {
       model: formModel.value || 'auto',
-      gather,
+      ...(gather ? { gather } : {}),
       ...(skills.length ? { skills } : {}),
       ...(formAllowFollowup.checked ? { allowFollowupQueries: true } : {}),
       ...(formAllowReadFiles.checked ? { allowReadWorkspaceFiles: true } : {}),
@@ -347,7 +361,9 @@ export function createScriptForm(ctx) {
     formFileRow.style.display = isFile ? '' : 'none';
   }
 
+  /** True when the gather step is enabled and its content/file is filled in. */
   function gatherFilled() {
+    if (!formGatherEnabled.checked) return false;
     return formGatherType.value === 'apex-file'
       ? formGatherFilePath.value.trim() !== ''
       : formGatherContent.value.trim() !== '';
@@ -358,7 +374,8 @@ export function createScriptForm(ctx) {
     const hasContent = isFile
       ? formFilePath.value.trim() !== ''
       : editor.getContent().trim() !== '';
-    const gatherOk = formType.value !== 'ai' || gatherFilled();
+    // Gather is optional; it's only required to be filled when its box is checked.
+    const gatherOk = formType.value !== 'ai' || !formGatherEnabled.checked || gatherFilled();
     formSaveBtn.disabled =
       formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent || !gatherOk;
   }
@@ -385,6 +402,7 @@ export function createScriptForm(ctx) {
     formError.textContent = '';
     inputsEditor.clear();
     formModel.value = 'auto';
+    formGatherEnabled.checked = false;
     formGatherType.value = 'soql';
     formGatherContent.value = '';
     formGatherFilePath.value = '';
@@ -449,6 +467,7 @@ export function createScriptForm(ctx) {
     // ── AI fields ──
     formModel.value = script.model ?? 'auto';
     const gather = script.gather;
+    formGatherEnabled.checked = !!gather;
     formGatherType.value = gather?.kind ?? 'soql';
     formGatherContent.value = gather && gather.kind !== 'apex-file' ? gather.value : '';
     formGatherFilePath.value = gather?.kind === 'apex-file' ? (gather.file ?? '') : '';
@@ -526,6 +545,10 @@ export function createScriptForm(ctx) {
     vscode.postMessage({ type: 'browseForScriptFile' });
   });
   // ── AI gather wiring ──
+  formGatherEnabled.addEventListener('change', () => {
+    updateGatherEnabled();
+    updateSaveBtn();
+  });
   formGatherType.addEventListener('change', () => {
     updateGatherMode();
     updateSaveBtn();
@@ -568,7 +591,7 @@ export function createScriptForm(ctx) {
       formFilePath.focus();
       return;
     }
-    if (formType.value === 'ai' && !gatherFilled()) {
+    if (formType.value === 'ai' && formGatherEnabled.checked && !gatherFilled()) {
       formError.textContent = L.errorGatherRequired;
       (formGatherType.value === 'apex-file' ? formGatherFilePath : formGatherContent).focus();
       return;

@@ -137,6 +137,26 @@ describe('AiExecutor', () => {
     expect(gw.sends[0].messages[0].text).toContain('payload-from-apex');
   });
 
+  it('runs an input/prompt-only script with no gather step', async () => {
+    const cm = makeCM();
+    const gw = new FakeGateway([[{ kind: 'text', text: 'answer' }]]);
+    const chunks: string[] = [];
+    const result = await makeExecutor(cm, gw, fakeSkills()).execute(
+      aiScript({ gather: undefined, script: 'Generate the SELECT Id FROM Account query.' }),
+      undefined,
+      (c) => chunks.push(c),
+    );
+
+    expect(cm.query).not.toHaveBeenCalled(); // no gather ran
+    expect(cm.executeAnonymousWithDebugLog).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(chunks.join('')).not.toContain('# Gathering data');
+    const prompt = gw.sends[0].messages[0].text;
+    expect(prompt).not.toContain('## Gathered data');
+    expect(prompt).toContain('Generate the SELECT Id FROM Account query.');
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('describe_object');
+  });
+
   it('fails cleanly when the apex gather does not compile', async () => {
     const cm = makeCM({
       executeAnonymousWithDebugLog: vi.fn(async () => ({
