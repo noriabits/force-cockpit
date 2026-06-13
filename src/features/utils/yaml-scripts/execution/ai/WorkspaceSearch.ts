@@ -41,7 +41,18 @@ export class VsCodeWorkspaceSearch implements WorkspaceSearch {
     }
 
     const isIgnored = await this.getIgnoreMatcher();
-    const uris = await vscode.workspace.findFiles('**/*', undefined, MAX_CANDIDATES);
+    // When the pattern is a literal word (no regex metacharacters), narrow at
+    // the source with a `**/*word*` glob so VS Code only returns candidate
+    // matches. Enumerating the whole tree (`**/*`) and capping at
+    // MAX_CANDIDATES silently drops files in large Salesforce workspaces (tens
+    // of thousands of files) — the target can fall outside the capped slice and
+    // never reach the regex filter. The case-insensitive `re` still runs on the
+    // results, so glob case-sensitivity (on case-sensitive filesystems) can
+    // only narrow, never wrongly include. Genuine regex patterns fall back to a
+    // capped full enumeration.
+    const isLiteral = /^[\w-]+$/.test(p);
+    const glob = isLiteral ? `**/*${p}*` : '**/*';
+    const uris = await vscode.workspace.findFiles(glob, undefined, MAX_CANDIDATES);
     const candidatesCapped = uris.length >= MAX_CANDIDATES;
     const matched = uris
       .map(displayPath)
