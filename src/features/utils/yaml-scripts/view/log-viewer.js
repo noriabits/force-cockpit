@@ -50,16 +50,23 @@ export function createLogViewer(ctx) {
    * Reads `data-raw-log` rather than `textContent` so the clean Markdown source is
    * used — not the JSON-table-rendered HTML the inline viewer shows for AI scripts.
    * @param {HTMLPreElement} logOutput
+   * @param {any} script
    * @returns {HTMLButtonElement}
    */
-  function buildOpenAsMarkdownButton(logOutput) {
+  function buildOpenAsMarkdownButton(logOutput, script) {
     const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     button.className = 'yaml-open-markdown-btn';
     button.textContent = 'Open as markdown';
     button.style.display = 'none';
     button.addEventListener('click', () => {
       const content = logOutput.getAttribute('data-raw-log') || logOutput.textContent || '';
-      vscode.postMessage({ type: 'openScriptResultMarkdown', content });
+      // Pass scriptId/title so the host can target a stable per-script preview URI.
+      vscode.postMessage({
+        type: 'openScriptResultMarkdown',
+        content,
+        scriptId: script.id,
+        title: script.name,
+      });
     });
     return button;
   }
@@ -183,7 +190,7 @@ export function createLogViewer(ctx) {
 
     // AI scripts emit Markdown — offer to open the raw output in VSCode's
     // native Markdown preview. Other script types don't get this button.
-    const openAsMarkdownBtn = isAi ? buildOpenAsMarkdownButton(logOutput) : null;
+    const openAsMarkdownBtn = isAi ? buildOpenAsMarkdownButton(logOutput, script) : null;
     if (openAsMarkdownBtn) logViewer.appendChild(openAsMarkdownBtn);
 
     const copyToClipboardBtn = buildCopyToClipboardButton(logOutput);

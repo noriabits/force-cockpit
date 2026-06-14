@@ -29,6 +29,18 @@ export function createYamlScriptsFeature(paths: {
       paths.describeService,
       workspaceSearch,
     );
+    // Back the "Open as markdown" preview with a virtual document at a stable
+    // per-script URI. Each click stores the latest result and fires onDidChange,
+    // so an already-open preview refreshes in place to the new content instead of
+    // staying bound to a stale untitled document (and untitled docs don't pile up).
+    const RESULT_SCHEME = 'force-cockpit-ai-result';
+    const resultContents = new Map<string, string>();
+    const onDidChangeResult = new vscode.EventEmitter<vscode.Uri>();
+    vscode.workspace.registerTextDocumentContentProvider(RESULT_SCHEME, {
+      onDidChange: onDidChangeResult.event,
+      provideTextDocumentContent: (uri) => resultContents.get(uri.path) ?? '',
+    });
+
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {
       id: 'yaml-scripts',
@@ -150,8 +162,14 @@ export function createYamlScriptsFeature(paths: {
         openScriptResultMarkdown: {
           handler: async (msg) => {
             const content = msg.content as string;
-            const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
-            await vscode.commands.executeCommand('markdown.showPreview', doc.uri);
+            // Stable URI per script: re-runs reuse one preview, different scripts
+            // each get their own. The `.md` suffix makes VSCode treat it as markdown.
+            const title = (msg.title as string) || (msg.scriptId as string) || 'AI result';
+            const uri = vscode.Uri.parse(`${RESULT_SCHEME}:/${encodeURIComponent(title)}.md`);
+            resultContents.set(uri.path, content);
+            onDidChangeResult.fire(uri);
+            await vscode.workspace.openTextDocument(uri);
+            await vscode.commands.executeCommand('markdown.showPreview', uri);
             return {};
           },
           successType: 'openScriptResultMarkdownDone',
