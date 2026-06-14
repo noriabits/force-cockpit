@@ -490,4 +490,63 @@ describe('AiExecutor', () => {
     );
     expect(result.cancelled).toBe(true);
   });
+
+  it('cancels mid-flight when the gather query hangs', async () => {
+    const ac = new AbortController();
+    // A gather query that never resolves on its own — only the abort can end it.
+    const cm = makeCM({ query: vi.fn(() => new Promise(() => {})) } as Partial<ConnectionManager>);
+    const promise = makeExecutor(cm, new FakeGateway([[]]), fakeSkills()).execute(
+      aiScript(),
+      ac.signal,
+    );
+    ac.abort();
+    const result = await promise;
+    expect(result.cancelled).toBe(true);
+  });
+
+  it('cancels mid-flight while the model is still streaming', async () => {
+    const ac = new AbortController();
+    // Yield one chunk, then abort and hang — the run must stop without waiting
+    // for the (never-arriving) next chunk.
+    const gw: LmGateway = {
+      listModels: async () => [],
+      async *send() {
+        yield { kind: 'text', text: 'partial ' } as ChatEvent;
+        ac.abort();
+        await new Promise(() => {});
+      },
+    };
+    const result = await makeExecutor(makeCM(), gw, fakeSkills()).execute(
+      aiScript({ gather: undefined }),
+      ac.signal,
+    );
+    expect(result.cancelled).toBe(true);
+  });
+
+  it('cancels mid-flight while a follow-up tool call is running', async () => {
+    const ac = new AbortController();
+    // gather resolves; the follow-up run_soql query aborts and then hangs.
+    const queryMock = vi
+      .fn()
+      .mockResolvedValueOnce({ records: [{ Id: '001' }], totalSize: 1, done: true })
+      .mockImplementationOnce(() => {
+        ac.abort();
+        return new Promise(() => {});
+      });
+    const cm = makeCM({ query: queryMock } as Partial<ConnectionManager>);
+    const gw = new FakeGateway([
+      [
+        {
+          kind: 'toolCall',
+          call: { callId: 'c1', name: 'run_soql', input: { soql: 'SELECT Id FROM Contact' } },
+        },
+      ],
+      [{ kind: 'text', text: 'done' }],
+    ]);
+    const result = await makeExecutor(cm, gw, fakeSkills()).execute(
+      aiScript({ allowFollowupQueries: true }),
+      ac.signal,
+    );
+    expect(result.cancelled).toBe(true);
+  });
 });
