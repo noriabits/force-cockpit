@@ -65,6 +65,11 @@ export interface ExecuteScriptResult {
   debugLog: string;
   filteredDebugLog?: string;
   cancelled?: boolean;
+  /**
+   * Set for `ai` scripts when the saved model was unavailable and the gateway
+   * fell back to another model. Lets the caller surface a warning to the user.
+   */
+  modelFallback?: { requestedId: string; usedModelName: string };
 }
 
 export interface SaveScriptInput {

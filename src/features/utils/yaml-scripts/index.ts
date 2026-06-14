@@ -58,7 +58,29 @@ export function createYamlScriptsFeature(paths: {
             const scriptId = msg.scriptId as string;
             const inputValues = (msg.inputs ?? {}) as Record<string, string>;
             const scripts = await service.loadScripts();
-            return service.executeScript(scriptId, scripts, inputValues, signal, onChunk);
+            // Warn as soon as the fallback is detected (before the analysis
+            // runs) so the user can cancel and pick a different model.
+            const onModelFallback = ({
+              requestedId,
+              usedModelName,
+            }: {
+              requestedId: string;
+              usedModelName: string;
+            }) => {
+              const scriptName = scripts.find((s) => s.id === scriptId)?.name ?? scriptId;
+              void vscode.window.showWarningMessage(
+                `The model "${requestedId}" chosen for "${scriptName}" is no longer available. ` +
+                  `Using "${usedModelName}" instead.`,
+              );
+            };
+            return await service.executeScript(
+              scriptId,
+              scripts,
+              inputValues,
+              signal,
+              onChunk,
+              onModelFallback,
+            );
           },
           successType: 'executeYamlScriptResult',
           errorType: 'executeYamlScriptError',

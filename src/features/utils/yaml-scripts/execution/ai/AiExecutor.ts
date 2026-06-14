@@ -8,6 +8,9 @@ import type { ChatMessage, LmGateway, ToolCall, ToolSpec, WorkspaceSearch } from
 
 const MAX_TOOL_ROUNDS = 150;
 
+/** Details of a model fallback, surfaced to the user when it happens. */
+type ModelFallback = { requestedId: string; usedModelName: string };
+
 function recordsToJson(records: unknown[]): string {
   return JSON.stringify(stripRecordAttributes(records), null, 2);
 }
@@ -158,6 +161,7 @@ export class AiExecutor {
     script: YamlScript,
     signal?: AbortSignal,
     onLogChunk?: (chunk: string) => void,
+    onModelFallback?: (fallback: ModelFallback) => void,
   ): Promise<ExecuteScriptResult> {
     let transcript = '';
     const append = (s: string) => {
@@ -201,13 +205,23 @@ export class AiExecutor {
       ];
 
       append('# Analysis\n');
-      await this.runAnalysisLoop(script, messages, tools, signal, append);
+      const fallback = { value: undefined as ModelFallback | undefined };
+      await this.runAnalysisLoop(
+        script,
+        messages,
+        tools,
+        signal,
+        append,
+        fallback,
+        onModelFallback,
+      );
 
       return {
         scriptId: script.id,
         success: true,
         message: `AI script "${script.name}" completed.`,
         debugLog: transcript,
+        ...(fallback.value ? { modelFallback: fallback.value } : {}),
       };
     } catch (err) {
       const errorMsg = (err as Error).message;
@@ -265,6 +279,8 @@ export class AiExecutor {
     tools: ToolSpec[],
     signal: AbortSignal | undefined,
     append: (s: string) => void,
+    fallback: { value: ModelFallback | undefined },
+    onModelFallback?: (fallback: ModelFallback) => void,
   ): Promise<void> {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       this.throwIfAborted(signal);
@@ -278,8 +294,24 @@ export class AiExecutor {
         if (event.kind === 'text') {
           assistantText += event.text;
           append(event.text);
-        } else {
+        } else if (event.kind === 'toolCall') {
           toolCalls.push(event.call);
+        } else {
+          // modelFallback — the gateway re-resolves every round, so it fires
+          // repeatedly; warn the user only once.
+          if (!fallback.value) {
+            fallback.value = {
+              requestedId: event.requestedId,
+              usedModelName: event.usedModelName,
+            };
+            // Notify the host immediately (before the analysis runs) so it can
+            // surface a toast while the run is still cancellable.
+            onModelFallback?.(fallback.value);
+            append(
+              `⚠ The model "${event.requestedId}" chosen for this script is no longer ` +
+                `available. Using "${event.usedModelName}" instead.\n\n`,
+            );
+          }
         }
       }
 

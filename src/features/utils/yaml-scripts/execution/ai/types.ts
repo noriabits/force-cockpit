@@ -31,7 +31,14 @@ export type ChatMessage =
   | { role: 'toolResult'; callId: string; content: string };
 
 /** A fragment streamed back from the model. */
-export type ChatEvent = { kind: 'text'; text: string } | { kind: 'toolCall'; call: ToolCall };
+export type ChatEvent =
+  | { kind: 'text'; text: string }
+  | { kind: 'toolCall'; call: ToolCall }
+  /**
+   * Emitted once when the requested model id was not available and the gateway
+   * fell back to another model, so callers can warn the user.
+   */
+  | { kind: 'modelFallback'; requestedId: string; usedModelName: string };
 
 export interface ChatRequest {
   /** Preferred model id; gateway falls back to the first available model. */

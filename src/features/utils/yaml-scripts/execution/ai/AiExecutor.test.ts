@@ -437,6 +437,50 @@ describe('AiExecutor', () => {
     expect(toolResult && 'content' in toolResult ? toolResult.content : '').toMatch(/not found/i);
   });
 
+  it('warns once and reports the fallback when the chosen model is unavailable', async () => {
+    const cm = makeCM();
+    // The gateway emits modelFallback every round (it re-resolves each send);
+    // a follow-up tool call forces a second round so we can prove it warns once.
+    const gw = new FakeGateway([
+      [
+        { kind: 'modelFallback', requestedId: 'gpt-4o', usedModelName: 'Claude Sonnet 4.6' },
+        {
+          kind: 'toolCall',
+          call: { callId: 'c1', name: 'run_soql', input: { soql: 'SELECT Id FROM Contact' } },
+        },
+      ],
+      [
+        { kind: 'modelFallback', requestedId: 'gpt-4o', usedModelName: 'Claude Sonnet 4.6' },
+        { kind: 'text', text: 'done' },
+      ],
+    ]);
+    const fallbacks: Array<{ requestedId: string; usedModelName: string }> = [];
+    const result = await makeExecutor(cm, gw, fakeSkills()).execute(
+      aiScript({ model: 'gpt-4o', allowFollowupQueries: true }),
+      undefined,
+      undefined,
+      (fb) => fallbacks.push(fb),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.modelFallback).toEqual({
+      requestedId: 'gpt-4o',
+      usedModelName: 'Claude Sonnet 4.6',
+    });
+    // The host callback fires once (so the toast shows once), not per round.
+    expect(fallbacks).toEqual([{ requestedId: 'gpt-4o', usedModelName: 'Claude Sonnet 4.6' }]);
+    const warnings = result.debugLog.match(/no longer\s+available/g) ?? [];
+    expect(warnings).toHaveLength(1); // warned once, not per round
+    expect(result.debugLog).toContain('"gpt-4o"');
+    expect(result.debugLog).toContain('"Claude Sonnet 4.6"');
+  });
+
+  it('omits modelFallback when the chosen model is available', async () => {
+    const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
+    const result = await makeExecutor(makeCM(), gw, fakeSkills()).execute(aiScript());
+    expect(result.modelFallback).toBeUndefined();
+  });
+
   it('returns cancelled when the signal is already aborted', async () => {
     const ac = new AbortController();
     ac.abort();

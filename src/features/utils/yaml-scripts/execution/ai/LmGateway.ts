@@ -59,7 +59,12 @@ export class VsCodeLmGateway implements LmGateway {
   async *send(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent> {
     const models = await vscode.lm.selectChatModels();
     if (models.length === 0) throw new NoModelsAvailableError();
-    const model = req.modelId ? (models.find((m) => m.id === req.modelId) ?? models[0]) : models[0];
+    const requested = req.modelId;
+    const found = requested ? models.find((m) => m.id === requested) : undefined;
+    const model = found ?? models[0];
+    if (requested && !found) {
+      yield { kind: 'modelFallback', requestedId: requested, usedModelName: model.name };
+    }
 
     const messages = req.messages.map(toVscodeMessage);
     const tools: vscode.LanguageModelChatTool[] = req.tools.map((t) => ({

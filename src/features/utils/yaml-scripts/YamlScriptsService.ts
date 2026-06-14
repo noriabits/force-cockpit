@@ -66,6 +66,7 @@ export class YamlScriptsService {
     inputValues?: Record<string, string>,
     signal?: AbortSignal,
     onLogChunk?: (chunk: string) => void,
+    onModelFallback?: (fallback: { requestedId: string; usedModelName: string }) => void,
   ): Promise<ExecuteScriptResult> {
     const script = scripts.find((s) => s.id === scriptId);
     if (!script) {
@@ -78,7 +79,7 @@ export class YamlScriptsService {
     }
 
     const finalScript = this.resolvePlaceholders(script, inputValues);
-    const result = await this.dispatchExecution(finalScript, signal, onLogChunk);
+    const result = await this.dispatchExecution(finalScript, signal, onLogChunk, onModelFallback);
 
     this.repo.saveExecutionLog(script.name, result.debugLog);
     return result;
@@ -128,6 +129,7 @@ export class YamlScriptsService {
     script: YamlScript,
     signal?: AbortSignal,
     onLogChunk?: (chunk: string) => void,
+    onModelFallback?: (fallback: { requestedId: string; usedModelName: string }) => void,
   ): Promise<ExecuteScriptResult> {
     switch (script.type) {
       case 'command':
@@ -137,7 +139,7 @@ export class YamlScriptsService {
       case 'apex':
         return this.apex.execute(script);
       case 'ai':
-        return this.ai.execute(script, signal, onLogChunk);
+        return this.ai.execute(script, signal, onLogChunk, onModelFallback);
     }
   }
 }
