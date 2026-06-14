@@ -37,13 +37,23 @@ function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
 export class VsCodeLmGateway implements LmGateway {
   async listModels(): Promise<ChatModelInfo[]> {
     const models = await vscode.lm.selectChatModels();
-    return models.map((m) => ({
-      id: m.id,
-      vendor: m.vendor,
-      family: m.family,
-      name: m.name,
-      maxInputTokens: m.maxInputTokens,
-    }));
+    // selectChatModels() can return the same model more than once (e.g. Copilot
+    // registers a model per capability/session), which surfaces as duplicate
+    // entries in the picker. De-duplicate by id, keeping the first occurrence.
+    const seen = new Set<string>();
+    const unique: ChatModelInfo[] = [];
+    for (const m of models) {
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      unique.push({
+        id: m.id,
+        vendor: m.vendor,
+        family: m.family,
+        name: m.name,
+        maxInputTokens: m.maxInputTokens,
+      });
+    }
+    return unique;
   }
 
   async *send(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent> {

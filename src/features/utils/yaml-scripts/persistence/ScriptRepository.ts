@@ -149,7 +149,7 @@ export class ScriptRepository {
   private buildYamlData(input: SaveScriptInput): Record<string, unknown> {
     const data: Record<string, unknown> = { name: input.name };
     if (input.description) data.description = input.description;
-    if (input.type === 'ai' && input.model && input.model !== 'auto') data.model = input.model;
+    if (input.type === 'ai' && input.model) data.model = input.model;
     const serializedInputs = this.serializeInputs(input.inputs);
     if (serializedInputs) data.inputs = serializedInputs;
 
@@ -217,9 +217,7 @@ export class ScriptRepository {
       ...(input.inputs?.length ? { inputs: input.inputs } : {}),
       ...(input.filterUserDebug ? { filterUserDebug: true } : {}),
       ...(input.formatJson ? { formatJson: true } : {}),
-      ...(input.type === 'ai' && input.model && input.model !== 'auto'
-        ? { model: input.model }
-        : {}),
+      ...(input.type === 'ai' && input.model ? { model: input.model } : {}),
       ...(input.gather ? { gather: input.gather } : {}),
       ...(input.type === 'ai' && input.allowFollowupQueries ? { allowFollowupQueries: true } : {}),
       ...(input.type === 'ai' && input.allowReadWorkspaceFiles

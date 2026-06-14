@@ -36,7 +36,11 @@ export interface YamlScript {
   filterUserDebug?: boolean;
   formatJson?: boolean;
   // ── ai-only ──
-  /** Preferred language-model id (from the picker); omit/`auto` = first available. */
+  /**
+   * Chosen language-model id (from the picker). Required for new scripts; may be
+   * absent on older saved scripts, in which case the gateway falls back to the
+   * first available model.
+   */
   model?: string;
   /** Fixed data-gathering step run before the analysis prompt. */
   gather?: GatherSpec;

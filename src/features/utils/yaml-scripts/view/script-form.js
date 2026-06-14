@@ -191,7 +191,7 @@ export function createScriptForm(ctx) {
   // ── AI field labels ───────────────────────────────────────────────────────
   const modelLabel = document.getElementById('yaml-form-model-label');
   if (modelLabel) modelLabel.textContent = L.labelModel;
-  formModel.options[0].text = L.modelAuto;
+  formModel.options[0].text = L.modelPlaceholder;
   const gatherLabel = document.getElementById('yaml-form-gather-label');
   if (gatherLabel) gatherLabel.textContent = L.labelGather;
   formGatherType.options[0].text = L.gatherTypeSoql;
@@ -259,18 +259,25 @@ export function createScriptForm(ctx) {
   }
 
   // ── Model picker (populated from the async listChatModels round-trip) ──────
-  let pendingModelSelection = 'auto';
+  // The model choice is mandatory: '' means "nothing picked yet" (the disabled
+  // placeholder option), which keeps the Save button disabled for AI scripts.
+  let pendingModelSelection = '';
 
   function applyPendingModel() {
     const has = Array.from(formModel.options).some((o) => o.value === pendingModelSelection);
-    formModel.value = has ? pendingModelSelection : 'auto';
+    formModel.value = has ? pendingModelSelection : '';
   }
 
   /** @param {Array<{ id: string; name?: string; family?: string }>} models */
   function setModels(models) {
-    pendingModelSelection = formModel.value || pendingModelSelection || 'auto';
+    pendingModelSelection = formModel.value || pendingModelSelection || '';
     while (formModel.options.length > 1) formModel.remove(1);
-    for (const m of models) {
+    const sorted = models
+      .slice()
+      .sort((a, b) =>
+        (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }),
+      );
+    for (const m of sorted) {
       const opt = document.createElement('option');
       opt.value = m.id;
       opt.text = m.name || m.id;
@@ -282,6 +289,7 @@ export function createScriptForm(ctx) {
       formModelHint.style.display = none ? '' : 'none';
       formModelHint.textContent = none ? L.modelHintNone : '';
     }
+    updateSaveBtn();
   }
 
   // ── Skills picker (populated from the async listSkills round-trip) ─────────
@@ -346,7 +354,7 @@ export function createScriptForm(ctx) {
     }
     const skills = checkedSkillIds();
     return {
-      model: formModel.value || 'auto',
+      model: formModel.value,
       ...(gather ? { gather } : {}),
       ...(skills.length ? { skills } : {}),
       ...(formAllowFollowup.checked ? { allowFollowupQueries: true } : {}),
@@ -376,8 +384,14 @@ export function createScriptForm(ctx) {
       : editor.getContent().trim() !== '';
     // Gather is optional; it's only required to be filled when its box is checked.
     const gatherOk = formType.value !== 'ai' || !formGatherEnabled.checked || gatherFilled();
+    // AI scripts require an explicit model choice.
+    const modelOk = formType.value !== 'ai' || formModel.value !== '';
     formSaveBtn.disabled =
-      formName.value.trim() === '' || formFolder.value.trim() === '' || !hasContent || !gatherOk;
+      formName.value.trim() === '' ||
+      formFolder.value.trim() === '' ||
+      !hasContent ||
+      !gatherOk ||
+      !modelOk;
   }
 
   function updateApexDefaultsVisibility() {
@@ -401,7 +415,7 @@ export function createScriptForm(ctx) {
     editor.setContent('');
     formError.textContent = '';
     inputsEditor.clear();
-    formModel.value = 'auto';
+    formModel.value = '';
     formGatherEnabled.checked = false;
     formGatherType.value = 'soql';
     formGatherContent.value = '';
@@ -465,7 +479,7 @@ export function createScriptForm(ctx) {
     editor.setContent(script.scriptFile ? '' : (script.script ?? ''));
     editor.setLanguage(script.type);
     // ── AI fields ──
-    formModel.value = script.model ?? 'auto';
+    formModel.value = script.model ?? '';
     const gather = script.gather;
     formGatherEnabled.checked = !!gather;
     formGatherType.value = gather?.kind ?? 'soql';
@@ -496,7 +510,7 @@ export function createScriptForm(ctx) {
     updateAiVisibility();
     // Re-apply the model + skills once the (async) lists arrive, in case the
     // saved selections aren't rendered yet.
-    pendingModelSelection = script.model ?? 'auto';
+    pendingModelSelection = script.model ?? '';
     applyPendingModel();
     pendingSkillSelection = Array.isArray(script.skills) ? script.skills.slice() : [];
     setSkills([], false);
@@ -545,6 +559,7 @@ export function createScriptForm(ctx) {
     vscode.postMessage({ type: 'browseForScriptFile' });
   });
   // ── AI gather wiring ──
+  formModel.addEventListener('change', updateSaveBtn);
   formGatherEnabled.addEventListener('change', () => {
     updateGatherEnabled();
     updateSaveBtn();
@@ -589,6 +604,11 @@ export function createScriptForm(ctx) {
     if (isFile && !filePathVal) {
       formError.textContent = L.errorFilePathRequired;
       formFilePath.focus();
+      return;
+    }
+    if (formType.value === 'ai' && !formModel.value) {
+      formError.textContent = L.errorModelRequired;
+      formModel.focus();
       return;
     }
     if (formType.value === 'ai' && formGatherEnabled.checked && !gatherFilled()) {
