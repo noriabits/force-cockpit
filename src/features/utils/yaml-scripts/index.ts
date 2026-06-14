@@ -29,16 +29,21 @@ export function createYamlScriptsFeature(paths: {
       paths.describeService,
       workspaceSearch,
     );
-    // Back the "Open as markdown" preview with a virtual document at a stable
-    // per-script URI. Each click stores the latest result and fires onDidChange,
-    // so an already-open preview refreshes in place to the new content instead of
-    // staying bound to a stale untitled document (and untitled docs don't pile up).
+    // Back the "Open as markdown" preview with a read-only virtual document so no
+    // raw-source editor is opened. A *fresh* URI is minted per click (the version
+    // lives in the query, keeping the tab title clean): a never-seen URI bypasses
+    // VSCode's content-provider cache (firing onDidChange does not reliably
+    // re-fetch), guaranteeing the latest result is rendered. The unlocked Markdown
+    // preview matches on column only, so the same preview tab is reused and simply
+    // switched to the new URI — no tab piles up.
     const RESULT_SCHEME = 'force-cockpit-ai-result';
     const resultContents = new Map<string, string>();
-    const onDidChangeResult = new vscode.EventEmitter<vscode.Uri>();
+    // path → previous uri.toString(), so we can evict the prior version per script
+    // and keep the map to one entry each.
+    const lastUriByPath = new Map<string, string>();
+    let resultVersion = 0;
     vscode.workspace.registerTextDocumentContentProvider(RESULT_SCHEME, {
-      onDidChange: onDidChangeResult.event,
-      provideTextDocumentContent: (uri) => resultContents.get(uri.path) ?? '',
+      provideTextDocumentContent: (uri) => resultContents.get(uri.toString()) ?? '',
     });
 
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
@@ -162,12 +167,23 @@ export function createYamlScriptsFeature(paths: {
         openScriptResultMarkdown: {
           handler: async (msg) => {
             const content = msg.content as string;
-            // Stable URI per script: re-runs reuse one preview, different scripts
-            // each get their own. The `.md` suffix makes VSCode treat it as markdown.
-            const title = (msg.title as string) || (msg.scriptId as string) || 'AI result';
-            const uri = vscode.Uri.parse(`${RESULT_SCHEME}:/${encodeURIComponent(title)}.md`);
-            resultContents.set(uri.path, content);
-            onDidChangeResult.fire(uri);
+            // `path` carries the script title (drives the tab name); `query` carries
+            // the version so each run gets a unique, never-cached URI. The `.md`
+            // suffix makes VSCode treat it as markdown.
+            const title = (
+              (msg.title as string) ||
+              (msg.scriptId as string) ||
+              'AI result'
+            ).replace(/[\\/]/g, '_');
+            const uri = vscode.Uri.from({
+              scheme: RESULT_SCHEME,
+              path: `/${title}.md`,
+              query: `v=${++resultVersion}`,
+            });
+            const prev = lastUriByPath.get(uri.path);
+            if (prev) resultContents.delete(prev);
+            resultContents.set(uri.toString(), content);
+            lastUriByPath.set(uri.path, uri.toString());
             await vscode.workspace.openTextDocument(uri);
             await vscode.commands.executeCommand('markdown.showPreview', uri);
             return {};
