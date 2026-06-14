@@ -61,7 +61,12 @@ export class VsCodeLmGateway implements LmGateway {
     if (models.length === 0) throw new NoModelsAvailableError();
     const requested = req.modelId;
     const found = requested ? models.find((m) => m.id === requested) : undefined;
-    const model = found ?? models[0];
+    // When the requested model is gone, prefer Copilot's "Auto" model (detected
+    // leniently by name or id, mirroring the picker in script-form.js) over an
+    // arbitrary first entry. Falls through to models[0] if Auto isn't present.
+    const isAuto = (m: { id: string; name: string }) =>
+      m.name.toLowerCase() === 'auto' || m.id.toLowerCase() === 'auto';
+    const model = found ?? models.find(isAuto) ?? models[0];
     if (requested && !found) {
       yield { kind: 'modelFallback', requestedId: requested, usedModelName: model.name };
     }

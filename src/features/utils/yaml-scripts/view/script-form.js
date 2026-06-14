@@ -263,9 +263,27 @@ export function createScriptForm(ctx) {
   // placeholder option), which keeps the Save button disabled for AI scripts.
   let pendingModelSelection = '';
 
+  /**
+   * The value of Copilot's "Auto" model option, or '' if not present. Detected
+   * leniently: a model whose name or id is "auto" (case-insensitive). Kept in
+   * sync with the gateway-side detection in LmGateway.ts.
+   */
+  function findAutoOptionValue() {
+    const opt = Array.from(formModel.options).find(
+      (o) =>
+        o.value !== '' &&
+        (o.text.trim().toLowerCase() === 'auto' || o.value.toLowerCase() === 'auto'),
+    );
+    return opt ? opt.value : '';
+  }
+
   function applyPendingModel() {
-    const has = Array.from(formModel.options).some((o) => o.value === pendingModelSelection);
-    formModel.value = has ? pendingModelSelection : '';
+    const has =
+      pendingModelSelection !== '' &&
+      Array.from(formModel.options).some((o) => o.value === pendingModelSelection);
+    // With no valid prior choice, default to Auto when available, else leave the
+    // (disabled) placeholder selected.
+    formModel.value = has ? pendingModelSelection : findAutoOptionValue();
   }
 
   /** @param {Array<{ id: string; name?: string; family?: string }>} models */
@@ -415,7 +433,8 @@ export function createScriptForm(ctx) {
     editor.setContent('');
     formError.textContent = '';
     inputsEditor.clear();
-    formModel.value = '';
+    pendingModelSelection = '';
+    applyPendingModel();
     formGatherEnabled.checked = false;
     formGatherType.value = 'soql';
     formGatherContent.value = '';
