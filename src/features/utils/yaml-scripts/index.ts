@@ -16,6 +16,8 @@ export function createYamlScriptsFeature(paths: {
   workspaceState: vscode.Memento;
   skillsPaths: string[];
   describeService: DescribeService;
+  /** Push an out-of-band message to the webview (e.g. editor-save → form sync). */
+  postToWebview: (message: unknown) => void;
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
     const gateway = new VsCodeLmGateway();
@@ -45,6 +47,63 @@ export function createYamlScriptsFeature(paths: {
     vscode.workspace.registerTextDocumentContentProvider(RESULT_SCHEME, {
       provideTextDocumentContent: (uri) => resultContents.get(uri.toString()) ?? '',
     });
+
+    // ── "Open in editor": editable virtual buffer for the script code body ──
+    // An in-memory FileSystemProvider gives a real Ctrl+S → writeFile hook with no
+    // "Save As" dialog and no temp files on disk. The editor edits only the code
+    // string; on save we push `scriptCodeUpdated` back to the form (YAML persistence
+    // stays on the form's Save button). A fresh URI is minted per click (version in
+    // the query) so seed content always lands in a clean buffer, and the prior buffer
+    // for the same title is evicted (one entry per script title) — mirrors the
+    // markdown-preview provider above.
+    const EDIT_SCHEME = 'force-cockpit-script-edit';
+    const editBuffers = new Map<string, { content: Uint8Array; mtime: number }>();
+    const lastEditUriByPath = new Map<string, string>();
+    let editVersion = 0;
+    const editEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
+    vscode.workspace.registerFileSystemProvider(
+      EDIT_SCHEME,
+      {
+        onDidChangeFile: editEmitter.event,
+        watch: () => new vscode.Disposable(() => {}),
+        stat: (uri) => {
+          const buf = editBuffers.get(uri.toString());
+          if (!buf) throw vscode.FileSystemError.FileNotFound(uri);
+          return {
+            type: vscode.FileType.File,
+            ctime: 0,
+            mtime: buf.mtime,
+            size: buf.content.byteLength,
+          };
+        },
+        readFile: (uri) => {
+          const buf = editBuffers.get(uri.toString());
+          if (!buf) throw vscode.FileSystemError.FileNotFound(uri);
+          return buf.content;
+        },
+        writeFile: (uri, content) => {
+          editBuffers.set(uri.toString(), { content, mtime: Date.now() });
+          editEmitter.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+          paths.postToWebview({
+            type: 'scriptCodeUpdated',
+            data: { code: Buffer.from(content).toString('utf8') },
+          });
+        },
+        readDirectory: () => {
+          throw vscode.FileSystemError.NoPermissions();
+        },
+        createDirectory: () => {
+          throw vscode.FileSystemError.NoPermissions();
+        },
+        delete: () => {
+          throw vscode.FileSystemError.NoPermissions();
+        },
+        rename: () => {
+          throw vscode.FileSystemError.NoPermissions();
+        },
+      },
+      { isCaseSensitive: true },
+    );
 
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {
@@ -153,6 +212,37 @@ export function createYamlScriptsFeature(paths: {
           },
           successType: 'openScriptFileResult',
           errorType: 'openScriptFileError',
+        },
+        editScriptCode: {
+          handler: async (msg) => {
+            const code = (msg.code as string) ?? '';
+            const scriptType = (msg.scriptType as string) ?? 'apex';
+            const extByType: Record<string, string> = {
+              apex: 'cls',
+              js: 'js',
+              command: 'sh',
+              ai: 'md',
+            };
+            const ext = extByType[scriptType] ?? 'txt';
+            const title = ((msg.name as string) || '').replace(/[\\/]/g, '_').trim() || 'script';
+            const uri = vscode.Uri.from({
+              scheme: EDIT_SCHEME,
+              path: `/${title}.${ext}`,
+              query: `v=${++editVersion}`,
+            });
+            const prev = lastEditUriByPath.get(uri.path);
+            if (prev) editBuffers.delete(prev);
+            editBuffers.set(uri.toString(), {
+              content: Buffer.from(code, 'utf8'),
+              mtime: Date.now(),
+            });
+            lastEditUriByPath.set(uri.path, uri.toString());
+            const doc = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(doc, { preview: false });
+            return {};
+          },
+          successType: 'editScriptCodeDone',
+          errorType: 'editScriptCodeError',
         },
         openScriptResult: {
           handler: async (msg) => {

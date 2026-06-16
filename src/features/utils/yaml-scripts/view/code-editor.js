@@ -1,82 +1,20 @@
 // @ts-check
-// Self-contained code editor widget: textarea overlaid by a highlight.js-rendered
-// <pre><code>, plus a line-number gutter. Syncs scroll, handles Tab indentation,
-// throttles highlighting via requestAnimationFrame.
-
-/** @param {'apex' | 'command' | 'js' | 'ai'} type */
-function languageForType(type) {
-  switch (type) {
-    case 'js':
-      return 'javascript';
-    case 'command':
-      return 'bash';
-    case 'ai':
-      return 'plaintext';
-    default:
-      return 'apex';
-  }
-}
+// Plain-textarea code editor widget. Syntax highlighting and line numbers were
+// intentionally dropped — for real editing the user opens the code in a native
+// VS Code editor (see the "Open in editor" button + the `editScriptCode` route).
+// The only affordance kept is Tab → 2 spaces so inline code stays indentable.
 
 /**
- * @param {{
- *   textarea: HTMLTextAreaElement,
- *   codeEl: HTMLElement,
- *   gutter: HTMLElement,
- *   hljs: any,
- * }} opts
+ * @param {{ textarea: HTMLTextAreaElement }} opts
  * @returns {{
  *   getContent: () => string,
  *   setContent: (text: string) => void,
- *   setLanguage: (type: 'apex' | 'command' | 'js' | 'ai') => void,
  *   setPlaceholder: (text: string) => void,
  *   onInput: (handler: () => void) => void,
  * }}
  */
-export function createCodeEditor({ textarea, codeEl, gutter, hljs }) {
-  let currentLang = 'apex';
-  /** @type {number | null} */
-  let highlightRaf = null;
-
-  function syncHighlight() {
-    const text = textarea.value;
-    const lineCount = text ? text.split('\n').length : 1;
-    const lineNumbers = [];
-    for (let lineIdx = 1; lineIdx <= lineCount; lineIdx++) lineNumbers.push(lineIdx);
-    gutter.textContent = lineNumbers.join('\n');
-
-    if (highlightRaf !== null) {
-      cancelAnimationFrame(highlightRaf);
-    }
-    highlightRaf = requestAnimationFrame(() => {
-      highlightRaf = null;
-      if (!text) {
-        codeEl.innerHTML = '';
-        return;
-      }
-      // Plaintext (e.g. the AI prompt) and any language not registered in the
-      // bundle have no grammar — render the raw text so the overlay still shows
-      // it (the textarea's own text is transparent). hljs.highlight would throw
-      // "Unknown language" and leave the overlay empty → invisible text.
-      if (currentLang === 'plaintext' || !hljs.getLanguage(currentLang)) {
-        codeEl.textContent = text + '\n';
-        return;
-      }
-      const result = hljs.highlight(text + '\n', { language: currentLang });
-      codeEl.innerHTML = result.value;
-    });
-  }
-
-  textarea.addEventListener('input', syncHighlight);
-  textarea.addEventListener('scroll', () => {
-    const pre = codeEl.parentElement;
-    if (pre) {
-      pre.scrollTop = textarea.scrollTop;
-      pre.scrollLeft = textarea.scrollLeft;
-    }
-    gutter.scrollTop = textarea.scrollTop;
-  });
-
-  // Tab key: insert 2 spaces (preserves native undo)
+export function createCodeEditor({ textarea }) {
+  // Tab key: insert 2 spaces instead of moving focus (preserves native undo).
   textarea.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') {
       event.preventDefault();
@@ -85,7 +23,7 @@ export function createCodeEditor({ textarea, codeEl, gutter, hljs }) {
       const value = textarea.value;
       textarea.value = value.substring(0, start) + '  ' + value.substring(end);
       textarea.selectionStart = textarea.selectionEnd = start + 2;
-      syncHighlight();
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
   });
 
@@ -93,11 +31,6 @@ export function createCodeEditor({ textarea, codeEl, gutter, hljs }) {
     getContent: () => textarea.value,
     setContent: (text) => {
       textarea.value = text || '';
-      syncHighlight();
-    },
-    setLanguage: (type) => {
-      currentLang = languageForType(type);
-      syncHighlight();
     },
     setPlaceholder: (text) => {
       textarea.placeholder = text || '';

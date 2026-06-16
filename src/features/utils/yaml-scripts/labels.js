@@ -23,6 +23,7 @@ window.YamlScriptsLabels = {
   labelType: 'Type',
   labelFolder: 'Category',
   labelContent: 'Content',
+  btnEditInEditor: '✎ Open in editor',
   placeholderName: 'My Script',
   placeholderDescription: 'What this script does...',
   placeholderFolder: 'Choose category...',

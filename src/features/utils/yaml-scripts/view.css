@@ -319,66 +319,41 @@
   width: 100%;
 }
 
-/* ── Code editor: textarea + highlight.js overlay ── */
-.yaml-code-editor {
+/* ── Code editor: plain textarea ── */
+.yaml-form-content-header {
   display: flex;
-  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-/* Line-number gutter */
-.yaml-code-gutter {
-  font-family: var(--vscode-editor-font-family, monospace);
-  font-size: 12px;
-  line-height: 1.4;
-  padding: 8px 6px 8px 8px;
-  margin: 0;
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-right: none;
-  border-radius: 3px 0 0 3px;
-  background: var(--vscode-editorGutter-background, var(--vscode-input-background));
-  color: var(--vscode-editorLineNumber-foreground, #858585);
-  text-align: right;
-  user-select: none;
-  overflow: hidden;
-  white-space: pre;
-  min-width: 2.5em;
+.yaml-edit-in-editor-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
 }
 
-/* Body: grid stacks textarea + highlight in the same cell */
-.yaml-code-body {
-  display: grid;
-  flex: 1;
-  min-width: 0;
-}
-
-.yaml-code-body > * {
-  grid-area: 1 / 1 / 2 / 2;
-}
-
-/* Shared properties — must match EXACTLY for text alignment */
-.yaml-code-textarea,
-.yaml-code-highlight {
+/* textarea.* qualifier raises specificity above the global `.text-input { flex: 1 }`
+   so the dragged height sticks (otherwise flex sizing overrides resize). */
+textarea.yaml-code-textarea {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 12px;
   line-height: 1.4;
   padding: 8px;
   margin: 0;
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 0 3px 3px 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 140px;
+  /* flex:none so the column-flex form row doesn't override the dragged height */
+  flex: none;
+  resize: vertical;
   white-space: pre;
   tab-size: 2;
   overflow: auto;
-}
-
-/* Textarea on top — transparent text/bg so highlight shows through */
-.yaml-code-textarea {
-  z-index: 1;
-  width: 100%;
-  min-height: 100px;
-  resize: vertical;
-  background: transparent;
-  color: transparent;
-  caret-color: var(--vscode-editorCursor-foreground, #fff);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
   outline: none;
 }
 
@@ -388,105 +363,6 @@
 
 .yaml-code-textarea::placeholder {
   color: var(--vscode-input-placeholderForeground);
-}
-
-/* Highlight layer behind — receives pointer events through textarea */
-.yaml-code-highlight {
-  z-index: 0;
-  pointer-events: none;
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border-color: transparent; /* only the textarea border is visible */
-}
-
-.yaml-code-highlight code {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  background: transparent;
-  padding: 0;
-}
-
-/* highlight.js token colors — Dark Modern theme */
-.yaml-code-highlight .hljs-keyword,
-.yaml-code-highlight .hljs-name,
-.yaml-code-highlight .hljs-selector-tag {
-  color: #c586c0;
-}
-.yaml-code-highlight .hljs-variable.language_ {
-  color: #569cd6;
-}
-.yaml-code-highlight .hljs-operator {
-  color: #d4d4d4;
-}
-.yaml-code-highlight .hljs-string {
-  color: #ce9178;
-}
-.yaml-code-highlight .hljs-meta .hljs-string,
-.yaml-code-highlight .hljs-quote {
-  color: #ce9178;
-}
-.yaml-code-highlight .hljs-comment {
-  color: #6a9955;
-}
-.yaml-code-highlight .hljs-number {
-  color: #b5cea8;
-}
-.yaml-code-highlight .hljs-literal,
-.yaml-code-highlight .hljs-char.escape_,
-.yaml-code-highlight .hljs-regexp {
-  color: #569cd6;
-}
-.yaml-code-highlight .hljs-type,
-.yaml-code-highlight .hljs-built_in {
-  color: #569cd6;
-}
-.yaml-code-highlight .hljs-title.class_,
-.yaml-code-highlight .hljs-title.class_.inherited__ {
-  color: #4ec9b0;
-}
-.yaml-code-highlight .hljs-title,
-.yaml-code-highlight .hljs-title.function_,
-.yaml-code-highlight .hljs-title.function_.invoke__ {
-  color: #dcdcaa;
-}
-.yaml-code-highlight .hljs-meta {
-  color: #dcdcaa;
-}
-.yaml-code-highlight .hljs-params,
-.yaml-code-highlight .hljs-variable {
-  color: #9cdcfe;
-}
-.yaml-code-highlight .hljs-property {
-  color: #9cdcfe;
-}
-.yaml-code-highlight .hljs-attr {
-  color: #9cdcfe;
-}
-.yaml-code-highlight .hljs-doctag {
-  color: #569cd6;
-}
-.yaml-code-highlight .hljs-soql {
-  color: #4ec9b0;
-  font-style: italic;
-}
-.yaml-code-highlight .hljs-soql .hljs-keyword {
-  color: #c586c0;
-  font-style: normal;
-}
-.yaml-code-highlight .hljs-soql .hljs-title.function_,
-.yaml-code-highlight .hljs-soql .hljs-title.function_.invoke__ {
-  color: #dcdcaa;
-  font-style: normal;
-}
-.yaml-code-highlight .hljs-soql .hljs-params,
-.yaml-code-highlight .hljs-soql .hljs-variable {
-  color: #9cdcfe;
-  font-style: normal;
-}
-.yaml-code-highlight .hljs-soql .hljs-punctuation,
-.yaml-code-highlight .hljs-soql .hljs-operator {
-  font-style: normal;
 }
 
 /* ── Edit button in accordion header ── */

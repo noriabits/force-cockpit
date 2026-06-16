@@ -93,6 +93,7 @@ export function activate(context: vscode.ExtensionContext): void {
       workspaceState: context.workspaceState,
       skillsPaths: cockpitConfig.skillsPaths,
       describeService,
+      postToWebview: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
     }),
     monitoringFeature.factory,
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),

@@ -78,7 +78,6 @@ import {
   const scriptForm = createScriptForm({
     labels: L,
     vscode: win.__vscode,
-    hljs: win.hljs,
     filterBar,
     getCurrentScripts: () => currentScripts,
   });
@@ -412,6 +411,7 @@ import {
     listChatModelsError: () => scriptForm.setModels([]),
     listSkillsResult: (data) => scriptForm.setSkills(data?.skills ?? []),
     listSkillsError: () => scriptForm.setSkills([]),
+    scriptCodeUpdated: (data) => scriptForm.setCodeFromEditor(data?.code ?? ''),
   };
 
   // ── Feature registration ──────────────────────────────────────────────────

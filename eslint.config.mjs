@@ -35,6 +35,7 @@ export default [
         DocumentFragment: 'readonly',
         navigator: 'readonly',
         CSS: 'readonly',
+        Event: 'readonly',
       },
     },
     rules: {

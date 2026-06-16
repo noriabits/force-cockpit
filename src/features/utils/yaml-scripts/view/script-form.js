@@ -11,7 +11,6 @@ import { createFolderCombobox } from '../../../shared/view/folder-combobox.js';
  * @typedef {Object} ScriptFormCtx
  * @property {any} labels
  * @property {{ postMessage: (msg: any) => void }} vscode
- * @property {any} hljs
  * @property {{ getState: () => { visibility: string; folder: string; subFolder: string | null } }} filterBar
  * @property {() => { folder: string }[]} getCurrentScripts
  */
@@ -20,7 +19,7 @@ import { createFolderCombobox } from '../../../shared/view/folder-combobox.js';
  * @param {ScriptFormCtx} ctx
  */
 export function createScriptForm(ctx) {
-  const { labels: L, vscode, hljs, filterBar, getCurrentScripts } = ctx;
+  const { labels: L, vscode, filterBar, getCurrentScripts } = ctx;
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
   const newBtn = /** @type {HTMLButtonElement} */ (document.getElementById('yaml-new-btn'));
@@ -40,8 +39,9 @@ export function createScriptForm(ctx) {
   const formContent = /** @type {HTMLTextAreaElement} */ (
     document.getElementById('yaml-form-content')
   );
-  const highlightCode = /** @type {HTMLElement} */ (document.getElementById('yaml-highlight-code'));
-  const gutter = /** @type {HTMLElement} */ (document.getElementById('yaml-code-gutter'));
+  const formEditInEditorBtn = /** @type {HTMLButtonElement} */ (
+    document.getElementById('yaml-form-edit-in-editor-btn')
+  );
   const formSource = /** @type {HTMLSelectElement} */ (document.getElementById('yaml-form-source'));
   const formFileRow = /** @type {HTMLElement} */ (document.getElementById('yaml-form-file-row'));
   const formFilePath = /** @type {HTMLInputElement} */ (
@@ -135,13 +135,8 @@ export function createScriptForm(ctx) {
   formDeleteBtn.style.display = 'none';
   formFileRow.style.display = 'none';
 
-  // ── Textarea + highlight.js editor ──────────────────────────────────────
-  const editor = createCodeEditor({
-    textarea: formContent,
-    codeEl: highlightCode,
-    gutter,
-    hljs,
-  });
+  // ── Plain-textarea code editor ──────────────────────────────────────────
+  const editor = createCodeEditor({ textarea: formContent });
 
   /** @type {string | null} */
   let editingScriptId = null;
@@ -167,6 +162,7 @@ export function createScriptForm(ctx) {
   if (labelType) labelType.textContent = L.labelType;
   if (labelFolder) labelFolder.textContent = L.labelFolder;
   if (labelContent) labelContent.textContent = L.labelContent;
+  formEditInEditorBtn.textContent = L.btnEditInEditor;
   formName.placeholder = L.placeholderName;
   formDescription.placeholder = L.placeholderDescription;
   formFolder.placeholder = L.placeholderFolder;
@@ -385,6 +381,9 @@ export function createScriptForm(ctx) {
     const contentRow = document.getElementById('yaml-form-content-row');
     if (contentRow) contentRow.style.display = isFile ? 'none' : '';
     formFileRow.style.display = isFile ? '' : 'none';
+    // The "Open in editor" button edits the inline textarea — irrelevant for
+    // file-based scripts (the referenced file is opened via the subtitle link).
+    formEditInEditorBtn.style.display = isFile ? 'none' : '';
   }
 
   /** True when the gather step is enabled and its content/file is filled in. */
@@ -444,7 +443,6 @@ export function createScriptForm(ctx) {
     pendingSkillSelection = [];
     setSkills([], false);
     updateContentPlaceholder();
-    editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateSourceMode();
     updateSaveBtn();
     if (formFilterUserDebug) formFilterUserDebug.checked = false;
@@ -465,9 +463,15 @@ export function createScriptForm(ctx) {
 
   // ── Show/hide ──────────────────────────────────────────────────────────────
 
+  /** Drop any inline height left over from a previous drag-resize. */
+  function resetCodeHeight() {
+    formContent.style.height = '';
+  }
+
   function showNewForm() {
     editingScriptId = null;
     editingScriptSource = null;
+    resetCodeHeight();
     formDeleteBtn.style.display = 'none';
     formPrivate.checked = false;
     resetForm();
@@ -488,6 +492,7 @@ export function createScriptForm(ctx) {
   function showEditForm(script) {
     editingScriptId = script.id;
     editingScriptSource = script.source ?? 'user';
+    resetCodeHeight();
     formPrivate.checked = script.source === 'private';
     formName.value = script.name;
     formDescription.value = script.description ?? '';
@@ -496,7 +501,6 @@ export function createScriptForm(ctx) {
     formSource.value = script.scriptFile ? 'file' : 'inline';
     formFilePath.value = script.scriptFile ?? '';
     editor.setContent(script.scriptFile ? '' : (script.script ?? ''));
-    editor.setLanguage(script.type);
     // ── AI fields ──
     formModel.value = script.model ?? '';
     const gather = script.gather;
@@ -558,7 +562,6 @@ export function createScriptForm(ctx) {
   updateAiVisibility();
   formType.addEventListener('change', () => {
     updateContentPlaceholder();
-    editor.setLanguage(/** @type {'apex' | 'command' | 'js' | 'ai'} */ (formType.value));
     updateApexDefaultsVisibility();
     updateAiVisibility();
     updateSaveBtn();
@@ -576,6 +579,17 @@ export function createScriptForm(ctx) {
   formBrowseBtn.addEventListener('click', () => {
     pendingBrowseTarget = 'prompt';
     vscode.postMessage({ type: 'browseForScriptFile' });
+  });
+  // Open the current code body in a native VS Code editor. The editor edits only
+  // the code string; on save the host pushes `scriptCodeUpdated` back into the
+  // textarea (see setCodeFromEditor). Persistence stays on the form's Save button.
+  formEditInEditorBtn.addEventListener('click', () => {
+    vscode.postMessage({
+      type: 'editScriptCode',
+      code: editor.getContent(),
+      scriptType: formType.value,
+      name: formName.value.trim(),
+    });
   });
   // ── AI gather wiring ──
   formModel.addEventListener('change', updateSaveBtn);
@@ -726,6 +740,14 @@ export function createScriptForm(ctx) {
     showEditForm,
     hideNewForm,
     refreshFolders: () => folderCombobox.refresh(),
+    /**
+     * Sync code edited in the native VS Code editor back into the textarea.
+     * @param {string} code
+     */
+    setCodeFromEditor(code) {
+      editor.setContent(code ?? '');
+      updateSaveBtn();
+    },
     /** @param {string} message */
     onSaveError(message) {
       formSaveBtn.disabled = false;

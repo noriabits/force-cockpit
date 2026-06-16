@@ -89,6 +89,9 @@ The results table supports:
 > Scripts can also be created and edited directly in the UI — no need to write YAML by hand.
 <div align="center"><img src="media/scriptEditView.png" alt="Script Editor" /></div>
 
+> [!TIP]
+> The code field in the new/edit form is a simple textarea. For comfortable editing — syntax highlighting, multi-cursor, find & replace — click **✎ Open in editor** to edit the code body in a real VS Code editor tab. **Saving** there (Ctrl/Cmd+S) syncs the code straight back into the form (the form stays open); nothing is written to disk and your other fields are untouched. Click the form's **Save** to persist the whole script.
+
 The **Scripts** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
