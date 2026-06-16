@@ -109,14 +109,14 @@
     "form-data": "4.0.6"
   },
   "dependencies": {
-    "@salesforce/core": "8.31.0",
+    "@salesforce/core": "8.31.1",
     "@xmldom/xmldom": "0.9.10",
     "chart.js": "4.5.1",
     "highlight.js": "11.11.1",
     "highlightjs-apex": "1.66.0",
     "ignore": "7.0.5",
     "js-yaml": "4.2.0",
-    "jsforce": "3.10.15",
+    "jsforce": "3.10.16",
     "xml-formatter": "3.7.0"
   },
   "devDependencies": {
