@@ -8,7 +8,7 @@ let autoResolveIdentity = true;
 const identityDeferreds: Array<{ resolve: () => void; reject: (e: unknown) => void }> = [];
 let connectionConstructorCount = 0;
 
-vi.mock('jsforce', () => ({
+vi.mock('@jsforce/jsforce-node', () => ({
   Connection: class {
     instanceUrl: string;
     accessToken: string;

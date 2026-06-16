@@ -1,4 +1,4 @@
-import * as jsforce from 'jsforce';
+import * as jsforce from '@jsforce/jsforce-node';
 import { EventEmitter } from 'events';
 import type { OrgDetails } from '../utils/sfCli';
 import { buildExecuteAnonymousEnvelope } from './soap/SoapEnvelope';
