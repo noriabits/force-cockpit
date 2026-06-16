@@ -66,6 +66,9 @@ export function createScriptForm(ctx) {
   const formDeleteBtn = /** @type {HTMLButtonElement} */ (
     document.getElementById('yaml-form-delete-btn')
   );
+  const formCloneBtn = /** @type {HTMLButtonElement} */ (
+    document.getElementById('yaml-form-clone-btn')
+  );
 
   // ── Apex default output settings refs ────────────────────────────────────
   const formApexDefaultsRow = /** @type {HTMLElement} */ (
@@ -133,6 +136,7 @@ export function createScriptForm(ctx) {
   // Hide form immediately via JS — the CSP blocks inline style="display:none" attributes
   newForm.style.display = 'none';
   formDeleteBtn.style.display = 'none';
+  formCloneBtn.style.display = 'none';
   formFileRow.style.display = 'none';
 
   // ── Plain-textarea code editor ──────────────────────────────────────────
@@ -148,6 +152,7 @@ export function createScriptForm(ctx) {
   newBtn.textContent = L.btnNewScript;
   formSaveBtn.textContent = L.btnSave;
   formCancelBtn.textContent = L.btnCancel;
+  formCloneBtn.textContent = L.btnClone;
   formType.options[0].text = L.typeApex;
   formType.options[1].text = L.typeCommand;
   formType.options[2].text = L.typeJs;
@@ -473,6 +478,7 @@ export function createScriptForm(ctx) {
     editingScriptSource = null;
     resetCodeHeight();
     formDeleteBtn.style.display = 'none';
+    formCloneBtn.style.display = 'none';
     formPrivate.checked = false;
     resetForm();
     const filterState = filterBar.getState();
@@ -543,6 +549,7 @@ export function createScriptForm(ctx) {
     }
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
+    formCloneBtn.style.display = '';
     folderCombobox.refresh();
     newForm.style.display = '';
     newBtn.disabled = true;
@@ -722,6 +729,23 @@ export function createScriptForm(ctx) {
       vscode.postMessage({ type: 'saveYamlScript', input: payload, isPrivate });
     }
   });
+
+  // Clone: turn the open edit form into a pre-filled *new* form. Every field
+  // value carries over untouched; only the name gets a `_copy` suffix and the
+  // editing identity is cleared so the next Save creates a new file (nothing is
+  // written to disk until then).
+  function convertToClone() {
+    editingScriptId = null;
+    editingScriptSource = null;
+    formName.value = (formName.value.trim() || 'script') + L.cloneSuffix;
+    formDeleteBtn.style.display = 'none';
+    formCloneBtn.style.display = 'none';
+    formError.textContent = '';
+    updateSaveBtn();
+    formName.focus();
+    formName.select();
+  }
+  formCloneBtn.addEventListener('click', convertToClone);
 
   formDeleteBtn.addEventListener('click', () => {
     if (!editingScriptId) return;

@@ -60,6 +60,8 @@ window.YamlScriptsLabels = {
   errorGatherRequired: 'Enter the gather SOQL or Apex, or uncheck “Gather data first”.',
   btnEdit: '✏',
   btnDelete: 'Delete',
+  btnClone: 'Clone',
+  cloneSuffix: '_copy',
   tooltipEditScript: 'Edit script',
   // Inputs
   labelInputs: 'Inputs',

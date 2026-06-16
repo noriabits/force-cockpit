@@ -92,6 +92,9 @@ The results table supports:
 > [!TIP]
 > The code field in the new/edit form is a simple textarea. For comfortable editing — syntax highlighting, multi-cursor, find & replace — click **✎ Open in editor** to edit the code body in a real VS Code editor tab. **Saving** there (Ctrl/Cmd+S) syncs the code straight back into the form (the form stays open); nothing is written to disk and your other fields are untouched. Click the form's **Save** to persist the whole script.
 
+> [!TIP]
+> Need a near-duplicate of a script? Open it for editing and click **Clone** — the form is pre-filled with every field of the original and `_copy` is added to the name. Tweak whatever you need and click **Save** to create the copy. Nothing is written until you Save, so the original stays untouched if you cancel.
+
 The **Scripts** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
