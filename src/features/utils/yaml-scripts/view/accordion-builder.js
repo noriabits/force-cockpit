@@ -17,6 +17,7 @@ import { wrapWithPasteButton } from '../../../shared/view/paste-input.js';
  * @property {Map<string, () => void>} executeStateUpdaters
  * @property {() => boolean} getConnected
  * @property {(script: any) => void} onEditClick
+ * @property {(script: any) => void} onOpenYamlClick
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {(str: string) => string} escapeHtml
  * @property {(script: any) => { fragment: DocumentFragment, refs: LogViewerRefs }} buildLogViewer
@@ -41,11 +42,25 @@ export function createAccordionBuilder(ctx) {
     executeStateUpdaters,
     getConnected,
     onEditClick,
+    onOpenYamlClick,
     vscode,
     escapeHtml,
     buildLogViewer,
     attachExecuteHandler,
   } = ctx;
+
+  /**
+   * Custom tooltips: native `title` tooltips don't render in VS Code webviews,
+   * so header icon buttons opt into the shared body-appended tooltip via
+   * `data-tooltip` (see shared/view/tooltip.js). `aria-label` keeps them
+   * accessible.
+   * @param {HTMLElement} el
+   * @param {string} text
+   */
+  function setTooltip(el, text) {
+    el.setAttribute('data-tooltip', text);
+    el.setAttribute('aria-label', text);
+  }
 
   /** @param {any} script @returns {HTMLButtonElement} */
   function createFavoriteButton(script) {
@@ -53,7 +68,7 @@ export function createAccordionBuilder(ctx) {
     const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     button.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
     button.textContent = isFav ? '★' : '☆';
-    button.title = isFav ? labels.unfavorite : labels.favorite;
+    setTooltip(button, isFav ? labels.unfavorite : labels.favorite);
     button.addEventListener('click', (event) => {
       event.stopPropagation();
       vscode.postMessage({ type: 'toggleFavorite', scriptId: script.id });
@@ -71,7 +86,7 @@ export function createAccordionBuilder(ctx) {
       const isFav = favoriteIds.has(scriptId);
       starBtn.textContent = isFav ? '★' : '☆';
       starBtn.className = 'btn yaml-star-btn' + (isFav ? ' yaml-star-btn--active' : '');
-      starBtn.title = isFav ? labels.unfavorite : labels.favorite;
+      setTooltip(starBtn, isFav ? labels.unfavorite : labels.favorite);
     });
   }
 
@@ -142,10 +157,23 @@ export function createAccordionBuilder(ctx) {
     const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
     button.className = 'btn yaml-edit-btn';
     button.textContent = labels.btnEdit;
-    button.title = labels.tooltipEditScript;
+    setTooltip(button, labels.tooltipEditScript);
     button.addEventListener('click', (event) => {
       event.stopPropagation();
       onEditClick(script);
+    });
+    return button;
+  }
+
+  /** @param {any} script @returns {HTMLButtonElement} */
+  function createOpenYamlButton(script) {
+    const button = /** @type {HTMLButtonElement} */ (document.createElement('button'));
+    button.className = 'btn yaml-open-yaml-btn';
+    button.textContent = '📄';
+    setTooltip(button, labels.tooltipOpenYaml);
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      onOpenYamlClick(script);
     });
     return button;
   }
@@ -182,6 +210,7 @@ export function createAccordionBuilder(ctx) {
 
     if (script.source === 'private') header.appendChild(createPrivateBadge());
     header.appendChild(createEditButton(script));
+    header.appendChild(createOpenYamlButton(script));
 
     const executeBtn = document.createElement('button');
     executeBtn.className = 'btn yaml-execute-btn';
@@ -324,7 +353,10 @@ export function createAccordionBuilder(ctx) {
     header.appendChild(createFavoriteButton(script));
     header.appendChild(createTypeBadge(script));
     if (script.source === 'private') header.appendChild(createPrivateBadge());
-    if (script.source !== 'builtin') header.appendChild(createEditButton(script));
+    if (script.source !== 'builtin') {
+      header.appendChild(createEditButton(script));
+      header.appendChild(createOpenYamlButton(script));
+    }
     header.appendChild(executeBtn);
 
     // ── Body ──

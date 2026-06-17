@@ -61,7 +61,7 @@ window.YamlScriptsLabels = {
   btnEdit: '✏',
   btnDelete: 'Delete',
   btnClone: 'Clone',
-  btnOpenYaml: '📄 Open YAML',
+  tooltipOpenYaml: 'Open YAML',
   cloneSuffix: '_copy',
   tooltipEditScript: 'Edit script',
   // Inputs

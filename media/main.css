@@ -1140,3 +1140,30 @@ body {
   opacity: 1;
   background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
 }
+
+/* Custom hover tooltip (VS Code webviews don't render native `title` tooltips).
+   Appended to <body> by src/features/shared/view/tooltip.js so it escapes any
+   ancestor `overflow: hidden` (e.g. the accordion cards). Opt in via a
+   `data-tooltip` attribute on the target element. */
+.fc-tooltip {
+  position: fixed;
+  z-index: 1000;
+  display: none;
+  max-width: 280px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  border: 1px solid
+    var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.08s ease-in;
+}
+.fc-tooltip--visible {
+  opacity: 1;
+}

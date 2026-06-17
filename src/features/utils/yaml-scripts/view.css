@@ -365,23 +365,25 @@ textarea.yaml-code-textarea {
   color: var(--vscode-input-placeholderForeground);
 }
 
-/* ── Edit button in accordion header ── */
-.yaml-edit-btn {
+/* ── Edit + Open YAML buttons in accordion header ── */
+.yaml-edit-btn,
+.yaml-open-yaml-btn {
   flex-shrink: 0;
   padding: 2px 6px;
   font-size: 12px;
   opacity: 0.7;
 }
 
-.yaml-edit-btn:hover {
+.yaml-edit-btn:hover,
+.yaml-open-yaml-btn:hover {
   opacity: 1;
 }
 
-/* ── Right-side form action group (Open YAML · Clone · Delete) ──
-   The first button carries margin-left:auto so the trio stays grouped at the
-   far right. All three are hidden in new mode; in edit mode Open YAML's
-   margin-left:auto pushes the whole group right. */
-#yaml-form-open-yaml-btn {
+/* ── Right-side form action group (Clone · Delete) ──
+   Clone carries margin-left:auto so the pair stays grouped at the far right.
+   Both are hidden in new mode; in edit mode Clone's margin-left:auto pushes
+   the whole group right. */
+#yaml-form-clone-btn {
   margin-left: auto;
 }
 
