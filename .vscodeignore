@@ -10,9 +10,6 @@ docs/**
 node_modules/**
 *.vsix
 .gitignore
-.yarnrc
-webpack.config.js
-vsc-extension-quickstart.md
 **/tsconfig.json
 **/tsconfig.*.json
 **/.eslintrc.json
@@ -26,5 +23,4 @@ package-lock.json
 out/**
 !dist/**
 force-cockpit/**
-automatedActions/**
 scripts/**

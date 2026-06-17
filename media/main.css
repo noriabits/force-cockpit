@@ -38,11 +38,6 @@ body {
   gap: 8px;
 }
 
-.header-icon {
-  font-size: 20px;
-  line-height: 1;
-}
-
 .header-title {
   font-size: 14px;
   font-weight: 600;
@@ -816,19 +811,6 @@ body {
   white-space: nowrap;
 }
 
-.badge-coming-soon {
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-}
-
-/* Placeholder input row */
-.placeholder-input {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-
 .text-input {
   flex: 1;
   padding: 6px 10px;
@@ -849,42 +831,6 @@ body {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* Script list */
-.script-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.script-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.script-item:last-child {
-  border-bottom: none;
-}
-
-.script-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.script-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--vscode-foreground);
-}
-
-.script-desc {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground);
 }
 
 /* Accordion */
