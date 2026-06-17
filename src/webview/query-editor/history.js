@@ -130,7 +130,7 @@ export function createQueryHistory(ctx) {
       label.className = 'query-history-item-label';
       const safeItem = /** @type {SavedQuery} */ (item);
       label.textContent = isSaved ? safeItem.name : truncate(item.query);
-      label.title = item.query;
+      /** @type {any} */ (window).__setTooltip(label, item.query);
       label.addEventListener('click', () => {
         onPick({ query: item.query, useToolingApi: item.useToolingApi });
         close();
@@ -149,7 +149,7 @@ export function createQueryHistory(ctx) {
         remove.type = 'button';
         remove.className = 'query-history-remove';
         remove.textContent = '×';
-        remove.title = 'Remove saved query';
+        /** @type {any} */ (window).__setTooltip(remove, 'Remove saved query');
         remove.addEventListener('click', (e) => {
           e.stopPropagation();
           saved = saved.filter((s) => s !== item);

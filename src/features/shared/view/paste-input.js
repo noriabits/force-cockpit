@@ -17,7 +17,7 @@ export function wrapWithPasteButton(inputEl, opts = {}) {
   const pasteBtn = document.createElement('button');
   pasteBtn.type = 'button';
   pasteBtn.className = 'paste-btn';
-  pasteBtn.title = 'Paste from clipboard';
+  /** @type {any} */ (window).__setTooltip(pasteBtn, 'Paste from clipboard');
   pasteBtn.textContent = '📋';
   pasteBtn.tabIndex = -1;
 

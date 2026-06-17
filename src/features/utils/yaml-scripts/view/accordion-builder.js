@@ -51,15 +51,13 @@ export function createAccordionBuilder(ctx) {
 
   /**
    * Custom tooltips: native `title` tooltips don't render in VS Code webviews,
-   * so header icon buttons opt into the shared body-appended tooltip via
-   * `data-tooltip` (see shared/view/tooltip.js). `aria-label` keeps them
-   * accessible.
+   * so header icon buttons opt into the shared body-appended tooltip via the
+   * global `win.__setTooltip` helper (media/modules/tooltip.js).
    * @param {HTMLElement} el
    * @param {string} text
    */
   function setTooltip(el, text) {
-    el.setAttribute('data-tooltip', text);
-    el.setAttribute('aria-label', text);
+    /** @type {any} */ (window).__setTooltip(el, text);
   }
 
   /** @param {any} script @returns {HTMLButtonElement} */
@@ -130,7 +128,7 @@ export function createAccordionBuilder(ctx) {
         fileLink.type = 'button';
         fileLink.className = 'yaml-file-link';
         fileLink.textContent = `📄 ${script.scriptFile}`;
-        fileLink.title = 'Open file in editor';
+        setTooltip(fileLink, 'Open file in editor');
         fileLink.addEventListener('click', (event) => {
           event.stopPropagation();
           vscode.postMessage({ type: 'openScriptFile', filePath: script.scriptFile });
@@ -148,7 +146,7 @@ export function createAccordionBuilder(ctx) {
     const badge = document.createElement('span');
     badge.className = 'private-badge';
     badge.textContent = labels.badgePrivate;
-    badge.title = labels.labelPrivate;
+    setTooltip(badge, labels.labelPrivate);
     return badge;
   }
 
@@ -216,7 +214,7 @@ export function createAccordionBuilder(ctx) {
     executeBtn.className = 'btn yaml-execute-btn';
     executeBtn.textContent = labels.btnExecute;
     executeBtn.disabled = true;
-    executeBtn.title = labels.tooltipInvalidScript;
+    setTooltip(executeBtn, labels.tooltipInvalidScript);
     header.appendChild(executeBtn);
 
     const body = document.createElement('div');

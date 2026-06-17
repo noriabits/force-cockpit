@@ -132,7 +132,10 @@ export function createResultsTable(ctx) {
       copyBtn.type = 'button';
       copyBtn.className = 'query-col-copy';
       copyBtn.textContent = '⧉';
-      copyBtn.title = "Copy column as 'a', 'b', … for an IN (…) clause";
+      /** @type {any} */ (window).__setTooltip(
+        copyBtn,
+        "Copy column as 'a', 'b', … for an IN (…) clause",
+      );
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         copyColumn(i, copyBtn);

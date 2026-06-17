@@ -73,7 +73,7 @@ export function createEditForm(ctx) {
   function buildFormatSelect(currentFormat) {
     const formatSelect = document.createElement('select');
     formatSelect.className = 'monitoring-vf-format-select';
-    formatSelect.title = L.labelValueFieldFormat;
+    /** @type {any} */ (window).__setTooltip(formatSelect, L.labelValueFieldFormat);
     for (const [val, lbl] of Object.entries(L.formatOptions)) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -94,12 +94,12 @@ export function createEditForm(ctx) {
       makeInput('number', threshold != null ? String(threshold) : '', L.placeholderThreshold, '')
     );
     thresholdInput.className = 'text-input monitoring-vf-threshold-input';
-    thresholdInput.title = L.placeholderThreshold;
+    /** @type {any} */ (window).__setTooltip(thresholdInput, L.placeholderThreshold);
     thresholdInput.min = '0';
 
     const conditionSelect = document.createElement('select');
     conditionSelect.className = 'monitoring-vf-condition-select';
-    conditionSelect.title = L.labelThresholdCondition;
+    /** @type {any} */ (window).__setTooltip(conditionSelect, L.labelThresholdCondition);
     for (const [val, lbl] of Object.entries(L.conditionOptions)) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -124,17 +124,17 @@ export function createEditForm(ctx) {
     row.className = 'monitoring-value-field-row';
 
     const fieldInput = makeInput('text', field, L.placeholderValueFieldApi, '');
-    fieldInput.title = L.labelValueFieldApi;
+    /** @type {any} */ (window).__setTooltip(fieldInput, L.labelValueFieldApi);
 
     const labelInput = makeInput('text', label, L.placeholderValueFieldLabel, '');
-    labelInput.title = L.labelValueFieldLabel;
+    /** @type {any} */ (window).__setTooltip(labelInput, L.labelValueFieldLabel);
 
     const { thresholdInput, conditionSelect } = buildThresholdGroup(threshold, thresholdCondition);
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'monitoring-remove-vf-btn';
     removeBtn.textContent = L.btnRemoveValueField;
-    removeBtn.title = 'Remove';
+    /** @type {any} */ (window).__setTooltip(removeBtn, 'Remove');
     removeBtn.addEventListener('click', () => {
       // Keep at least one row
       const rows = container.querySelectorAll('.monitoring-value-field-row');

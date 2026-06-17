@@ -6,7 +6,6 @@ import { createLogViewer } from './log-viewer.js';
 import { createExecuteHandler } from './execute-handler.js';
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
 import { applyListFilter } from '../../../shared/view/list-filter';
-import { initTooltips } from '../../../shared/view/tooltip.js';
 import {
   scrollAndHighlight,
   isScrolledToBottom,
@@ -16,10 +15,6 @@ import {
 (function () {
   const win = /** @type {any} */ (window);
   const L = win.YamlScriptsLabels;
-
-  // Native `title` tooltips don't render in VS Code webviews — install the
-  // shared custom-tooltip handler (driven by `data-tooltip` attributes).
-  initTooltips();
 
   const searchInput = /** @type {HTMLInputElement} */ (document.getElementById('yaml-search'));
   const refreshBtn = /** @type {HTMLButtonElement} */ (document.getElementById('yaml-refresh-btn'));

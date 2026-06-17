@@ -22,6 +22,7 @@ export class WebviewAssets {
   // can sit alongside the plain media/modules/ scripts.
   static readonly WEBVIEW_MODULES: readonly string[] = [
     'media/modules/ipc.js',
+    'media/modules/tooltip.js',
     'media/modules/action-tracker.js',
     'media/modules/confirmation.js',
     'media/modules/org-lifecycle.js',

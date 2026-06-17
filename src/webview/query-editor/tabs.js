@@ -104,7 +104,7 @@ export function createQueryTabs(ctx) {
         close.className = 'query-tab-close';
         close.type = 'button';
         close.textContent = '×';
-        close.title = 'Close tab';
+        /** @type {any} */ (window).__setTooltip(close, 'Close tab');
         close.addEventListener('click', (e) => {
           e.stopPropagation();
           closeTab(i);
@@ -118,7 +118,7 @@ export function createQueryTabs(ctx) {
     addBtn.className = 'query-tab-add';
     addBtn.type = 'button';
     addBtn.textContent = '+';
-    addBtn.title = 'New query tab';
+    /** @type {any} */ (window).__setTooltip(addBtn, 'New query tab');
     addBtn.addEventListener('click', addTab);
     tabBarEl.appendChild(addBtn);
   }

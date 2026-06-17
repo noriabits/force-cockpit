@@ -338,7 +338,7 @@ export function createScriptForm(ctx) {
     for (const s of skills) {
       const label = document.createElement('label');
       label.className = 'yaml-form-skill-option';
-      label.title = s.description || '';
+      if (s.description) /** @type {any} */ (window).__setTooltip(label, s.description);
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.value = s.id;

@@ -26,7 +26,7 @@
           type="button"
           class="btn btn-ghost btn-icon"
           id="btn-refresh-org"
-          title="Refresh org connection"
+          data-tooltip="Refresh org connection"
           aria-label="Refresh org connection"
         >
           🔄
@@ -165,7 +165,11 @@
               <div class="query-toolbar">
                 <button class="btn btn-primary" id="btn-run-query">Run Query</button>
                 <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
-                <label class="query-tooling-toggle" title="Run against the Tooling API">
+                <label
+                  class="query-tooling-toggle"
+                  data-tooltip="Run against the Tooling API"
+                  aria-label="Run against the Tooling API"
+                >
                   <input type="checkbox" id="query-use-tooling" />
                   Tooling API
                 </label>
@@ -177,7 +181,12 @@
                     style="display: none"
                   ></div>
                 </div>
-                <button class="btn btn-ghost" id="btn-save-query" title="Save current query">
+                <button
+                  class="btn btn-ghost"
+                  id="btn-save-query"
+                  data-tooltip="Save current query"
+                  aria-label="Save current query"
+                >
                   ★ Save
                 </button>
                 <span class="query-hint" id="query-hint"></span>

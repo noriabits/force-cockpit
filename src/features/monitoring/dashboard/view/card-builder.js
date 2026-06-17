@@ -95,7 +95,7 @@ export function createCardBuilder(ctx) {
     const dragHandle = document.createElement('span');
     dragHandle.className = 'monitoring-drag-handle';
     dragHandle.textContent = '⠿';
-    dragHandle.title = 'Drag to reorder';
+    /** @type {any} */ (window).__setTooltip(dragHandle, 'Drag to reorder');
     dragHandle.addEventListener('mousedown', () => {
       const card = /** @type {HTMLElement | null} */ (header.parentElement);
       if (!card) return;
@@ -116,12 +116,12 @@ export function createCardBuilder(ctx) {
     const title = document.createElement('span');
     title.className = 'monitoring-card-title';
     title.textContent = cfg.name;
-    title.title = cfg.name;
+    /** @type {any} */ (window).__setTooltip(title, cfg.name);
     if (cfg.source === 'private') {
       const badge = document.createElement('span');
       badge.className = 'private-badge';
       badge.textContent = L.badgePrivate;
-      badge.title = L.labelPrivate;
+      /** @type {any} */ (window).__setTooltip(badge, L.labelPrivate);
       title.appendChild(badge);
     }
 
