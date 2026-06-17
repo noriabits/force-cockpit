@@ -69,6 +69,9 @@ export function createScriptForm(ctx) {
   const formCloneBtn = /** @type {HTMLButtonElement} */ (
     document.getElementById('yaml-form-clone-btn')
   );
+  const formOpenYamlBtn = /** @type {HTMLButtonElement} */ (
+    document.getElementById('yaml-form-open-yaml-btn')
+  );
 
   // ── Apex default output settings refs ────────────────────────────────────
   const formApexDefaultsRow = /** @type {HTMLElement} */ (
@@ -137,6 +140,7 @@ export function createScriptForm(ctx) {
   newForm.style.display = 'none';
   formDeleteBtn.style.display = 'none';
   formCloneBtn.style.display = 'none';
+  formOpenYamlBtn.style.display = 'none';
   formFileRow.style.display = 'none';
 
   // ── Plain-textarea code editor ──────────────────────────────────────────
@@ -153,6 +157,7 @@ export function createScriptForm(ctx) {
   formSaveBtn.textContent = L.btnSave;
   formCancelBtn.textContent = L.btnCancel;
   formCloneBtn.textContent = L.btnClone;
+  formOpenYamlBtn.textContent = L.btnOpenYaml;
   formType.options[0].text = L.typeApex;
   formType.options[1].text = L.typeCommand;
   formType.options[2].text = L.typeJs;
@@ -479,6 +484,7 @@ export function createScriptForm(ctx) {
     resetCodeHeight();
     formDeleteBtn.style.display = 'none';
     formCloneBtn.style.display = 'none';
+    formOpenYamlBtn.style.display = 'none';
     formPrivate.checked = false;
     resetForm();
     const filterState = filterBar.getState();
@@ -550,6 +556,7 @@ export function createScriptForm(ctx) {
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
     formCloneBtn.style.display = '';
+    formOpenYamlBtn.style.display = '';
     folderCombobox.refresh();
     newForm.style.display = '';
     newBtn.disabled = true;
@@ -740,12 +747,28 @@ export function createScriptForm(ctx) {
     formName.value = (formName.value.trim() || 'script') + L.cloneSuffix;
     formDeleteBtn.style.display = 'none';
     formCloneBtn.style.display = 'none';
+    formOpenYamlBtn.style.display = 'none';
     formError.textContent = '';
     updateSaveBtn();
     formName.focus();
     formName.select();
   }
   formCloneBtn.addEventListener('click', convertToClone);
+
+  // Open the script's underlying YAML file in a native editor (edit mode only —
+  // hidden while creating a new script, so the file is guaranteed to exist).
+  // Closing the form switches to raw-YAML editing so the form's stale in-memory
+  // snapshot can't later overwrite the hand-edited file via Save. A host-side
+  // save watcher reloads the list when the .yaml is saved (see extension.ts).
+  formOpenYamlBtn.addEventListener('click', () => {
+    if (!editingScriptId) return;
+    vscode.postMessage({
+      type: 'openScriptYamlFile',
+      scriptId: editingScriptId,
+      source: editingScriptSource,
+    });
+    hideNewForm();
+  });
 
   formDeleteBtn.addEventListener('click', () => {
     if (!editingScriptId) return;

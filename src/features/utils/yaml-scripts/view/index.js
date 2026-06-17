@@ -412,6 +412,9 @@ import {
     listSkillsResult: (data) => scriptForm.setSkills(data?.skills ?? []),
     listSkillsError: () => scriptForm.setSkills([]),
     scriptCodeUpdated: (data) => scriptForm.setCodeFromEditor(data?.code ?? ''),
+    // Host pushes this when a script .yaml is saved on disk (e.g. via the edit
+    // form's "Open YAML" button) — re-fetch so the list reflects manual edits.
+    reloadYamlScripts: () => win.__vscode.postMessage({ type: 'loadYamlScripts' }),
   };
 
   // ── Feature registration ──────────────────────────────────────────────────

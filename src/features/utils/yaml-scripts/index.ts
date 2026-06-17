@@ -7,6 +7,7 @@ import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import { VsCodeLmGateway } from './execution/ai/LmGateway';
 import { VsCodeWorkspaceSearch } from './execution/ai/WorkspaceSearch';
 import { SkillsRepository } from './skills/SkillsRepository';
+import { splitItemId, resolveYamlPath } from '../../../utils/yamlRepository';
 
 export function createYamlScriptsFeature(paths: {
   builtInPath: string;
@@ -212,6 +213,26 @@ export function createYamlScriptsFeature(paths: {
           },
           successType: 'openScriptFileResult',
           errorType: 'openScriptFileError',
+        },
+        openScriptYamlFile: {
+          handler: async (msg) => {
+            const scriptId = msg.scriptId as string;
+            const source = (msg.source as string) ?? 'user';
+            const { folder, basename } = splitItemId(scriptId);
+            const base =
+              source === 'private'
+                ? paths.privatePath
+                : source === 'builtin'
+                  ? paths.builtInPath
+                  : paths.userPath;
+            const yamlPath = resolveYamlPath(base, folder, basename);
+            if (!yamlPath) throw new Error(`YAML file not found for "${scriptId}".`);
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(yamlPath));
+            await vscode.window.showTextDocument(doc);
+            return {};
+          },
+          successType: 'openScriptYamlFileDone',
+          errorType: 'openScriptYamlFileError',
         },
         editScriptCode: {
           handler: async (msg) => {

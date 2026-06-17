@@ -377,9 +377,16 @@ textarea.yaml-code-textarea {
   opacity: 1;
 }
 
-/* ── Delete button in form — destructive, pushed to far right ── */
-.yaml-form-delete-btn {
+/* ── Right-side form action group (Open YAML · Clone · Delete) ──
+   The first button carries margin-left:auto so the trio stays grouped at the
+   far right. All three are hidden in new mode; in edit mode Open YAML's
+   margin-left:auto pushes the whole group right. */
+#yaml-form-open-yaml-btn {
   margin-left: auto;
+}
+
+/* ── Delete button in form — destructive ── */
+.yaml-form-delete-btn {
   color: var(--vscode-inputValidation-errorBorder, #be1100);
   border-color: color-mix(
     in srgb,

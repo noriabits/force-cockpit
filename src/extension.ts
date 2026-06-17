@@ -131,6 +131,23 @@ export function activate(context: vscode.ExtensionContext): void {
     logsWatcher.onDidCreate(notifyLogs);
     logsWatcher.onDidDelete(notifyLogs);
     context.subscriptions.push(logsWatcher);
+
+    // Reload the scripts list when a script .yaml is hand-edited on disk (e.g. via
+    // the edit form's "Open YAML" button) — there is no file watcher on the scripts
+    // dirs, so without this the panel's in-memory list would go stale. The form's
+    // own Save writes via fs.writeFileSync (not a TextDocument), so it never fires
+    // this; the `file` scheme check skips the in-memory "Open in editor" buffers.
+    const scriptsUserDir = path.join(userBasePath, 'scripts') + path.sep;
+    const scriptsPrivateDir = path.join(userBasePath, 'private', 'scripts') + path.sep;
+    context.subscriptions.push(
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        if (doc.uri.scheme !== 'file' || !/\.ya?ml$/i.test(doc.uri.fsPath)) return;
+        const p = doc.uri.fsPath;
+        if (p.startsWith(scriptsUserDir) || p.startsWith(scriptsPrivateDir)) {
+          MainPanel.currentPanel?.postWebviewMessage({ type: 'reloadYamlScripts' });
+        }
+      }),
+    );
   }
 
   // Guard: if any operation is running, warn before switching/disconnecting
