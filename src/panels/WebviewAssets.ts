@@ -56,7 +56,6 @@ export class WebviewAssets {
       .replace(/\$\{cssUri\}/g, uris.css)
       .replace(/\$\{jsUri\}/g, uris.js)
       .replace(/\$\{chartJsUri\}/g, uris.chartJs)
-      .replace(/\$\{highlightJsUri\}/g, uris.highlightJs)
       .replace(/\$\{webviewModules\}/g, webviewModuleTags)
       .replace(/\$\{cspSource\}/g, this.webview.cspSource)
       .replace(/\$\{logoUri\}/g, uris.logo)
@@ -90,7 +89,6 @@ export class WebviewAssets {
       css: this._fileUri('media', 'main.css'),
       js: this._fileUri('media', 'main.js'),
       chartJs: this._fileUri('dist', 'vendor', 'chart.umd.js'),
-      highlightJs: this._fileUri('dist', 'vendor', 'highlightjs.bundle.js'),
       logo: this._fileUri('media', 'fc-logo.png'),
     };
   }

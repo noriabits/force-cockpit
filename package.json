@@ -74,9 +74,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
-    "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --minify --keep-names && esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --minify --keep-names && esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --minify --keep-names",
+    "build": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names && esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --minify --keep-names && esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --minify --keep-names && esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --minify --keep-names",
     "compile": "tsc -p ./ && tsc -p ./tsconfig.webview.json",
-    "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && node scripts/build-highlightjs.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names --sourcemap --watch & esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch & esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch & esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch",
+    "watch": "node scripts/copy-feature-assets.js && node scripts/copy-vendor-assets.js && esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify --keep-names --sourcemap --watch & esbuild ./src/features/utils/yaml-scripts/view/index.js --bundle --outfile=dist/features/utils/yaml-scripts/view.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch & esbuild ./src/features/monitoring/dashboard/view/index.js --bundle --outfile=dist/features/monitoring/dashboard/view.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch & esbuild ./src/webview/query-editor/index.js --bundle --outfile=dist/webview/query-editor.js --format=iife --platform=browser --minify --keep-names --sourcemap --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"src/features/**/*.{js,css,html}\" \"src/webview/**/*.js\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
@@ -113,8 +113,6 @@
     "@salesforce/core": "8.31.0",
     "@xmldom/xmldom": "0.9.10",
     "chart.js": "4.5.1",
-    "highlight.js": "11.11.1",
-    "highlightjs-apex": "1.66.0",
     "ignore": "7.0.5",
     "js-yaml": "4.2.0",
     "xml-formatter": "3.7.0"
