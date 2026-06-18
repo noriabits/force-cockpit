@@ -110,7 +110,7 @@
   },
   "dependencies": {
     "@jsforce/jsforce-node": "3.10.14",
-    "@salesforce/core": "8.31.0",
+    "@salesforce/core": "8.31.1",
     "@xmldom/xmldom": "0.9.10",
     "chart.js": "4.5.1",
     "ignore": "7.0.5",
