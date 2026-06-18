@@ -22,6 +22,10 @@ export interface FeatureModule {
   // so they are centralised and not scattered across view.js and view.html.
   labelsPath?: string; // e.g. path.join('dist', 'features', 'utils', 'clone-user', 'labels.js')
   routes: Record<string, RouteDescriptor>;
+  // Optional: release any resources the factory acquired (e.g. registered
+  // providers/emitters). Called by MainPanel when the panel is disposed so a
+  // reopened panel can re-create the feature without leaking registrations.
+  dispose?: () => void;
 }
 
 export type FeatureModuleFactory = (connectionManager: ConnectionManager) => FeatureModule;

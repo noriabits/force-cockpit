@@ -45,7 +45,7 @@ export function createYamlScriptsFeature(paths: {
     // and keep the map to one entry each.
     const lastUriByPath = new Map<string, string>();
     let resultVersion = 0;
-    vscode.workspace.registerTextDocumentContentProvider(RESULT_SCHEME, {
+    const resultProviderReg = vscode.workspace.registerTextDocumentContentProvider(RESULT_SCHEME, {
       provideTextDocumentContent: (uri) => resultContents.get(uri.toString()) ?? '',
     });
 
@@ -62,7 +62,7 @@ export function createYamlScriptsFeature(paths: {
     const lastEditUriByPath = new Map<string, string>();
     let editVersion = 0;
     const editEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
-    vscode.workspace.registerFileSystemProvider(
+    const editProviderReg = vscode.workspace.registerFileSystemProvider(
       EDIT_SCHEME,
       {
         onDidChangeFile: editEmitter.event,
@@ -108,6 +108,11 @@ export function createYamlScriptsFeature(paths: {
 
     const base = path.join('dist', 'features', 'utils', 'yaml-scripts');
     return {
+      dispose: () => {
+        resultProviderReg.dispose();
+        editProviderReg.dispose();
+        editEmitter.dispose();
+      },
       id: 'yaml-scripts',
       tab: 'utils-scripts',
       htmlPath: path.join(base, 'view.html'),

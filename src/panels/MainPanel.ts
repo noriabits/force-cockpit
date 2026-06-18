@@ -213,6 +213,7 @@ export class MainPanel {
   dispose(): void {
     MainPanel.currentPanel = undefined;
     this._panel.dispose();
+    for (const feature of this._features) feature.dispose?.();
     for (const d of this._disposables) d.dispose();
     this._disposables = [];
   }
