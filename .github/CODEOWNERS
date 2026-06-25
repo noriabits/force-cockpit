@@ -1,0 +1,11 @@
+# Code owners for force-cockpit.
+#
+# Owners listed here are automatically requested for review on every PR,
+# including Dependabot's — this replaces the `reviewers` key that GitHub
+# removed from dependabot.yml on 2025-05-20.
+#
+# Note: GitHub never requests review from the PR author, so for PRs you
+# open yourself only the *other* owner is requested; Dependabot PRs
+# (authored by dependabot[bot]) request both.
+
+* @noriabits @paferpo

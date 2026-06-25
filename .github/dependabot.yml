@@ -4,18 +4,34 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    cooldown:
-      default-days: 7
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 3
-    open-pull-requests-limit: 10
     groups:
-      salesforce:
+      production-security:
+        applies-to: security-updates
         patterns:
-          - "@salesforce/*"
-          - "jsforce"
+          - "*"
     allow:
       - dependency-type: "production"
-    reviewers:
-      - "noriabits"
+    ignore:
+      - dependency-name: "*"
+        applies-to: version-updates
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    ignore:
+      - dependency-name: "*"
+        applies-to: version-updates
+        update-types:
+          - "version-update:semver-patch"
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
