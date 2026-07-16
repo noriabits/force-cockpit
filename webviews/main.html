@@ -308,14 +308,24 @@
               <option value="PATCH">PATCH</option>
               <option value="DELETE">DELETE</option>
             </select>
-            <input
-              type="text"
-              id="rest-endpoint"
-              class="text-input rest-endpoint"
-              spellcheck="false"
-              placeholder="/services/apexrest/api/orderUpdate"
-              aria-label="Endpoint path"
-            />
+            <div class="input-with-paste" style="width: 100%">
+              <input
+                type="text"
+                id="rest-endpoint"
+                class="text-input rest-endpoint"
+                spellcheck="false"
+                placeholder="/services/apexrest/api/orderUpdate"
+                aria-label="Endpoint path"
+              />
+              <button
+                type="button"
+                class="paste-btn"
+                data-tooltip="Paste from clipboard"
+                aria-label="Paste from clipboard"
+              >
+                📋
+              </button>
+            </div>
           </div>
 
           <textarea

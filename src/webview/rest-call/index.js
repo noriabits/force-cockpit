@@ -94,6 +94,22 @@ win.__onMessage('restCallStateLoaded', (/** @type {any} */ msg) => {
 });
 
 // ── Input handlers ──────────────────────────────────────────────────────────────
+/** Verbs that mutate org data — gated behind sensitive-org confirmation. */
+const DESTRUCTIVE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** @param {string} endpoint */
+function dispatchSend(endpoint) {
+  hideResponse();
+  btnSend.disabled = true;
+  btnSend.classList.add('running');
+  vscode.postMessage({
+    type: 'restCall',
+    method: methodEl.value,
+    endpoint,
+    body: bodyEl.value,
+  });
+}
+
 btnSend.addEventListener('click', () => {
   const endpoint = endpointEl.value.trim();
   if (!endpoint) {
@@ -104,15 +120,14 @@ btnSend.addEventListener('click', () => {
     showError('Not connected to any org.');
     return;
   }
-  hideResponse();
-  btnSend.disabled = true;
-  btnSend.classList.add('running');
-  vscode.postMessage({
-    type: 'restCall',
-    method: methodEl.value,
-    endpoint,
-    body: bodyEl.value,
-  });
+  const send = () => dispatchSend(endpoint);
+  // Destructive verbs on a sensitive org (production / protected sandbox) require
+  // confirmation; __confirmIfSensitive no-ops straight to the callback otherwise.
+  if (DESTRUCTIVE_METHODS.has((methodEl.value || '').toUpperCase())) {
+    win.__confirmIfSensitive(win.__currentOrg, 'Send this REST request?', send);
+  } else {
+    send();
+  }
 });
 
 methodEl.addEventListener('change', scheduleSave);

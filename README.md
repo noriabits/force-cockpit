@@ -57,6 +57,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | **Overview** | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table |
 | **Utils** | Built-in utilities (Clone User, Reactivate OmniScript) and custom YAML scripts |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files |
+| **REST** | Call any REST API or Apex REST endpoint on the connected org, with a pretty-printed response |
 
 ---
 
@@ -414,6 +415,22 @@ chartType: table
 ### Editing and saving charts in the UI
 
 Each card has an **Edit** button that opens an inline form. Changes to the SOQL field trigger an auto-preview after 800 ms. Check **Private** to save to the private folder; leave unchecked to save to the shared workspace path. Clicking **Save** writes the YAML — it never overwrites bundled extension charts.
+
+---
+
+## REST Tab
+
+The REST tab lets you call any REST API or Apex REST endpoint on the connected org, reusing the extension's authenticated session — no need to copy access tokens or set up a separate HTTP client.
+
+1. **Pick an HTTP method** — `GET`, `POST`, `PUT`, `PATCH`, or `DELETE`.
+2. **Enter the endpoint path** — a relative path is prefixed with the org's instance URL automatically, e.g. `/services/data/v65.0/limits` or `/services/apexrest/api/orderUpdate`. A full `https://…` URL is used as-is. Use the 📋 button to paste from the clipboard.
+3. **Add a JSON body** (optional) — used for `POST` / `PUT` / `PATCH`; ignored for `GET` / `DELETE`. A default `Content-Type: application/json` header is sent.
+4. **Send** the request with the **Send** button or `Cmd`/`Ctrl`+`Enter`. JSON responses are pretty-printed; a non-2xx response is shown as an error.
+
+Your last request (method, endpoint, body) is saved per workspace and restored when you reopen the panel.
+
+> [!WARNING]
+> When you are connected to a **production org or a protected sandbox**, sending a `POST` / `PUT` / `PATCH` / `DELETE` request prompts for confirmation first, since these verbs can modify live data. `GET` requests are sent without a prompt.
 
 ---
 
