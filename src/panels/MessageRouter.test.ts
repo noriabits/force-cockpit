@@ -38,6 +38,8 @@ import { MessageRouter } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
 import type { QueryStateStore } from '../services/QueryStateStore';
+import type { RestCallService } from '../services/RestCallService';
+import type { RestCallStateStore } from '../services/RestCallStateStore';
 import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule } from '../features/FeatureModule';
 import type { OperationRegistry } from './OperationRegistry';
@@ -50,6 +52,8 @@ function makeRouter(
     onReady?: ReturnType<typeof vi.fn>;
     operations?: Partial<OperationRegistry>;
     queryStateStore?: Partial<QueryStateStore>;
+    restCallService?: Partial<RestCallService>;
+    restCallStateStore?: Partial<RestCallStateStore>;
     describeService?: Partial<DescribeService>;
   } = {},
 ) {
@@ -68,6 +72,15 @@ function makeRouter(
     saveSavedQueries: vi.fn().mockResolvedValue([]),
     ...opts.queryStateStore,
   } as unknown as QueryStateStore;
+  const restCallService = {
+    send: vi.fn().mockResolvedValue({ body: { ok: true } }),
+    ...opts.restCallService,
+  } as unknown as RestCallService;
+  const restCallStateStore = {
+    getState: vi.fn(() => ({ method: 'POST', endpoint: '', body: '' })),
+    save: vi.fn().mockResolvedValue(undefined),
+    ...opts.restCallStateStore,
+  } as unknown as RestCallStateStore;
   const describeService = {
     describeGlobal: vi.fn().mockResolvedValue({ sobjects: [] }),
     describeSObject: vi.fn().mockResolvedValue({ name: 'Account', fields: [] }),
@@ -88,6 +101,8 @@ function makeRouter(
     connectionManager,
     queryService,
     queryStateStore,
+    restCallService,
+    restCallStateStore,
     describeService,
     features: opts.features ?? [],
     operations,
@@ -100,6 +115,8 @@ function makeRouter(
     onReady,
     queryService,
     queryStateStore,
+    restCallService,
+    restCallStateStore,
     describeService,
   };
 }
@@ -170,6 +187,44 @@ describe('MessageRouter built-in routes', () => {
     const tabs = [{ name: 'A', query: 'q', useToolingApi: false }];
     await router.handle({ type: 'saveQueryTabs', tabs, activeTab: 0 });
     expect(saveTabs).toHaveBeenCalledWith(tabs, 0);
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('restCall → posts restCallResult with the service response', async () => {
+    const send = vi.fn().mockResolvedValue({ body: { id: '001' } });
+    const { router, postMessage } = makeRouter({ restCallService: { send } });
+    await router.handle({ type: 'restCall', method: 'POST', endpoint: '/x', body: '{"a":1}' });
+    expect(send).toHaveBeenCalledWith('POST', '/x', '{"a":1}');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallResult',
+      data: { body: { id: '001' } },
+    });
+  });
+
+  it('restCall failure → posts restCallError with the message', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('NOT_FOUND'));
+    const { router, postMessage } = makeRouter({ restCallService: { send } });
+    await router.handle({ type: 'restCall', method: 'GET', endpoint: '/x', body: '' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallError',
+      data: { message: 'NOT_FOUND' },
+    });
+  });
+
+  it('loadRestCallState → posts restCallStateLoaded with the stored config', async () => {
+    const config = { method: 'PATCH', endpoint: '/services/apexrest/x', body: '{}' };
+    const { router, postMessage } = makeRouter({
+      restCallStateStore: { getState: vi.fn(() => config) },
+    });
+    await router.handle({ type: 'loadRestCallState' });
+    expect(postMessage).toHaveBeenCalledWith({ type: 'restCallStateLoaded', data: config });
+  });
+
+  it('saveRestCallState → persists the config (fire-and-forget, no post)', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { router, postMessage } = makeRouter({ restCallStateStore: { save } });
+    await router.handle({ type: 'saveRestCallState', method: 'GET', endpoint: '/x', body: '' });
+    expect(save).toHaveBeenCalledWith({ method: 'GET', endpoint: '/x', body: '' });
     expect(postMessage).not.toHaveBeenCalled();
   });
 

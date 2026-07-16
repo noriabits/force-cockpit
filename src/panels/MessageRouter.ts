@@ -15,6 +15,8 @@ import * as fs from 'fs';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
 import type { QueryStateStore, SavedQuery, QueryTab } from '../services/QueryStateStore';
+import type { RestCallService } from '../services/RestCallService';
+import type { RestCallStateStore } from '../services/RestCallStateStore';
 import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
@@ -27,6 +29,8 @@ interface MessageRouterDeps {
   connectionManager: ConnectionManager;
   queryService: QueryService;
   queryStateStore: QueryStateStore;
+  restCallService: RestCallService;
+  restCallStateStore: RestCallStateStore;
   describeService: DescribeService;
   features: FeatureModule[];
   operations: OperationRegistry;
@@ -38,6 +42,8 @@ export class MessageRouter {
   private readonly connectionManager: ConnectionManager;
   private readonly queryService: QueryService;
   private readonly queryStateStore: QueryStateStore;
+  private readonly restCallService: RestCallService;
+  private readonly restCallStateStore: RestCallStateStore;
   private readonly describeService: DescribeService;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
@@ -48,6 +54,8 @@ export class MessageRouter {
     this.connectionManager = deps.connectionManager;
     this.queryService = deps.queryService;
     this.queryStateStore = deps.queryStateStore;
+    this.restCallService = deps.restCallService;
+    this.restCallStateStore = deps.restCallStateStore;
     this.describeService = deps.describeService;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
@@ -109,6 +117,32 @@ export class MessageRouter {
           'savedQueriesUpdated',
           'savedQueriesError',
         );
+        return;
+      case 'restCall':
+        await this._route(
+          () =>
+            this.restCallService.send(
+              message.method as string,
+              message.endpoint as string,
+              message.body as string,
+            ),
+          'restCallResult',
+          'restCallError',
+        );
+        return;
+      case 'loadRestCallState':
+        await this._route(
+          async () => this.restCallStateStore.getState(),
+          'restCallStateLoaded',
+          'restCallStateError',
+        );
+        return;
+      case 'saveRestCallState':
+        await this.restCallStateStore.save({
+          method: message.method as string,
+          endpoint: message.endpoint as string,
+          body: message.body as string,
+        });
         return;
       case 'describeGlobal':
         await this._route(

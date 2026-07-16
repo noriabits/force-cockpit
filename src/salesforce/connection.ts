@@ -13,6 +13,9 @@ export interface ConnectionChangedEvent {
   org?: OrgDetails;
 }
 
+/** HTTP methods the REST tab exposes — a subset of jsforce's HttpMethods. */
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
 export type { ApexLogLevel } from './soap/SoapEnvelope';
 import type { ApexLogLevel } from './soap/SoapEnvelope';
 
@@ -213,6 +216,23 @@ export class ConnectionManager extends EventEmitter {
       throw new Error(NOT_CONNECTED);
     }
     return this._connection.request(urlPath) as Promise<string>;
+  }
+
+  /**
+   * Generic REST request against the connected org. jsforce prefixes `instanceUrl`
+   * and attaches the `Authorization: Bearer <accessToken>` header automatically.
+   * Used by the REST tab to call arbitrary REST / Apex REST endpoints.
+   */
+  async request(options: {
+    method: HttpMethod;
+    url: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }): Promise<unknown> {
+    if (!this._connection) {
+      throw new Error(NOT_CONNECTED);
+    }
+    return this._connection.request(options);
   }
 
   isSandbox(): boolean {

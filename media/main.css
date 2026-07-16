@@ -469,6 +469,44 @@ body {
   border-color: var(--vscode-focusBorder);
 }
 
+/* ── REST tab ──────────────────────────────────────────────────────────── */
+.rest-request-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rest-method {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.rest-endpoint {
+  width: 100%;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+#rest-body {
+  margin-bottom: 8px;
+}
+
+.rest-response-body {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 360px;
+  overflow: auto;
+  background-color: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .query-toolbar {
   display: flex;
   align-items: center;

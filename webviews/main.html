@@ -63,6 +63,15 @@
       >
         📊 Monitoring
       </button>
+      <button
+        class="tab"
+        data-tab="restcall"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-restcall"
+      >
+        🛰️ REST
+      </button>
     </nav>
 
     <!-- Production org warning -->
@@ -278,6 +287,58 @@
         </section>
 
         <!-- features:monitoring -->
+      </div>
+      <!-- ═══════════════════ TAB: REST ═══════════════════ -->
+      <div class="tab-content" id="tab-restcall" role="tabpanel">
+        <section class="card">
+          <div class="card-header">
+            <h3 class="card-title">🛰️ REST</h3>
+          </div>
+          <p class="card-description">
+            Call any REST API or Apex REST endpoint on the connected org.
+          </p>
+        </section>
+
+        <section class="card" id="restcall-card">
+          <div class="rest-request-row">
+            <select id="rest-method" class="text-input rest-method" aria-label="HTTP method">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+            <input
+              type="text"
+              id="rest-endpoint"
+              class="text-input rest-endpoint"
+              spellcheck="false"
+              placeholder="/services/apexrest/api/orderUpdate"
+              aria-label="Endpoint path"
+            />
+          </div>
+
+          <textarea
+            id="rest-body"
+            class="soql-textarea"
+            spellcheck="false"
+            placeholder="{ }"
+            rows="6"
+          ></textarea>
+
+          <div class="query-toolbar">
+            <button class="btn btn-primary" id="btn-rest-send">Send</button>
+          </div>
+
+          <div id="rest-response" style="display: none">
+            <div class="query-results-toolbar">
+              <span class="results-meta" id="rest-response-meta">Response</span>
+            </div>
+            <pre class="rest-response-body" id="rest-response-body"></pre>
+          </div>
+
+          <div id="rest-error" class="error-box" style="display: none"></div>
+        </section>
       </div>
     </main>
 
