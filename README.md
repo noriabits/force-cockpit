@@ -6,7 +6,7 @@
 [![Release](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml/badge.svg)](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/noriabits/force-cockpit)](https://github.com/noriabits/force-cockpit/blob/main/LICENSE)
 
-A VSCode extension that provides a Salesforce utilities cockpit. It connects to Salesforce orgs via the SF CLI and offers operational tools for monitoring and general utilities — all from within VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
+A VSCode cockpit for Salesforce orgs, built around your own automation. Connect via the SF CLI, then write Apex, shell, JavaScript, or AI-powered scripts — organized into folders and categories — to automate whatever your workflow needs, plus SOQL querying, REST calls, and live monitoring dashboards, all without leaving VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
 
 ---
 
@@ -55,7 +55,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | Tab | Description |
 |-----|-------------|
 | **Overview** | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table |
-| **Utils** | Built-in utilities (Clone User, Reactivate OmniScript) and custom YAML scripts |
+| **Utils** | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript) |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files |
 | **REST** | Call any REST API or Apex REST endpoint on the connected org, with a pretty-printed response |
 
@@ -78,7 +78,6 @@ The results table supports:
 - **Sort** — click any column header to sort; click again to reverse.
 - **Copy column as IN-list** — click the **⧉** button on a column header to copy that column's values (deduped, as `'a', 'b', 'c'`) to the clipboard, ready to paste into another query's `IN (…)` clause. Respects the current filter.
 - **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
-- **Record counts** — `SELECT COUNT() FROM …` queries show the count instead of "0 records".
 - **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 
 ---
