@@ -27,6 +27,12 @@ const responseHeadersListEl = /** @type {HTMLElement} */ (
 const btnHeadersToggle = /** @type {HTMLButtonElement} */ (
   document.getElementById('btn-rest-headers-toggle')
 );
+const btnOpenEditor = /** @type {HTMLButtonElement} */ (
+  document.getElementById('btn-rest-open-editor')
+);
+const btnCopyOutput = /** @type {HTMLButtonElement} */ (
+  document.getElementById('btn-rest-copy-output')
+);
 const errorEl = /** @type {HTMLElement} */ (document.getElementById('rest-error'));
 
 const headersListEl = /** @type {HTMLElement} */ (document.getElementById('rest-headers-list'));
@@ -54,6 +60,8 @@ const responseView = createResponseView({
   bodyEl: responseBodyEl,
   headersToggleBtn: btnHeadersToggle,
   headersListEl: responseHeadersListEl,
+  openEditorBtn: btnOpenEditor,
+  copyBtn: btnCopyOutput,
   vscode,
   escapeHtml: win.__escapeHtml,
 });

@@ -3,6 +3,10 @@
 // the apex-only filter bar (USER_DEBUG + Format JSON checkboxes honoring the
 // script's YAML defaults), plus the Open-in-editor and Copy buttons. Factory
 // receives a `ctx` so it never reaches into the orchestrator's scope.
+import {
+  wireOpenInEditorButton,
+  wireCopyToClipboardButton,
+} from '../../../shared/view/output-actions';
 
 /**
  * @typedef {Object} LogViewerRefs
@@ -38,10 +42,7 @@ export function createLogViewer(ctx) {
     button.className = 'yaml-open-editor-btn';
     button.textContent = 'Open in editor';
     button.style.display = 'none';
-    button.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      vscode.postMessage({ type: 'openScriptResult', content });
-    });
+    wireOpenInEditorButton(button, () => logOutput.textContent || '', vscode);
     return button;
   }
 
@@ -80,18 +81,7 @@ export function createLogViewer(ctx) {
     button.className = 'yaml-copy-output-btn';
     button.textContent = 'Copy to clipboard';
     button.style.display = 'none';
-    button.addEventListener('click', () => {
-      const content = logOutput.textContent || '';
-      navigator.clipboard
-        .writeText(content)
-        .then(() => {
-          button.textContent = 'Copied!';
-          setTimeout(() => {
-            button.textContent = 'Copy to clipboard';
-          }, 1500);
-        })
-        .catch(() => {});
-    });
+    wireCopyToClipboardButton(button, () => logOutput.textContent || '');
     return button;
   }
 

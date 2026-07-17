@@ -2,8 +2,14 @@
 // Response rendering for the REST tab: a color-coded status badge, a collapsible
 // response-headers list, and a pretty-printed JSON body with clickable Salesforce
 // record-Id links (same detector/click pattern as Quick Query's results-table.js
-// and Monitoring's table-rendering.js).
+// and Monitoring's table-rendering.js). Also wires the Open-in-editor / Copy-to-
+// clipboard buttons below the body, sharing the same behaviors as yaml-scripts'
+// log viewer via the shared output-actions module.
 import { isSalesforceRecordId } from '../../utils/salesforce';
+import {
+  wireOpenInEditorButton,
+  wireCopyToClipboardButton,
+} from '../../features/shared/view/output-actions';
 
 /**
  * @typedef {Object} ResponseViewCtx
@@ -13,6 +19,8 @@ import { isSalesforceRecordId } from '../../utils/salesforce';
  * @property {HTMLElement} bodyEl           `<pre>` the formatted/linkified body renders into.
  * @property {HTMLButtonElement} headersToggleBtn
  * @property {HTMLElement} headersListEl
+ * @property {HTMLButtonElement} openEditorBtn
+ * @property {HTMLButtonElement} copyBtn
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {(str: any) => string} escapeHtml
  */
@@ -30,6 +38,8 @@ export function createResponseView(ctx) {
     bodyEl,
     headersToggleBtn,
     headersListEl,
+    openEditorBtn,
+    copyBtn,
     vscode,
     escapeHtml,
   } = ctx;
@@ -105,6 +115,9 @@ export function createResponseView(ctx) {
     headersOpen = !headersOpen;
     headersListEl.style.display = headersOpen ? '' : 'none';
   });
+
+  wireOpenInEditorButton(openEditorBtn, () => bodyEl.textContent || '', vscode);
+  wireCopyToClipboardButton(copyBtn, () => bodyEl.textContent || '');
 
   /** @param {{ status: number, statusText?: string, headers: Record<string, string>, body: unknown }} data */
   function showResponse(data) {
