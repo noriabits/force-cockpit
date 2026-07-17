@@ -73,12 +73,23 @@ function makeRouter(
     ...opts.queryStateStore,
   } as unknown as QueryStateStore;
   const restCallService = {
-    send: vi.fn().mockResolvedValue({ body: { ok: true } }),
+    send: vi
+      .fn()
+      .mockResolvedValue({ status: 200, statusText: 'OK', headers: {}, body: { ok: true } }),
     ...opts.restCallService,
   } as unknown as RestCallService;
   const restCallStateStore = {
-    getState: vi.fn(() => ({ method: 'POST', endpoint: '', body: '' })),
+    getState: vi.fn(() => ({
+      method: 'POST',
+      endpoint: '',
+      body: '',
+      headers: [],
+      history: [],
+      savedRequests: [],
+    })),
     save: vi.fn().mockResolvedValue(undefined),
+    addHistory: vi.fn().mockResolvedValue([]),
+    saveSavedRequests: vi.fn().mockResolvedValue([]),
     ...opts.restCallStateStore,
   } as unknown as RestCallStateStore;
   const describeService = {
@@ -191,13 +202,20 @@ describe('MessageRouter built-in routes', () => {
   });
 
   it('restCall → posts restCallResult with the service response', async () => {
-    const send = vi.fn().mockResolvedValue({ body: { id: '001' } });
+    const send = vi.fn().mockResolvedValue({ status: 201, headers: {}, body: { id: '001' } });
     const { router, postMessage } = makeRouter({ restCallService: { send } });
-    await router.handle({ type: 'restCall', method: 'POST', endpoint: '/x', body: '{"a":1}' });
-    expect(send).toHaveBeenCalledWith('POST', '/x', '{"a":1}');
+    const headers = [{ key: 'X-Foo', value: 'bar' }];
+    await router.handle({
+      type: 'restCall',
+      method: 'POST',
+      endpoint: '/x',
+      body: '{"a":1}',
+      headers,
+    });
+    expect(send).toHaveBeenCalledWith('POST', '/x', '{"a":1}', headers);
     expect(postMessage).toHaveBeenCalledWith({
       type: 'restCallResult',
-      data: { body: { id: '001' } },
+      data: { status: 201, headers: {}, body: { id: '001' } },
     });
   });
 
@@ -211,21 +229,70 @@ describe('MessageRouter built-in routes', () => {
     });
   });
 
-  it('loadRestCallState → posts restCallStateLoaded with the stored config', async () => {
-    const config = { method: 'PATCH', endpoint: '/services/apexrest/x', body: '{}' };
+  it('loadRestCallState → posts restCallStateLoaded with the stored state', async () => {
+    const state = {
+      method: 'PATCH',
+      endpoint: '/services/apexrest/x',
+      body: '{}',
+      headers: [],
+      history: [],
+      savedRequests: [],
+    };
     const { router, postMessage } = makeRouter({
-      restCallStateStore: { getState: vi.fn(() => config) },
+      restCallStateStore: { getState: vi.fn(() => state) },
     });
     await router.handle({ type: 'loadRestCallState' });
-    expect(postMessage).toHaveBeenCalledWith({ type: 'restCallStateLoaded', data: config });
+    expect(postMessage).toHaveBeenCalledWith({ type: 'restCallStateLoaded', data: state });
   });
 
-  it('saveRestCallState → persists the config (fire-and-forget, no post)', async () => {
+  it('saveRestCallState → persists the config incl. headers (fire-and-forget, no post)', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     const { router, postMessage } = makeRouter({ restCallStateStore: { save } });
-    await router.handle({ type: 'saveRestCallState', method: 'GET', endpoint: '/x', body: '' });
-    expect(save).toHaveBeenCalledWith({ method: 'GET', endpoint: '/x', body: '' });
+    const headers = [{ key: 'X-Foo', value: 'bar' }];
+    await router.handle({
+      type: 'saveRestCallState',
+      method: 'GET',
+      endpoint: '/x',
+      body: '',
+      headers,
+    });
+    expect(save).toHaveBeenCalledWith({ method: 'GET', endpoint: '/x', body: '', headers });
     expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('addRestCallHistory → posts the updated history list', async () => {
+    const history = [{ method: 'GET', endpoint: '/x', body: '', headers: [] }];
+    const addHistory = vi.fn().mockResolvedValue(history);
+    const { router, postMessage } = makeRouter({ restCallStateStore: { addHistory } });
+    await router.handle({
+      type: 'addRestCallHistory',
+      method: 'GET',
+      endpoint: '/x',
+      body: '',
+      headers: [],
+    });
+    expect(addHistory).toHaveBeenCalledWith({
+      method: 'GET',
+      endpoint: '/x',
+      body: '',
+      headers: [],
+    });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallHistoryUpdated',
+      data: { history },
+    });
+  });
+
+  it('saveRestCallSavedRequests → posts the stored saved-requests list', async () => {
+    const savedRequests = [{ name: 'S', method: 'GET', endpoint: '/x', body: '', headers: [] }];
+    const saveSavedRequests = vi.fn().mockResolvedValue(savedRequests);
+    const { router, postMessage } = makeRouter({ restCallStateStore: { saveSavedRequests } });
+    await router.handle({ type: 'saveRestCallSavedRequests', savedRequests });
+    expect(saveSavedRequests).toHaveBeenCalledWith(savedRequests);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallSavedRequestsUpdated',
+      data: { savedRequests },
+    });
   });
 
   it('addQueryHistory → posts the updated history list', async () => {

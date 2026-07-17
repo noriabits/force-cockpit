@@ -16,6 +16,14 @@ export interface ConnectionChangedEvent {
 /** HTTP methods the REST tab exposes — a subset of jsforce's HttpMethods. */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/** Result of a raw REST call — status/headers exposed since jsforce's own request() never surfaces them. */
+export interface RawHttpResult {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
 export type { ApexLogLevel } from './soap/SoapEnvelope';
 import type { ApexLogLevel } from './soap/SoapEnvelope';
 
@@ -219,20 +227,39 @@ export class ConnectionManager extends EventEmitter {
   }
 
   /**
-   * Generic REST request against the connected org. jsforce prefixes `instanceUrl`
-   * and attaches the `Authorization: Bearer <accessToken>` header automatically.
-   * Used by the REST tab to call arbitrary REST / Apex REST endpoints.
+   * Generic REST request against the connected org. Bypasses jsforce (whose `request()`
+   * only ever resolves with the parsed body — no way to read HTTP status or response
+   * headers on success) in favor of a direct `fetch` call against `instanceUrl`, with
+   * the Bearer token attached manually. Used by the REST tab to call arbitrary REST /
+   * Apex REST endpoints. Does NOT throw on a non-2xx status — the caller decides how to
+   * present it; only network-level failures (DNS, TLS, connection refused) throw.
    */
   async request(options: {
     method: HttpMethod;
     url: string;
     headers?: Record<string, string>;
     body?: string;
-  }): Promise<unknown> {
+  }): Promise<RawHttpResult> {
     if (!this._connection) {
       throw new Error(NOT_CONNECTED);
     }
-    return this._connection.request(options);
+    const url = /^https?:\/\//i.test(options.url)
+      ? options.url
+      : `${this._connection.instanceUrl}${options.url}`;
+    const response = await fetch(url, {
+      method: options.method,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${this._connection.accessToken ?? ''}`,
+      },
+      body: options.body,
+    });
+    const headers = Object.fromEntries(response.headers.entries());
+    const contentType = response.headers.get('content-type') ?? '';
+    const body = contentType.includes('json')
+      ? await response.json().catch(() => null)
+      : await response.text();
+    return { status: response.status, statusText: response.statusText, headers, body };
   }
 
   isSandbox(): boolean {

@@ -124,4 +124,112 @@ describe('ConnectionManager', () => {
     expect(cm.getCurrentOrg()).toBeNull();
     expect(cm.connectingTarget).toBeNull();
   });
+
+  describe('request()', () => {
+    function fakeResponse(overrides: {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string>;
+      contentType?: string;
+      json?: unknown;
+      text?: string;
+    }) {
+      const headers = new Headers({
+        'content-type': overrides.contentType ?? 'application/json',
+        ...overrides.headers,
+      });
+      return {
+        status: overrides.status ?? 200,
+        statusText: overrides.statusText ?? 'OK',
+        headers,
+        json: vi.fn().mockResolvedValue(overrides.json ?? { ok: true }),
+        text: vi.fn().mockResolvedValue(overrides.text ?? ''),
+      };
+    }
+
+    it('throws when not connected', async () => {
+      const cm = new ConnectionManager();
+      await expect(cm.request({ method: 'GET', url: '/services/data' })).rejects.toThrow();
+    });
+
+    it('resolves relative URLs against instanceUrl and attaches the Bearer token', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      const fetchMock = vi.fn().mockResolvedValue(fakeResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await cm.request({ method: 'GET', url: '/services/data/v60.0/sobjects' });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://example.my.salesforce.com/services/data/v60.0/sobjects',
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({ Authorization: 'Bearer TOKEN' }),
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
+
+    it('leaves absolute http(s) URLs untouched', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      const fetchMock = vi.fn().mockResolvedValue(fakeResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await cm.request({ method: 'GET', url: 'https://other-host.example.com/x' });
+
+      expect(fetchMock).toHaveBeenCalledWith('https://other-host.example.com/x', expect.anything());
+      vi.unstubAllGlobals();
+    });
+
+    it('never lets a caller-supplied Authorization header override the real token', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      const fetchMock = vi.fn().mockResolvedValue(fakeResponse({}));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await cm.request({
+        method: 'GET',
+        url: '/x',
+        headers: { Authorization: 'Bearer attacker-supplied' },
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer TOKEN' }),
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
+
+    it('returns status/headers/body without throwing on a non-2xx response', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(fakeResponse({ status: 404, json: { message: 'not found' } })),
+      );
+
+      const result = await cm.request({ method: 'GET', url: '/x' });
+
+      expect(result.status).toBe(404);
+      expect(result.body).toEqual({ message: 'not found' });
+      vi.unstubAllGlobals();
+    });
+
+    it('parses a non-JSON content-type as text', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(fakeResponse({ contentType: 'text/plain', text: 'hello' })),
+      );
+
+      const result = await cm.request({ method: 'GET', url: '/x' });
+
+      expect(result.body).toBe('hello');
+      vi.unstubAllGlobals();
+    });
+  });
 });

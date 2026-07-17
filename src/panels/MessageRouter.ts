@@ -1,7 +1,8 @@
 // Routes incoming webview messages to their handlers:
 //   - Built-in host routes (ready, query, openRecord, openInBrowser, refreshOrg,
 //     confirmAction, openExternalUrl, exportQueryResult, loadQueryState,
-//     saveQueryTabs, addQueryHistory, saveSavedQueries, describeGlobal,
+//     saveQueryTabs, addQueryHistory, saveSavedQueries, restCall, loadRestCallState,
+//     saveRestCallState, addRestCallHistory, saveRestCallSavedRequests, describeGlobal,
 //     describeSObject, operationStarted/Ended, cancelOperation)
 //   - Feature routes registered via defineFeature()
 // On success: posts `{ type: successType, data: <result + context> }`.
@@ -16,7 +17,11 @@ import type { ConnectionManager } from '../salesforce/connection';
 import type { QueryService } from '../services/QueryService';
 import type { QueryStateStore, SavedQuery, QueryTab } from '../services/QueryStateStore';
 import type { RestCallService } from '../services/RestCallService';
-import type { RestCallStateStore } from '../services/RestCallStateStore';
+import type {
+  RestCallStateStore,
+  HeaderEntry,
+  SavedRestCall,
+} from '../services/RestCallStateStore';
 import type { DescribeService } from '../services/DescribeService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
@@ -125,6 +130,7 @@ export class MessageRouter {
               message.method as string,
               message.endpoint as string,
               message.body as string,
+              message.headers as HeaderEntry[] | undefined,
             ),
           'restCallResult',
           'restCallError',
@@ -142,7 +148,33 @@ export class MessageRouter {
           method: message.method as string,
           endpoint: message.endpoint as string,
           body: message.body as string,
+          headers: (message.headers as HeaderEntry[] | undefined) ?? [],
         });
+        return;
+      case 'addRestCallHistory':
+        await this._route(
+          async () => ({
+            history: await this.restCallStateStore.addHistory({
+              method: message.method as string,
+              endpoint: message.endpoint as string,
+              body: message.body as string,
+              headers: (message.headers as HeaderEntry[] | undefined) ?? [],
+            }),
+          }),
+          'restCallHistoryUpdated',
+          'restCallHistoryError',
+        );
+        return;
+      case 'saveRestCallSavedRequests':
+        await this._route(
+          async () => ({
+            savedRequests: await this.restCallStateStore.saveSavedRequests(
+              message.savedRequests as SavedRestCall[],
+            ),
+          }),
+          'restCallSavedRequestsUpdated',
+          'restCallSavedRequestsError',
+        );
         return;
       case 'describeGlobal':
         await this._route(

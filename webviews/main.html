@@ -314,7 +314,7 @@
                 id="rest-endpoint"
                 class="text-input rest-endpoint"
                 spellcheck="false"
-                placeholder="/services/apexrest/api/orderUpdate"
+                placeholder="/services/data/v65.0/sobjects/Account"
                 aria-label="Endpoint path"
               />
               <button
@@ -328,6 +328,14 @@
             </div>
           </div>
 
+          <div class="rest-headers-section">
+            <div class="rest-headers-section-title">Headers</div>
+            <div class="rest-headers-list" id="rest-headers-list"></div>
+            <button type="button" class="btn btn-ghost" id="btn-rest-add-header">
+              + Add header
+            </button>
+          </div>
+
           <textarea
             id="rest-body"
             class="soql-textarea"
@@ -338,12 +346,39 @@
 
           <div class="query-toolbar">
             <button class="btn btn-primary" id="btn-rest-send">Send</button>
+            <div class="query-history-wrap">
+              <button class="btn btn-ghost" id="btn-rest-history">History ▾</button>
+              <div
+                class="query-history-dropdown"
+                id="rest-history-dropdown"
+                style="display: none"
+              ></div>
+            </div>
+            <button
+              class="btn btn-ghost"
+              id="btn-rest-save-request"
+              data-tooltip="Save current request"
+              aria-label="Save current request"
+            >
+              ★ Save
+            </button>
           </div>
 
           <div id="rest-response" style="display: none">
             <div class="query-results-toolbar">
-              <span class="results-meta" id="rest-response-meta">Response</span>
+              <span class="results-meta rest-response-status" id="rest-response-meta"
+                >Response</span
+              >
+              <span class="query-toolbar-spacer"></span>
+              <button type="button" class="btn btn-ghost" id="btn-rest-headers-toggle">
+                Headers ▾
+              </button>
             </div>
+            <div
+              class="rest-response-headers"
+              id="rest-response-headers-list"
+              style="display: none"
+            ></div>
             <pre class="rest-response-body" id="rest-response-body"></pre>
           </div>
 

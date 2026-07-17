@@ -1,8 +1,15 @@
 // @ts-check
 // REST tab — call arbitrary REST / Apex REST endpoints on the connected org.
 // Mirrors the Quick Query module: talks to the host via win.__onMessage / postMessage,
-// persists the last { method, endpoint, body } through saveRestCallState, and restores
-// it on load via loadRestCallState. Bundled by esbuild into dist/webview/rest-call.js.
+// persists the last { method, endpoint, body, headers } through saveRestCallState, and
+// restores it on load via loadRestCallState. Bundled by esbuild into dist/webview/rest-call.js.
+// Wires three focused sub-modules: headers-editor.js (custom headers), history.js
+// (request history + saved/named requests), response-view.js (status/headers/body,
+// incl. clickable record-Id links).
+
+import { createHeadersEditor } from './headers-editor';
+import { createRestCallHistory } from './history';
+import { createResponseView } from './response-view';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -14,46 +21,67 @@ const btnSend = /** @type {HTMLButtonElement} */ (document.getElementById('btn-r
 const responseEl = /** @type {HTMLElement} */ (document.getElementById('rest-response'));
 const responseMetaEl = /** @type {HTMLElement} */ (document.getElementById('rest-response-meta'));
 const responseBodyEl = /** @type {HTMLElement} */ (document.getElementById('rest-response-body'));
+const responseHeadersListEl = /** @type {HTMLElement} */ (
+  document.getElementById('rest-response-headers-list')
+);
+const btnHeadersToggle = /** @type {HTMLButtonElement} */ (
+  document.getElementById('btn-rest-headers-toggle')
+);
 const errorEl = /** @type {HTMLElement} */ (document.getElementById('rest-error'));
 
-// ── Response / error display ──────────────────────────────────────────────────
-function hideResponse() {
-  responseEl.style.display = 'none';
-  errorEl.style.display = 'none';
+const headersListEl = /** @type {HTMLElement} */ (document.getElementById('rest-headers-list'));
+const btnAddHeader = /** @type {HTMLButtonElement} */ (
+  document.getElementById('btn-rest-add-header')
+);
+const btnHistory = /** @type {HTMLButtonElement} */ (document.getElementById('btn-rest-history'));
+const historyDropdownEl = /** @type {HTMLElement} */ (
+  document.getElementById('rest-history-dropdown')
+);
+const btnSaveRequest = /** @type {HTMLButtonElement} */ (
+  document.getElementById('btn-rest-save-request')
+);
+
+const headersEditor = createHeadersEditor({
+  listEl: headersListEl,
+  addBtn: btnAddHeader,
+  onChange: () => scheduleSave(),
+});
+
+const responseView = createResponseView({
+  responseEl,
+  errorEl,
+  metaEl: responseMetaEl,
+  bodyEl: responseBodyEl,
+  headersToggleBtn: btnHeadersToggle,
+  headersListEl: responseHeadersListEl,
+  vscode,
+  escapeHtml: win.__escapeHtml,
+});
+
+/** @returns {{ method: string, endpoint: string, body: string, headers: {key: string, value: string}[] }} */
+function getCurrent() {
+  return {
+    method: methodEl.value,
+    endpoint: endpointEl.value,
+    body: bodyEl.value,
+    headers: headersEditor.getHeaders(),
+  };
 }
 
-/** @param {unknown} body */
-function showResponse(body) {
-  errorEl.style.display = 'none';
-  responseMetaEl.textContent = 'Response';
-  responseBodyEl.textContent =
-    body === undefined || body === '' ? '(empty response)' : formatBody(body);
-  responseEl.style.display = '';
-}
-
-/** @param {string} message */
-function showError(message) {
-  responseEl.style.display = 'none';
-  errorEl.textContent = message;
-  errorEl.style.display = '';
-}
-
-/** Pretty-print objects; show strings/other primitives as-is. */
-function formatBody(/** @type {unknown} */ body) {
-  if (typeof body === 'string') {
-    // The host may hand back a raw JSON string — pretty-print it when parseable.
-    try {
-      return JSON.stringify(JSON.parse(body), null, 2);
-    } catch {
-      return body;
-    }
-  }
-  try {
-    return JSON.stringify(body, null, 2);
-  } catch {
-    return String(body);
-  }
-}
+const history = createRestCallHistory({
+  buttonEl: btnHistory,
+  dropdownEl: historyDropdownEl,
+  saveBtn: btnSaveRequest,
+  vscode,
+  getCurrent,
+  onPick: (entry) => {
+    methodEl.value = entry.method;
+    endpointEl.value = entry.endpoint;
+    bodyEl.value = entry.body;
+    headersEditor.setHeaders(entry.headers || []);
+    scheduleSave();
+  },
+});
 
 // ── Persistence (debounced) ─────────────────────────────────────────────────────
 /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -61,12 +89,8 @@ let saveTimer;
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    vscode.postMessage({
-      type: 'saveRestCallState',
-      method: methodEl.value,
-      endpoint: endpointEl.value,
-      body: bodyEl.value,
-    });
+    const cur = getCurrent();
+    vscode.postMessage({ type: 'saveRestCallState', ...cur });
   }, 300);
 }
 
@@ -78,12 +102,13 @@ function stopSending() {
 
 win.__onMessage('restCallResult', (/** @type {any} */ msg) => {
   stopSending();
-  showResponse(msg.data.body);
+  responseView.showResponse(msg.data);
+  history.recordRun(getCurrent());
 });
 
 win.__onMessage('restCallError', (/** @type {any} */ msg) => {
   stopSending();
-  showError(msg.data.message);
+  responseView.showError(msg.data.message);
 });
 
 win.__onMessage('restCallStateLoaded', (/** @type {any} */ msg) => {
@@ -91,6 +116,16 @@ win.__onMessage('restCallStateLoaded', (/** @type {any} */ msg) => {
   if (cfg.method) methodEl.value = cfg.method;
   endpointEl.value = cfg.endpoint || '';
   bodyEl.value = cfg.body || '';
+  headersEditor.setHeaders(cfg.headers || []);
+  history.load(cfg);
+});
+
+win.__onMessage('restCallHistoryUpdated', (/** @type {any} */ msg) => {
+  history.onHistoryUpdated(msg.data.history);
+});
+
+win.__onMessage('restCallSavedRequestsUpdated', (/** @type {any} */ msg) => {
+  history.onSavedUpdated(msg.data.savedRequests);
 });
 
 // ── Input handlers ──────────────────────────────────────────────────────────────
@@ -99,25 +134,21 @@ const DESTRUCTIVE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** @param {string} endpoint */
 function dispatchSend(endpoint) {
-  hideResponse();
+  responseView.hideResponse();
   btnSend.disabled = true;
   btnSend.classList.add('running');
-  vscode.postMessage({
-    type: 'restCall',
-    method: methodEl.value,
-    endpoint,
-    body: bodyEl.value,
-  });
+  const cur = getCurrent();
+  vscode.postMessage({ type: 'restCall', ...cur, endpoint });
 }
 
 btnSend.addEventListener('click', () => {
   const endpoint = endpointEl.value.trim();
   if (!endpoint) {
-    showError('Enter an endpoint path.');
+    responseView.showError('Enter an endpoint path.');
     return;
   }
   if (!win.__orgConnected) {
-    showError('Not connected to any org.');
+    responseView.showError('Not connected to any org.');
     return;
   }
   const send = () => dispatchSend(endpoint);

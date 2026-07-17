@@ -1,6 +1,14 @@
 import type { ConnectionManager, HttpMethod } from '../salesforce/connection';
 
+export interface HeaderEntry {
+  key: string;
+  value: string;
+}
+
 export interface RestCallResult {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
   /** The parsed response body (object for JSON responses, string otherwise, undefined for 204). */
   body: unknown;
 }
@@ -12,16 +20,20 @@ const BODY_METHODS = new Set<HttpMethod>(['POST', 'PUT', 'PATCH']);
 
 /**
  * Sends an arbitrary REST / Apex REST request against the connected org, reusing the
- * extension's authenticated jsforce connection. jsforce prefixes the instance URL and
- * attaches the Bearer token; we only add a default JSON Content-Type.
- *
- * jsforce's `request()` resolves with the parsed body only (no HTTP status), so on a
- * non-2xx response it throws — MessageRouter turns that into a `restCallError` message.
+ * extension's authenticated connection. A default JSON Content-Type is applied, but any
+ * user-supplied header (including Content-Type) overrides it. A non-2xx response is
+ * returned like any other response (status/headers/body) rather than thrown — only
+ * network-level failures propagate as errors.
  */
 export class RestCallService {
   constructor(private readonly connectionManager: ConnectionManager) {}
 
-  async send(method: string, endpoint: string, body: string): Promise<RestCallResult> {
+  async send(
+    method: string,
+    endpoint: string,
+    body: string,
+    headers: HeaderEntry[] = [],
+  ): Promise<RestCallResult> {
     const verb = this.normalizeMethod(method);
     const url = this.normalizeEndpoint(endpoint);
 
@@ -33,7 +45,7 @@ export class RestCallService {
     } = {
       method: verb,
       url,
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.mergeHeaders(headers),
     };
 
     const trimmedBody = body?.trim();
@@ -41,8 +53,22 @@ export class RestCallService {
       options.body = body;
     }
 
-    const result = await this.connectionManager.request(options);
-    return { body: result };
+    return this.connectionManager.request(options);
+  }
+
+  /** Default JSON Content-Type, overridden case-insensitively by any user-supplied header. */
+  private mergeHeaders(headers: HeaderEntry[]): Record<string, string> {
+    const merged: Record<string, string> = { 'Content-Type': 'application/json' };
+    for (const { key, value } of headers) {
+      const trimmedKey = key?.trim();
+      if (!trimmedKey) continue;
+      const existingKey = Object.keys(merged).find(
+        (k) => k.toLowerCase() === trimmedKey.toLowerCase(),
+      );
+      if (existingKey) delete merged[existingKey];
+      merged[trimmedKey] = value ?? '';
+    }
+    return merged;
   }
 
   /** Uppercases and validates the method, defaulting to GET for anything unrecognized. */

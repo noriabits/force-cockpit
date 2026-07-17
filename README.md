@@ -52,12 +52,12 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 ## Tabs
 
-| Tab | Description |
-|-----|-------------|
-| **Overview** | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table |
-| **Utils** | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript) |
-| **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files |
-| **REST** | Call any REST API or Apex REST endpoint on the connected org, with a pretty-printed response |
+| Tab            | Description                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overview**   | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table                                   |
+| **Utils**      | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                               |
+| **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                       |
+| **REST**       | Call any REST API or Apex REST endpoint on the connected org, with custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response |
 
 ---
 
@@ -87,6 +87,7 @@ The results table supports:
 <div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
 
 > Scripts can also be created and edited directly in the UI — no need to write YAML by hand.
+
 <div align="center"><img src="media/scriptEditView.png" alt="Script Editor" /></div>
 
 > [!TIP]
@@ -99,6 +100,7 @@ The results table supports:
 > Prefer hand-editing the raw YAML? When editing an existing script, click **📄 Open YAML** to open its underlying `.yaml` file in a VS Code editor tab. The edit form closes (you've switched to raw editing, so there's no risk of a stale form **Save** overwriting your changes), and the script list refreshes automatically when you save the file. (The button only appears when editing an existing script.)
 
 The **Scripts** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
 
@@ -165,8 +167,8 @@ Write `${variableName}` in your script code where you want the value substituted
 
 In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
 
-| Placeholder | Description |
-|-------------|-------------|
+| Placeholder      | Description                                          |
+| ---------------- | ---------------------------------------------------- |
 | `${orgUsername}` | Salesforce username (not alias) of the connected org |
 
 System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
@@ -177,36 +179,36 @@ apex: |
   System.debug('Running as: ${orgUsername}');
 ```
 
-| Type | Badge | Org required | Output |
-|------|-------|-------------|--------|
-| Apex | Blue | Yes | Debug log (USER_DEBUG filter available) |
-| Command | Purple | No | stdout/stderr |
-| JavaScript | Green | No | `log()` / `console.log()` output |
-| AI | Orange | Yes | Streamed model analysis |
+| Type       | Badge  | Org required | Output                                  |
+| ---------- | ------ | ------------ | --------------------------------------- |
+| Apex       | Blue   | Yes          | Debug log (USER_DEBUG filter available) |
+| Command    | Purple | No           | stdout/stderr                           |
+| JavaScript | Green  | No           | `log()` / `console.log()` output        |
+| AI         | Orange | Yes          | Streamed model analysis                 |
 
 **JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
 
 ### AI scripts
 
-An **AI script** optionally gathers Salesforce data with a *fixed, author-defined* step and then uses a language model (via VS Code's built-in [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model), powered by GitHub Copilot) to **analyse** it. The analysis streams into the script's output. The gather step is optional — omit it (uncheck "Gather data first" in the form) for a script driven purely by its prompt + inputs.
+An **AI script** optionally gathers Salesforce data with a _fixed, author-defined_ step and then uses a language model (via VS Code's built-in [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model), powered by GitHub Copilot) to **analyse** it. The analysis streams into the script's output. The gather step is optional — omit it (uncheck "Gather data first" in the form) for a script driven purely by its prompt + inputs.
 
 **Requirements:** GitHub Copilot must be enabled in VS Code (the first run shows a one-time consent prompt), and an org must be connected.
 
 ```yaml
 name: Energy account analysis
 description: Summarises energy-industry accounts.
-model: auto                         # the chosen model's id — the form requires one and defaults to Copilot's "Auto"
+model: auto # the chosen model's id — the form requires one and defaults to Copilot's "Auto"
 inputs:
   - name: industry
     label: Industry
     required: true
-gather:                             # OPTIONAL fixed data step — exactly one of soql / apex / apex-file (omit for a prompt-only script)
+gather: # OPTIONAL fixed data step — exactly one of soql / apex / apex-file (omit for a prompt-only script)
   soql: SELECT Id, Name, AnnualRevenue FROM Account WHERE Industry = '${industry}'
-ai: |                               # the analysis prompt (use ai-file: to load it from a file)
+ai: | # the analysis prompt (use ai-file: to load it from a file)
   Summarise the accounts below and flag anything unusual about their revenue.
-allow-followup-queries: true        # optional — lets the model run follow-up SOQL for extra context
-allow-read-workspace-files: true    # optional — lets the model search & read workspace files (any non-gitignored source/metadata)
-skills:                             # optional — ids of skills the model may read on demand
+allow-followup-queries: true # optional — lets the model run follow-up SOQL for extra context
+allow-read-workspace-files: true # optional — lets the model search & read workspace files (any non-gitignored source/metadata)
+skills: # optional — ids of skills the model may read on demand
   - data-quality-checklist
 ```
 
@@ -219,7 +221,7 @@ How it works and why it's safe:
 - **Model picker.** Picking a model is **required** (the field is marked with a red `*`). The list is populated from the models Copilot offers — de-duplicated and sorted alphabetically — and **defaults to Copilot's "Auto"** model when it's available. If a script's saved model is no longer available at run time, Force Cockpit falls back to **Auto** (or the first available model), prepends a warning to the output, and shows a notification — so the run still completes. Note: some models don't support follow-up queries — gather + analyse still works regardless.
 - **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
 - **Schema is cached locally.** Before querying, the model checks object fields via a `describe_object` tool. Results are cached per workspace under `force-cockpit/.describe-cache/` (git-ignored, 2-week expiry) and shared with the Overview Quick Query autocomplete, so repeated lookups don't hit the org. Click the 🔄 refresh button next to the connection status to clear the cache and re-pull the latest schema.
-- **Open as markdown.** AI analysis is written in Markdown. Once a run finishes, an **Open as markdown** button (next to *Open in editor* / *Copy to clipboard*) opens the output in VSCode's built-in Markdown preview — headings, lists, tables, and code blocks rendered nicely. Nothing is written to disk; it opens an in-memory untitled document. The gathered data is shown as a code block in the preview.
+- **Open as markdown.** AI analysis is written in Markdown. Once a run finishes, an **Open as markdown** button (next to _Open in editor_ / _Copy to clipboard_) opens the output in VSCode's built-in Markdown preview — headings, lists, tables, and code blocks rendered nicely. Nothing is written to disk; it opens an in-memory untitled document. The gathered data is shown as a code block in the preview.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
 
@@ -239,10 +241,10 @@ The Monitoring tab displays live charts built from SOQL queries. Each chart is d
 
 Charts are loaded from two sources (merged at runtime, later wins):
 
-| Source | Path | Purpose |
-|--------|------|---------|
-| **User-defined** | `{workspace}/force-cockpit/monitoring/{category}/*.yaml` | Your own charts, committed to git |
-| **Private** | `{workspace}/force-cockpit/private/monitoring/{category}/*.yaml` | Personal charts, **not** committed to git |
+| Source           | Path                                                             | Purpose                                   |
+| ---------------- | ---------------------------------------------------------------- | ----------------------------------------- |
+| **User-defined** | `{workspace}/force-cockpit/monitoring/{category}/*.yaml`         | Your own charts, committed to git         |
+| **Private**      | `{workspace}/force-cockpit/private/monitoring/{category}/*.yaml` | Personal charts, **not** committed to git |
 
 The user-defined path can be customised via the VSCode setting `forceCockpit.cockpitPath` (see [Configuration](#configuration)).
 
@@ -281,8 +283,8 @@ Click **Edit** on the card → click the red **Delete** button in the form → c
 ### YAML schema
 
 ```yaml
-name: Open Orders by Status          # Display name shown on the card
-description: Count of open orders grouped by status.  # Subtitle shown on the card
+name: Open Orders by Status # Display name shown on the card
+description: Count of open orders grouped by status. # Subtitle shown on the card
 
 soql: |
   SELECT Status, COUNT(Id) RecordCount
@@ -290,35 +292,35 @@ soql: |
   WHERE Status != 'Cancelled'
   GROUP BY Status
 
-labelField: Status        # API name of the field used as chart labels (X-axis or pie slices)
+labelField: Status # API name of the field used as chart labels (X-axis or pie slices)
 
-valueFields:              # One or more datasets to plot
-  - field: RecordCount    # API name of the numeric field
-    label: Orders         # Legend label for this dataset
-    format: number        # optional: number | currency | percent
+valueFields: # One or more datasets to plot
+  - field: RecordCount # API name of the numeric field
+    label: Orders # Legend label for this dataset
+    format: number # optional: number | currency | percent
 
-chartType: bar            # bar | line | pie | doughnut | metric | table
-stacked: false            # true = stacked bars/lines (bar and line only)
-notifyOnIncrease: false   # true = fire a notification when totalRows grows between two refreshes
-refreshInterval: 0        # Auto-refresh in seconds. 0 = manual refresh only
+chartType: bar # bar | line | pie | doughnut | metric | table
+stacked: false # true = stacked bars/lines (bar and line only)
+notifyOnIncrease: false # true = fire a notification when totalRows grows between two refreshes
+refreshInterval: 0 # Auto-refresh in seconds. 0 = manual refresh only
 ```
 
 ### Field reference
 
-| Field | Required | Values | Description |
-|-------|----------|--------|-------------|
-| `name` | Yes | string | Card title |
-| `description` | No | string | Card subtitle |
-| `soql` | Yes | SOQL string | Any valid SOQL query |
-| `labelField` | Yes* | API name | Field whose values become chart labels or the first table column. *Not required for `metric` type. |
-| `valueFields` | Yes | array | At least one `{ field, label }` entry |
-| `valueFields[].field` | Yes | API name | Field to plot or display |
-| `valueFields[].label` | Yes | string | Dataset legend label or column header |
-| `valueFields[].format` | No | `currency` \| `percent` | Number formatting on axes, tooltips, and table cells |
-| `chartType` | No | `bar` \| `line` \| `pie` \| `doughnut` \| `metric` \| `table` | Default chart type (user can override for chart types) |
-| `stacked` | No | `true` \| `false` | Stack bars or lines (bar and line only) |
-| `notifyOnIncrease` | No | `true` \| `false` | Fire a VSCode warning whenever the row count grows between two auto-refreshes (e.g. new error records appearing). Snoozable for 1 hour or for the day. |
-| `refreshInterval` | No | integer (seconds) | `0` disables auto-refresh |
+| Field                  | Required | Values                                                        | Description                                                                                                                                            |
+| ---------------------- | -------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`                 | Yes      | string                                                        | Card title                                                                                                                                             |
+| `description`          | No       | string                                                        | Card subtitle                                                                                                                                          |
+| `soql`                 | Yes      | SOQL string                                                   | Any valid SOQL query                                                                                                                                   |
+| `labelField`           | Yes\*    | API name                                                      | Field whose values become chart labels or the first table column. \*Not required for `metric` type.                                                    |
+| `valueFields`          | Yes      | array                                                         | At least one `{ field, label }` entry                                                                                                                  |
+| `valueFields[].field`  | Yes      | API name                                                      | Field to plot or display                                                                                                                               |
+| `valueFields[].label`  | Yes      | string                                                        | Dataset legend label or column header                                                                                                                  |
+| `valueFields[].format` | No       | `currency` \| `percent`                                       | Number formatting on axes, tooltips, and table cells                                                                                                   |
+| `chartType`            | No       | `bar` \| `line` \| `pie` \| `doughnut` \| `metric` \| `table` | Default chart type (user can override for chart types)                                                                                                 |
+| `stacked`              | No       | `true` \| `false`                                             | Stack bars or lines (bar and line only)                                                                                                                |
+| `notifyOnIncrease`     | No       | `true` \| `false`                                             | Fire a VSCode warning whenever the row count grows between two auto-refreshes (e.g. new error records appearing). Snoozable for 1 hour or for the day. |
+| `refreshInterval`      | No       | integer (seconds)                                             | `0` disables auto-refresh                                                                                                                              |
 
 > **Background notifications:** Charts with thresholds or `notifyOnIncrease: true` keep auto-refreshing in the background even when the Force Cockpit panel is closed, so threshold breaches and row-count growth alerts still fire. Row-count growth also plays a short OS audio cue (best-effort, uses the system audio command for your platform). Charts without these flags only refresh while the panel is open. Disconnect from the org and the background polling stops.
 
@@ -423,10 +425,13 @@ The REST tab lets you call any REST API or Apex REST endpoint on the connected o
 
 1. **Pick an HTTP method** — `GET`, `POST`, `PUT`, `PATCH`, or `DELETE`.
 2. **Enter the endpoint path** — a relative path is prefixed with the org's instance URL automatically, e.g. `/services/data/v65.0/limits` or `/services/apexrest/api/orderUpdate`. A full `https://…` URL is used as-is. Use the 📋 button to paste from the clipboard.
-3. **Add a JSON body** (optional) — used for `POST` / `PUT` / `PATCH`; ignored for `GET` / `DELETE`. A default `Content-Type: application/json` header is sent.
-4. **Send** the request with the **Send** button or `Cmd`/`Ctrl`+`Enter`. JSON responses are pretty-printed; a non-2xx response is shown as an error.
+3. **Add custom headers** (optional) — click **+ Add header** for any extra headers your endpoint needs (e.g. `Sforce-Auto-Assign`). A default `Content-Type: application/json` header is sent; a custom header with the same name overrides it.
+4. **Add a JSON body** (optional) — used for `POST` / `PUT` / `PATCH`; ignored for `GET` / `DELETE`.
+5. **Send** the request with the **Send** button or `Cmd`/`Ctrl`+`Enter`. The response shows a color-coded status code, a collapsible list of response headers, and the pretty-printed JSON body — any Salesforce record Id in the response is a clickable link that opens the record in your browser. The response box border is colored to match (green/amber/red). A non-2xx response (e.g. `404`, `400`) is shown as a normal response, not an error — only network-level failures (e.g. no connectivity) show as an error.
 
-Your last request (method, endpoint, body) is saved per workspace and restored when you reopen the panel.
+**History & saved requests** — every successful send (including non-2xx responses) is recorded in the **History ▾** dropdown, with the method badge first and the endpoint next, so you can quickly re-run or tweak a past request. Click **★ Save** to name and keep a request permanently under "Saved" — useful for endpoints you call often.
+
+Your last request (method, endpoint, body, headers) is saved per workspace and restored when you reopen the panel.
 
 > [!WARNING]
 > When you are connected to a **production org or a protected sandbox**, sending a `POST` / `PUT` / `PATCH` / `DELETE` request prompts for confirmation first, since these verbs can modify live data. `GET` requests are sent without a prompt.
@@ -438,6 +443,7 @@ Your last request (method, endpoint, body) is saved per workspace and restored w
 Most extension settings are managed via a `config.yaml` file — making them easy to share across a team by committing the file to git.
 
 The extension loads configuration in this order (later layers override earlier ones):
+
 1. **Hardcoded defaults** — built into the extension
 2. **Bundled `config.yaml`** — shipped with the extension at its root
 3. **User `config.yaml`** — at `force-cockpit/config.yaml` in your workspace (or the custom `cockpitPath`)
@@ -446,16 +452,16 @@ Only keys present in a layer override the previous layer — omitted keys keep t
 
 ### Available settings
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `apiVersion` | string | `"66.0"` | Salesforce API version for all API calls |
-| `protectedSandboxes` | string[] | `[]` | Sandbox org names that require confirmation before destructive actions |
-| `skillsPaths` | string[] | `[".claude/skills", ".github/skills"]` | Workspace-relative folders scanned for Agent Skills attachable to AI scripts |
+| Key                  | Type     | Default                                | Description                                                                  |
+| -------------------- | -------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| `apiVersion`         | string   | `"66.0"`                               | Salesforce API version for all API calls                                     |
+| `protectedSandboxes` | string[] | `[]`                                   | Sandbox org names that require confirmation before destructive actions       |
+| `skillsPaths`        | string[] | `[".claude/skills", ".github/skills"]` | Workspace-relative folders scanned for Agent Skills attachable to AI scripts |
 
 ### Example `force-cockpit/config.yaml`
 
 ```yaml
-apiVersion: "66.0"
+apiVersion: '66.0'
 protectedSandboxes:
   - staging
   - uat
@@ -468,9 +474,9 @@ skillsPaths:
 
 One setting remains in VSCode's `settings.json` because it determines where the config file lives:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `forceCockpit.cockpitPath` | `""` | Absolute path to the `force-cockpit` folder. Defaults to `{workspace root}/force-cockpit` if empty. |
+| Setting                    | Default | Description                                                                                         |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `forceCockpit.cockpitPath` | `""`    | Absolute path to the `force-cockpit` folder. Defaults to `{workspace root}/force-cockpit` if empty. |
 
 > **Note:** Changes to `config.yaml` are picked up automatically — no window reload needed.
 
@@ -488,6 +494,7 @@ To create a release:
 4. Click **Run workflow**.
 
 The workflow will:
+
 - Bump the version in `package.json`
 - Update `CHANGELOG.md` with the version and date
 - Push a version commit and git tag to `main`
