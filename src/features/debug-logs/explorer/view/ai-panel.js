@@ -3,7 +3,11 @@
 // "Apply these levels" action built from the ```debug-level block the model
 // ends its answer with.
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
-import { isScrolledToBottom, stickToBottom } from '../../../shared/view/scroll-highlight';
+import {
+  isScrolledToBottom,
+  scrollAndHighlight,
+  stickToBottom,
+} from '../../../shared/view/scroll-highlight';
 import { parseLevelSuggestion } from './apply-levels';
 
 /**
@@ -22,6 +26,7 @@ export function createAiPanel(ctx) {
 
   const panel = $('dbg-ai');
   const analyzeBtn = /** @type {HTMLButtonElement} */ ($('dbg-analyze'));
+  const runBtn = /** @type {HTMLButtonElement} */ ($('dbg-ai-run'));
   const modelSel = /** @type {HTMLSelectElement} */ ($('dbg-ai-model'));
   const workspaceChk = /** @type {HTMLInputElement} */ ($('dbg-ai-workspace'));
   const orgChk = /** @type {HTMLInputElement} */ ($('dbg-ai-org'));
@@ -82,14 +87,38 @@ export function createAiPanel(ctx) {
     opId = null;
   }
 
+  const isOpen = () => panel.style.display !== 'none';
+
+  /** Reveal the settings + output panel (without running anything) and make it noticeable. */
+  function openPanel() {
+    panel.style.display = '';
+    analyzeBtn.textContent = labels.analyzeClose;
+    if (!analysis && !opId) outputEl.textContent = labels.aiIdleHint;
+    scrollAndHighlight(document, '#dbg-ai', 'dbg-ai--highlight');
+  }
+
+  function closePanel() {
+    panel.style.display = 'none';
+    analyzeBtn.textContent = labels.analyzeOpen;
+  }
+
+  // "Analyze with AI" only opens the settings panel — it lets the user pick a
+  // model, toggle tools, and describe what to focus on BEFORE anything runs.
+  // Running the analysis is a separate, explicit action (dbg-ai-run below).
   analyzeBtn.addEventListener('click', () => {
     const logId = ctx.getLogId();
     if (!logId) return;
-    panel.style.display = '';
+    if (isOpen()) closePanel();
+    else openPanel();
+  });
+
+  runBtn.addEventListener('click', () => {
+    const logId = ctx.getLogId();
+    if (!logId) return;
     analyzedLogId = logId;
     clearOutput();
     const win = /** @type {any} */ (window);
-    opId = win.__startAction(analyzeBtn, () => {
+    opId = win.__startAction(runBtn, () => {
       vscode.postMessage({ type: 'cancelOperation', opId });
     });
     vscode.postMessage({
@@ -180,6 +209,7 @@ export function createAiPanel(ctx) {
       win.__endAction(opId);
       opId = null;
       panel.style.display = '';
+      analyzeBtn.textContent = labels.analyzeClose;
       outputEl.textContent = `${labels.analyzeFailed}: ${message}`;
     },
     getOpId: () => opId,
@@ -196,13 +226,13 @@ export function createAiPanel(ctx) {
       abortRun();
       analyzedLogId = '';
       clearOutput();
-      panel.style.display = 'none';
+      closePanel();
     },
     hide() {
       abortRun();
       analyzedLogId = '';
       clearOutput();
-      panel.style.display = 'none';
+      closePanel();
     },
   };
 }

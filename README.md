@@ -487,7 +487,7 @@ Click a log to open it:
 
 ### 4. Ask AI what happened
 
-**✨ Analyze with AI** sends the log for analysis through the VS Code Language Model API (GitHub Copilot), the same mechanism as AI scripts.
+**✨ Analyze with AI** opens the analysis panel — model picker, "Read workspace files" / "Query the org" toggles, and an optional "what should the analysis focus on?" field — without sending anything yet, so you can set it up first. The panel scrolls into view and flashes briefly since it sits below the summary/issues/log output and is easy to miss otherwise. Click **Run analysis** to actually send the log through the VS Code Language Model API (GitHub Copilot), the same mechanism as AI scripts.
 
 Debug logs are far too large for any context window, so the model receives a *briefing* — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context.
 

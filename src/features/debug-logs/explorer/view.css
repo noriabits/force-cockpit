@@ -623,11 +623,29 @@
 }
 
 .dbg-ai-question {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
 .dbg-ai-question input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Flash the panel so it's noticeable when opened below a long log/issues list. */
+@keyframes dbg-ai-highlight-fade {
+  0% {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.dbg-ai--highlight {
+  animation: dbg-ai-highlight-fade 1.5s ease-out forwards;
 }
 
 .dbg-ai-output {

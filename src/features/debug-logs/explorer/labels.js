@@ -49,6 +49,11 @@ window.DebugLogsLabels = {
   partialLog: 'This log is too large to show in full — only its start and end are loaded.',
 
   // AI
+  analyzeOpen: '✨ Analyze with AI',
+  analyzeClose: '✕ Hide AI panel',
+  runAnalysis: 'Run analysis',
+  aiIdleHint:
+    'Pick a model, adjust the tools and optionally say what to focus on — then click "Run analysis".',
   analyzing: 'Analyzing…',
   analyzeFailed: 'Analysis failed',
   applyLevels: 'Apply these levels',
