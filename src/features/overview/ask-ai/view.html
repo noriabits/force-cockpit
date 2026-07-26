@@ -1,7 +1,17 @@
 <section class="card" id="ask-ai-card">
   <div class="card-header">
     <h3 class="card-title">🤖 Ask the AI</h3>
-    <button type="button" class="btn btn-ghost" id="ask-ai-new">New chat</button>
+    <div class="feature-actions">
+      <div class="query-history-wrap">
+        <button type="button" class="btn btn-ghost" id="ask-ai-history-btn">History ▾</button>
+        <div
+          class="query-history-dropdown"
+          id="ask-ai-history-dropdown"
+          style="display: none"
+        ></div>
+      </div>
+      <button type="button" class="btn btn-ghost" id="ask-ai-new">New chat</button>
+    </div>
   </div>
   <p class="card-description">
     Ask ad-hoc questions about your org or workspace. Multi-turn — follow-ups build on what you

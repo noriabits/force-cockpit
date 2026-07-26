@@ -278,6 +278,81 @@ describe('AskAiService', () => {
     expect(gw.sends[1].tools.map((t) => t.name)).not.toContain('run_soql');
   });
 
+  it('getSnapshot() is null before any turn has landed', () => {
+    const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
+    const svc = makeService(gw);
+    expect(svc.getSnapshot()).toBeNull();
+  });
+
+  it('getSnapshot() returns the thread, lock, turns and modelId after a turn', async () => {
+    const gw = new FakeGateway([[{ kind: 'text', text: 'ok' }]]);
+    const svc = makeService(gw, { workspaceSearch: fakeWorkspaceSearch() });
+    await svc.ask({ question: 'Q1', modelId: 'gpt-4o', access: ALL_ON });
+
+    const snapshot = svc.getSnapshot();
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.turns).toBe(1);
+    expect(snapshot?.modelId).toBe('gpt-4o');
+    expect(snapshot?.locked).toEqual({
+      allowWorkspaceFiles: true,
+      allowOrgQueries: true,
+      hasSkills: false,
+    });
+    expect(snapshot?.messages).toHaveLength(2); // user + assistant
+  });
+
+  it('restoreSnapshot() throws while a question is running', async () => {
+    let resolveSend!: () => void;
+    const gw: LmGateway = {
+      listModels: async () => [],
+      async *send(): AsyncIterable<ChatEvent> {
+        await new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        });
+        yield { kind: 'text', text: 'done' };
+      },
+    };
+    const svc = makeService(gw);
+    const first = svc.ask({ question: 'Q1', access: ALL_ON });
+    expect(() =>
+      svc.restoreSnapshot({ messages: [], locked: null, turns: 0, modelId: '' }),
+    ).toThrow('Cannot restore a conversation while one is running.');
+    resolveSend();
+    await first;
+  });
+
+  it('restoreSnapshot() resumes a thread without repeating the preamble and keeps its lock', async () => {
+    const gw = new FakeGateway([[{ kind: 'text', text: 'resumed answer' }]]);
+    const svc = makeService(gw);
+
+    // Simulate a snapshot that was archived with workspace files OFF, org queries ON.
+    const restored = {
+      messages: [
+        { role: 'user' as const, text: '## Question\nWhat is the API version?' },
+        { role: 'assistant' as const, text: 'It is 65.0.' },
+      ],
+      locked: { allowWorkspaceFiles: false, allowOrgQueries: true, hasSkills: false },
+      turns: 1,
+      modelId: 'gpt-4o',
+    };
+    svc.restoreSnapshot(restored);
+    expect(svc.turnCount).toBe(1);
+
+    // A follow-up asks with different toggles — the restored lock should win.
+    const result = await svc.ask({
+      question: 'And the API name?',
+      access: { allowWorkspaceFiles: true, allowOrgQueries: false },
+    });
+
+    expect(result.access).toEqual({ allowWorkspaceFiles: false, allowOrgQueries: true });
+    const sent = gw.sends[0].messages;
+    expect(sent).toHaveLength(3); // 2 restored + 1 new user message
+    expect(sent[2].text).toBe('And the API name?'); // no preamble repeated
+    const names = gw.sends[0].tools.map((t) => t.name);
+    expect(names).toContain('run_soql'); // org tools still locked on
+    expect(names).not.toContain('search_workspace_files'); // workspace tools still locked off
+  });
+
   it('surfaces a model fallback once', async () => {
     const gw = new FakeGateway([
       [

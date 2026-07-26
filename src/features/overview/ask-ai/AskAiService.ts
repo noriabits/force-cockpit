@@ -22,11 +22,9 @@ import {
 import type { ChatMessage, LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import type { SkillsRepository } from '../../../services/skills/SkillsRepository';
 import { buildAskAiPreamble } from './prompt';
+import type { AskAiAccess, LockedAccess } from './types';
 
-export interface AskAiAccess {
-  allowWorkspaceFiles: boolean;
-  allowOrgQueries: boolean;
-}
+export type { AskAiAccess, LockedAccess };
 
 export interface AskAiRequest {
   question: string;
@@ -45,10 +43,6 @@ export interface AskAiResult {
   modelFallback?: ModelFallback;
 }
 
-interface LockedAccess extends AskAiAccess {
-  hasSkills: boolean;
-}
-
 export class AskAiService {
   private readonly conversation: AiConversation;
   private messages: ChatMessage[] = [];
@@ -64,6 +58,9 @@ export class AskAiService {
    * the life of the conversation. `reset()` clears it for a fresh thread.
    */
   private locked: LockedAccess | null = null;
+  /** The modelId actually used on the most recent successful turn — needed to
+   *  resume a restored conversation with the same model it was started with. */
+  private lastModelId = '';
 
   constructor(
     gateway: LmGateway,
@@ -88,6 +85,44 @@ export class AskAiService {
     this.messages = [];
     this.turns = 0;
     this.locked = null;
+    this.lastModelId = '';
+  }
+
+  /**
+   * Everything needed to archive the live conversation, or `null` when there's
+   * nothing to archive yet (no turn has landed). Callers that persist this must
+   * deep-clone `messages` first — `AiConversation` mutates it in place, and this
+   * returns the live array reference, not a copy.
+   */
+  getSnapshot(): {
+    messages: ChatMessage[];
+    locked: LockedAccess | null;
+    turns: number;
+    modelId: string;
+  } | null {
+    if (this.turns === 0) return null;
+    return {
+      messages: this.messages,
+      locked: this.locked,
+      turns: this.turns,
+      modelId: this.lastModelId,
+    };
+  }
+
+  /** Resume a previously archived conversation with its tool-access lock intact. */
+  restoreSnapshot(snapshot: {
+    messages: ChatMessage[];
+    locked: LockedAccess | null;
+    turns: number;
+    modelId: string;
+  }): void {
+    if (this.running) {
+      throw new Error('Cannot restore a conversation while one is running.');
+    }
+    this.messages = snapshot.messages;
+    this.locked = snapshot.locked;
+    this.turns = snapshot.turns;
+    this.lastModelId = snapshot.modelId;
   }
 
   async ask(
@@ -144,6 +179,7 @@ export class AskAiService {
       });
       // Only lock in once a turn has actually landed successfully.
       this.locked = locked;
+      this.lastModelId = req.modelId || this.lastModelId;
       const turnIndex = this.turns++;
       return {
         answer,

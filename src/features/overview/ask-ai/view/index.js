@@ -7,6 +7,7 @@
 // imports the shared ES-module helpers below.
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
 import { isScrolledToBottom, stickToBottom } from '../../../shared/view/scroll-highlight';
+import { createAskAiHistory } from './history';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -23,6 +24,8 @@ const sendBtn = /** @type {HTMLButtonElement} */ ($('ask-ai-send'));
 const newChatBtn = /** @type {HTMLButtonElement} */ ($('ask-ai-new'));
 const openMarkdownBtn = /** @type {HTMLButtonElement} */ ($('ask-ai-open-markdown'));
 const copyBtn = /** @type {HTMLButtonElement} */ ($('ask-ai-copy'));
+const historyBtn = /** @type {HTMLButtonElement} */ ($('ask-ai-history-btn'));
+const historyDropdown = /** @type {HTMLElement} */ ($('ask-ai-history-dropdown'));
 
 /** The full conversation rendered as one Markdown string — also what Copy / Open as markdown export. */
 let transcript = '';
@@ -34,6 +37,16 @@ let pendingModelId = '';
 let receivedChunk = false;
 
 wireCopyToClipboardButton(copyBtn, () => transcript);
+
+const history = createAskAiHistory({
+  buttonEl: historyBtn,
+  dropdownEl: historyDropdown,
+  vscode,
+  onPick: (id) => {
+    if (opId) return; // don't orphan an in-flight answer by switching threads mid-stream
+    vscode.postMessage({ type: 'loadAskAiConversation', id });
+  },
+});
 
 openMarkdownBtn.addEventListener('click', () => {
   if (!transcript) return;
@@ -162,6 +175,9 @@ questionEl.addEventListener('keydown', (e) => {
 
 newChatBtn.addEventListener('click', () => {
   if (opId) return; // disabled while running, but guard anyway
+  // Nothing to archive here — the host already saved every completed reply
+  // to History as it happened (see askAiAnswer below), so this just clears
+  // the live thread to start a new session.
   vscode.postMessage({ type: 'resetAskAiChat' });
 });
 
@@ -174,8 +190,19 @@ function endRun() {
 
 win.__registerFeature('ask-ai', {
   onOrgConnected() {
+    // A direct org-to-org switch never fires onOrgDisconnected, so a run left
+    // in flight from the previous org would otherwise keep going and let its
+    // tool calls (run_soql/describe_object) silently query the NEW org under
+    // the old question's framing. Cancel it the same way onOrgDisconnected does.
+    if (opId) {
+      vscode.postMessage({ type: 'cancelOperation', opId });
+      endRun();
+    }
     vscode.postMessage({ type: 'loadAskAiState' });
     vscode.postMessage({ type: 'listChatModels' });
+    // History is global (not per-org) — refresh it here too, since the host
+    // may have just archived the outgoing thread via connectionChanged.
+    history.refresh();
     // The host resets the thread on every connection change (a new/rejoined
     // org invalidates prior tool results) — mirror that here.
     resetChat();
@@ -215,6 +242,10 @@ win.__registerFeature('ask-ai', {
           transcript += `\n${labels.cancelledNote}\n`;
         } else {
           lockToggles();
+          // The host just saved/updated this conversation's History entry —
+          // refresh so the dropdown shows it (and its bumped timestamp)
+          // whenever it's next opened, without waiting for a reconnect.
+          history.refresh();
         }
         outputEl.textContent = transcript;
         break;
@@ -229,6 +260,37 @@ win.__registerFeature('ask-ai', {
 
       case 'askAiChatReset':
         resetChat();
+        break;
+
+      case 'askAiHistoryLoaded':
+        history.onHistoryUpdated(data.conversations ?? []);
+        break;
+
+      case 'askAiConversationLoaded':
+        transcript = data.transcript ?? '';
+        outputEl.textContent = transcript;
+        pendingModelId = data.modelId ?? '';
+        if (pendingModelId && [...modelSel.options].some((o) => o.value === pendingModelId)) {
+          modelSel.value = pendingModelId;
+        }
+        // The restored thread's tool access is already committed host-side —
+        // reflect that immediately rather than waiting for a new turn to lock it.
+        lockToggles();
+        if (data.messagesTruncated) {
+          transcript += `\n\n_${labels.historyTruncatedNote}_\n`;
+          outputEl.textContent = transcript;
+        }
+        break;
+      case 'askAiConversationLoadedError':
+        // Don't touch whatever is already on screen — there's nothing wrong
+        // with the current transcript, only the load attempt failed.
+        console.error('Failed to load conversation:', data.message);
+        break;
+
+      case 'askAiConversationDeleted':
+        break; // history.js already removed it locally on click
+      case 'askAiConversationDeleteError':
+        history.refresh(); // resync — the optimistic local removal may be wrong
         break;
     }
   },

@@ -54,7 +54,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card for ad-hoc questions                                                                                                                       |
+| **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                     |
 | **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                                                                       |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
@@ -84,6 +84,8 @@ Two read-only toggles control what the model can do this conversation:
 Your workspace's [Agent Skills](#ai-scripts) are **always available with no picker** — the model sees the same short id + description catalogue AI scripts do and can pull a skill's full content on demand via `read_skill`. There's nothing to select: since the question changes every time, the model decides which skill (if any) is relevant.
 
 Use **New chat** to clear the conversation and unlock the toggles again. **Open as markdown** renders the whole conversation in VS Code's Markdown preview; **Copy** copies it as Markdown text. Switching orgs (or disconnecting) automatically starts a fresh conversation, since prior answers may reference org data from the previous connection.
+
+**History ▾** lists your past conversations — one shared list, not scoped to any particular org. Every conversation is saved **as you go**: the moment each reply finishes, it's written to History under one entry for the whole conversation, so a question followed by three follow-ups shows up as a single row, not four — closing the panel, switching orgs, or the extension reloading never loses anything you've already seen an answer to. Click a row to reopen it (its transcript, model, and locked tool-access settings are all restored) and continue asking follow-ups — they keep updating that same entry — or click **×** to delete it. A very old or unusually large conversation may only restore its transcript for reading, without supporting true follow-up continuation — a small note appears in that case.
 
 ---
 

@@ -125,6 +125,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     createAskAiFeature({
       workspaceState: context.workspaceState,
+      userBasePath,
       describeService,
       gateway: lmGateway,
       workspaceSearch,

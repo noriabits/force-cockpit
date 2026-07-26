@@ -11,4 +11,6 @@ window.AskAiLabels = {
   lockedHint: 'Tools are locked for this conversation — start "New chat" to change them.',
   emptyOutputHint:
     'Ask a question to start a conversation. Follow-ups build on what you already asked.',
+  historyTruncatedNote:
+    '[this conversation was too large to fully restore — follow-ups will start a new context]',
 };
