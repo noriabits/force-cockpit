@@ -13,11 +13,15 @@ import { analyzeSoql } from './soql-context';
  * @property {ReturnType<import('./describe-cache').createDescribeCache>} describeCache
  * @property {() => boolean} isConnected
  * @property {() => void} onInsert  Called after a value is inserted (sync tab state).
+ * @property {HTMLElement} [anchorEl]  Element the dropdown is positioned under.
+ *   Defaults to the textarea; pass the highlight stack wrapper when the textarea
+ *   is no longer offset-positioned against .query-editor.
  */
 
 /** @param {AutocompleteCtx} ctx */
 export function createAutocomplete(ctx) {
   const { textarea, dropdownEl, describeCache, isConnected, onInsert } = ctx;
+  const anchorEl = ctx.anchorEl || textarea;
 
   /** @type {{ label: string, detail: string, insert: string, reopen: boolean }[]} */
   let items = [];
@@ -61,8 +65,8 @@ export function createAutocomplete(ctx) {
       });
       dropdownEl.appendChild(row);
     });
-    dropdownEl.style.top = textarea.offsetTop + textarea.offsetHeight + 2 + 'px';
-    dropdownEl.style.left = textarea.offsetLeft + 'px';
+    dropdownEl.style.top = anchorEl.offsetTop + anchorEl.offsetHeight + 2 + 'px';
+    dropdownEl.style.left = anchorEl.offsetLeft + 'px';
     dropdownEl.style.display = '';
     open = true;
   }

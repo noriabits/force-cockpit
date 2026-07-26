@@ -11,6 +11,9 @@ import { createQueryTabs } from './tabs';
 import { createQueryHistory } from './history';
 import { createDescribeCache } from './autocomplete/describe-cache';
 import { createAutocomplete } from './autocomplete/autocomplete';
+import { createSoqlHighlighter } from './highlight/highlighter';
+import { createQueryErrorView } from './error-view';
+import { capitalizeKeywordEndingAt } from './keyword-case';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -38,6 +41,40 @@ const historyDropdown = /** @type {HTMLElement} */ (
 );
 const btnSaveQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-save-query'));
 const autocompleteEl = /** @type {HTMLElement} */ (document.getElementById('query-autocomplete'));
+const editorStack = /** @type {HTMLElement} */ (document.getElementById('soql-editor-stack'));
+const highlightEl = /** @type {HTMLElement} */ (document.getElementById('soql-highlight'));
+
+// Auto-uppercase SOQL keywords (SELECT, FROM, WHERE, AND, ...) as the user
+// finishes typing them. Registered before the highlighter/autocomplete/tabs
+// listeners below so they all observe the already-uppercased text: listeners on
+// the same event fire synchronously in registration order, and setRangeText
+// mutates textarea.value in place without dispatching a second `input` event.
+const BOUNDARY_CHARS = new Set([' ', '\t', '\n', ',', '(', ')']);
+function maybeCapitalizeKeyword() {
+  const cursor = soqlInput.selectionStart;
+  if (!cursor || !BOUNDARY_CHARS.has(soqlInput.value[cursor - 1])) return;
+  const found = capitalizeKeywordEndingAt(soqlInput.value, cursor - 1);
+  if (!found) return;
+  soqlInput.setRangeText(found.word, found.start, found.end, 'preserve');
+  soqlInput.setSelectionRange(cursor, cursor);
+}
+soqlInput.addEventListener('input', maybeCapitalizeKeyword);
+// Catches a trailing keyword with no delimiter after it yet (e.g. a query ending
+// in "...LIMIT" when the user tabs away or clicks Run). Not part of the `input`
+// cascade above, so it re-syncs the highlighter/tab state itself.
+soqlInput.addEventListener('blur', () => {
+  const found = capitalizeKeywordEndingAt(soqlInput.value, soqlInput.value.length);
+  if (!found) return;
+  const cursor = soqlInput.selectionStart;
+  soqlInput.setRangeText(found.word, found.start, found.end, 'preserve');
+  soqlInput.setSelectionRange(cursor, cursor);
+  highlighter.refresh();
+  tabs.onActiveEdited();
+});
+
+// Syntax-highlight overlay. `refresh()` must be called from every site that writes
+// soqlInput.value programmatically — those never fire an `input` event.
+const highlighter = createSoqlHighlighter({ textarea: soqlInput, overlayEl: highlightEl });
 
 const table = createResultsTable({
   thead: resultsThead,
@@ -49,16 +86,18 @@ const table = createResultsTable({
   escapeHtml: win.__escapeHtml,
 });
 
+const errorView = createQueryErrorView({ errorEl: queryError });
+
 // ── Results display ───────────────────────────────────────────────────────────
 function hideResults() {
   queryResults.style.display = 'none';
-  queryError.style.display = 'none';
+  errorView.hide();
   table.clear();
 }
 
 /** @param {{ records: any[], totalSize: number }} data */
 function showResults(data) {
-  queryError.style.display = 'none';
+  errorView.hide();
   table.setData(data.records, data.totalSize);
   queryResults.style.display = '';
 }
@@ -70,17 +109,25 @@ const tabs = createQueryTabs({
   toolingCheckbox,
   vscode,
   onActivate: (tab) => {
+    // Every tab switch/add/close/load pushes the tab's text into the textarea
+    // without an `input` event, so re-highlight here.
+    highlighter.refresh();
     // Render the activated tab's stored results, or clear if it has none.
     if (tab && tab.results) showResults(tab.results);
     else hideResults();
   },
 });
 
+// The tabs factory hydrates the textarea once at construction time, before any
+// onActivate fires.
+highlighter.refresh();
+
 /** Load a query (from history/saved) into the active tab's editor. */
 function loadQueryIntoEditor(/** @type {{ query: string, useToolingApi: boolean }} */ entry) {
   soqlInput.value = entry.query;
   toolingCheckbox.checked = !!entry.useToolingApi;
   tabs.onActiveEdited();
+  highlighter.refresh();
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -98,6 +145,9 @@ const describeCache = createDescribeCache({ vscode });
 createAutocomplete({
   textarea: soqlInput,
   dropdownEl: autocompleteEl,
+  // The textarea is now offset-positioned against the highlight stack, so the
+  // dropdown anchors to the stack instead.
+  anchorEl: editorStack,
   describeCache,
   isConnected: () => !!win.__orgConnected,
   onInsert: () => tabs.onActiveEdited(),
@@ -128,8 +178,7 @@ win.__onMessage('queryError', (/** @type {any} */ msg) => {
   queryHint.textContent = '';
   queryResults.style.display = 'none';
   tabs.setActiveResults(null);
-  queryError.textContent = msg.data.message;
-  queryError.style.display = '';
+  errorView.show(msg.data.message, msg.data.diagnostics);
 });
 
 win.__onMessage('queryStateLoaded', (/** @type {any} */ msg) => {
@@ -162,8 +211,7 @@ btnRunQuery.addEventListener('click', () => {
   const soql = soqlInput.value.trim();
   if (!soql) return;
   if (!win.__orgConnected) {
-    queryError.textContent = 'Not connected to any org.';
-    queryError.style.display = '';
+    errorView.show('Not connected to any org.');
     return;
   }
 
@@ -177,6 +225,7 @@ btnRunQuery.addEventListener('click', () => {
 btnClearQuery.addEventListener('click', () => {
   soqlInput.value = '';
   tabs.onActiveEdited();
+  highlighter.refresh();
   hideResults();
   tabs.setActiveResults(null);
 });

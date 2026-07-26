@@ -41,6 +41,7 @@ import type { QueryStateStore } from '../services/QueryStateStore';
 import type { RestCallService } from '../services/RestCallService';
 import type { RestCallStateStore } from '../services/RestCallStateStore';
 import type { DescribeService } from '../services/DescribeService';
+import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule } from '../features/FeatureModule';
 import type { OperationRegistry } from './OperationRegistry';
 
@@ -55,6 +56,7 @@ function makeRouter(
     restCallService?: Partial<RestCallService>;
     restCallStateStore?: Partial<RestCallStateStore>;
     describeService?: Partial<DescribeService>;
+    diagnose?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
   const postMessage = vi.fn();
@@ -97,6 +99,9 @@ function makeRouter(
     describeSObject: vi.fn().mockResolvedValue({ name: 'Account', fields: [] }),
     ...opts.describeService,
   } as unknown as DescribeService;
+  const soqlDiagnostics = {
+    diagnose: opts.diagnose ?? vi.fn().mockResolvedValue([]),
+  } as unknown as SoqlDiagnosticsService;
   const operations = {
     startWebviewOp: vi.fn(),
     endWebviewOp: vi.fn(),
@@ -115,6 +120,7 @@ function makeRouter(
     restCallService,
     restCallStateStore,
     describeService,
+    soqlDiagnostics,
     features: opts.features ?? [],
     operations,
     onReady,
@@ -129,6 +135,7 @@ function makeRouter(
     restCallService,
     restCallStateStore,
     describeService,
+    soqlDiagnostics,
   };
 }
 
@@ -167,8 +174,39 @@ describe('MessageRouter built-in routes', () => {
     await router.handle({ type: 'query', soql: 'x' });
     expect(postMessage).toHaveBeenCalledWith({
       type: 'queryError',
-      data: { message: 'bad soql' },
+      data: { message: 'bad soql', diagnostics: [] },
     });
+  });
+
+  it('query failure → attaches the diagnostics for the failed SOQL', async () => {
+    const diagnostic = {
+      severity: 'warning',
+      title: "'AssetReferenceId__c' exists but field-level security is hiding it",
+      detail: 'Ask an admin for Read access.',
+    };
+    const diagnose = vi.fn().mockResolvedValue([diagnostic]);
+    const { router, postMessage } = makeRouter({
+      runQuery: vi.fn().mockRejectedValue(new Error("No such column 'AssetReferenceId__c'")),
+      diagnose,
+    });
+
+    await router.handle({ type: 'query', soql: 'SELECT AssetReferenceId__c FROM QuoteLineItem' });
+
+    expect(diagnose).toHaveBeenCalledWith(
+      'SELECT AssetReferenceId__c FROM QuoteLineItem',
+      "No such column 'AssetReferenceId__c'",
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryError',
+      data: { message: "No such column 'AssetReferenceId__c'", diagnostics: [diagnostic] },
+    });
+  });
+
+  it('query success → never runs diagnosis', async () => {
+    const diagnose = vi.fn().mockResolvedValue([]);
+    const { router } = makeRouter({ diagnose });
+    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account' });
+    expect(diagnose).not.toHaveBeenCalled();
   });
 
   it('query forwards the useToolingApi flag to the service', async () => {

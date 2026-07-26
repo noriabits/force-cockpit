@@ -23,6 +23,7 @@ import type {
   SavedRestCall,
 } from '../services/RestCallStateStore';
 import type { DescribeService } from '../services/DescribeService';
+import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { OperationRegistry } from './OperationRegistry';
@@ -37,6 +38,7 @@ interface MessageRouterDeps {
   restCallService: RestCallService;
   restCallStateStore: RestCallStateStore;
   describeService: DescribeService;
+  soqlDiagnostics: SoqlDiagnosticsService;
   features: FeatureModule[];
   operations: OperationRegistry;
   onReady: () => Promise<void>;
@@ -50,6 +52,7 @@ export class MessageRouter {
   private readonly restCallService: RestCallService;
   private readonly restCallStateStore: RestCallStateStore;
   private readonly describeService: DescribeService;
+  private readonly soqlDiagnostics: SoqlDiagnosticsService;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
   private readonly _routeMap = new Map<string, RouteDescriptor>();
@@ -62,6 +65,7 @@ export class MessageRouter {
     this.restCallService = deps.restCallService;
     this.restCallStateStore = deps.restCallStateStore;
     this.describeService = deps.describeService;
+    this.soqlDiagnostics = deps.soqlDiagnostics;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
     for (const feature of deps.features) {
@@ -77,14 +81,9 @@ export class MessageRouter {
         await this.onReady();
         return;
       case 'query':
-        await this._route(
-          () =>
-            this.queryService.runQuery(
-              message.soql as string,
-              message.useToolingApi as boolean | undefined,
-            ),
-          'queryResult',
-          'queryError',
+        await this._handleQuery(
+          message.soql as string,
+          message.useToolingApi as boolean | undefined,
         );
         return;
       case 'loadQueryState':
@@ -297,6 +296,22 @@ export class MessageRouter {
     );
 
     if (opId) this.operations.endTerminalOp(opId);
+  }
+
+  /**
+   * The query route does not use `_route` because its failure path is richer: the
+   * verbatim Salesforce message is kept, and diagnostics explaining *why* it failed
+   * (a field hidden by FLS, a mistyped name…) ride alongside it.
+   */
+  private async _handleQuery(soql: string, useToolingApi?: boolean): Promise<void> {
+    try {
+      const data = await this.queryService.runQuery(soql, useToolingApi);
+      this.webview.postMessage({ type: 'queryResult', data });
+    } catch (err) {
+      const message = (err as Error).message;
+      const diagnostics = await this.soqlDiagnostics.diagnose(soql, message);
+      this.webview.postMessage({ type: 'queryError', data: { message, diagnostics } });
+    }
   }
 
   /** Run an action; post success/error with context merged in both branches. */

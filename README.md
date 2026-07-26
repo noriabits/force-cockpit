@@ -52,12 +52,12 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 ## Tabs
 
-| Tab            | Description                                                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Overview**   | Org info card, storage usage bars, SOQL Quick Query editor (tabs, history, autocomplete, Tooling toggle) with a filterable, sortable results table                                   |
-| **Utils**      | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                               |
-| **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                       |
-| **REST**       | Call any REST API or Apex REST endpoint on the connected org, with custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response |
+| Tab            | Description                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**   | Org info card, storage usage bars, SOQL Quick Query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                              |
+| **Utils**      | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
+| **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
+| **REST**       | Call any REST API or Apex REST endpoint on the connected org, with custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                                    |
 | **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
 
 ---
@@ -68,10 +68,21 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 
 The editor supports:
 
+- **Keyword highlighting** — clauses, functions, string and number literals and comparison operators are colour-coded as you type, using your VS Code theme's colours.
+- **Auto-capitalized keywords** — `select`, `from`, `where`, `and`, `order by`… are uppercased automatically the moment you finish typing them, matching the Salesforce documentation convention. Object and field names are left exactly as you typed them — including standard objects like `Order` or `Group`, which are never mistaken for the `ORDER`/`GROUP` clause keywords.
 - **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
 - **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
 - **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
 - **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
+- **Explained errors** — when a query fails, the Salesforce error is shown exactly as returned, with an explanation added underneath.
+
+  This matters most for permissions. Salesforce rejects a field you're not allowed to _see_ with the same `No such column 'X' on entity 'Y'` message it uses for a genuine typo, so you end up hunting for a spelling mistake that isn't there. Force Cockpit checks the field against the org's full metadata and tells you which it is:
+
+  > 🔒 **`AssetReferenceId__c` exists but field-level security is hiding it** — The field is defined on QuoteLineItem (Asset Reference Id, Text), but your user has no Read access to it. Ask an admin to grant Read on this field via a profile or permission set.
+
+  If the field really doesn't exist you get a **Did you mean:** list of the closest names instead. The same applies to mistyped relationships (`Accont.Name`) and objects, including objects that exist but that your user cannot access.
+
+  Reading the full field list needs the **View Setup and Configuration** permission. Without it you still get suggestions — the message just says that a field hidden by field-level security couldn't be ruled out.
 
 The results table supports:
 
@@ -452,20 +463,20 @@ Choose **what to trace**:
 - **Me** — the user you are connected as.
 - **Automated Process** — async work (platform-event triggers, resumed flows, batch retries) logs under the Automated Process user, separately from whoever triggered it. Setup cannot create a trace flag for these system users at all; Force Cockpit does it through the Tooling API. Other platform/integration users are listed here too.
 - **Search user…** — any user in the org, by name or username.
-- **Apex class / trigger…** — creates a `CLASS_TRACING` flag that raises the log levels *inside* one class or trigger without generating its own log. Combined with a quiet user-level flag, this is how you get `FINEST` detail on the suspect code without truncating the log.
+- **Apex class / trigger…** — creates a `CLASS_TRACING` flag that raises the log levels _inside_ one class or trigger without generating its own log. Combined with a quiet user-level flag, this is how you get `FINEST` detail on the suspect code without truncating the log.
 
 Then choose a **debug level**. Each preset explains itself in the dropdown and in the hint underneath — what it is for, what it captures, and the exact category levels it applies:
 
-| Preset                          | When to use it                                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Balanced** ⭐ *Recommended*    | The default, and the right answer when you don't know which to pick. Debug output, which classes ran, every SOQL/DML statement and the limit summary — without truncating. |
-| **USER_DEBUG only (quiet)**     | You only care about your own `System.debug()` lines and want the smallest possible log.                        |
-| **SOQL / database deep dive**   | A query is slow, non-selective or returns the wrong rows. Full query text, row counts and timings.             |
-| **Flow & Process Builder**      | A Flow or record-triggered automation misbehaves — shows flow elements *and* their variable values.            |
-| **Integration / callouts**      | An outbound callout fails — logs the full request and response bodies.                                         |
-| **Governor limits / performance** | The transaction hits (or nearly hits) a limit — full cumulative-usage breakdown.                             |
-| **Deep trace (FINEST)**         | Last resort. Every statement and variable assignment; fills the 20 MB budget fast, so pair it with a class trace. |
-| **Production-safe (errors)**    | Tracing on production or a busy integration user. Preselected automatically on sensitive orgs.                 |
+| Preset                            | When to use it                                                                                                                                                             |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Balanced** ⭐ _Recommended_     | The default, and the right answer when you don't know which to pick. Debug output, which classes ran, every SOQL/DML statement and the limit summary — without truncating. |
+| **USER_DEBUG only (quiet)**       | You only care about your own `System.debug()` lines and want the smallest possible log.                                                                                    |
+| **SOQL / database deep dive**     | A query is slow, non-selective or returns the wrong rows. Full query text, row counts and timings.                                                                         |
+| **Flow & Process Builder**        | A Flow or record-triggered automation misbehaves — shows flow elements _and_ their variable values.                                                                        |
+| **Integration / callouts**        | An outbound callout fails — logs the full request and response bodies.                                                                                                     |
+| **Governor limits / performance** | The transaction hits (or nearly hits) a limit — full cumulative-usage breakdown.                                                                                           |
+| **Deep trace (FINEST)**           | Last resort. Every statement and variable assignment; fills the 20 MB budget fast, so pair it with a class trace.                                                          |
+| **Production-safe (errors)**      | Tracing on production or a busy integration user. Preselected automatically on sensitive orgs.                                                                             |
 
 Or open **Custom…** to set all eight categories by hand. Pick a duration (15 minutes to the 24-hour platform maximum) and press **Start tracing**. Salesforce allows only one active trace flag per entity, so starting a trace on something already traced updates the existing flag instead of failing. Active flags are listed with a live countdown and **Extend** / **Stop** buttons.
 
@@ -474,7 +485,7 @@ Or open **Custom…** to set all eight categories by hand. Pick a duration (15 m
 Logs are listed newest first, sortable, with a text filter and:
 
 - **Errors only** — only transactions that ended with an exception.
-- **Hide empty logs** — a real org fills this list with Lightning/Aura round-trips and no-op triggers. "Empty" means *the transaction did nothing observable*: no debug output, no error, no SOQL and no DML. Force Cockpit checks the log bodies to decide that (fetched in small batches and cached), plus a free pre-filter on the operation name for recognisable UI chatter. Size and duration are deliberately **not** used — a useful anonymous-Apex log is only ~1.5 KB and runs in a few milliseconds, so "small" would hide exactly what you came for. A `N hidden as empty` chip with a **Show** button means nothing ever disappears silently, and a failed transaction is never hidden however small it is.
+- **Hide empty logs** — a real org fills this list with Lightning/Aura round-trips and no-op triggers. "Empty" means _the transaction did nothing observable_: no debug output, no error, no SOQL and no DML. Force Cockpit checks the log bodies to decide that (fetched in small batches and cached), plus a free pre-filter on the operation name for recognisable UI chatter. Size and duration are deliberately **not** used — a useful anonymous-Apex log is only ~1.5 KB and runs in a few milliseconds, so "small" would hide exactly what you came for. A `N hidden as empty` chip with a **Show** button means nothing ever disappears silently, and a failed transaction is never hidden however small it is.
 - **Live tail** — polls the org while the tab is open; a new failed transaction raises a notification. On by default.
 
 ### 3. Make sense of one log
@@ -489,7 +500,7 @@ Click a log to open it:
 
 **✨ Analyze with AI** opens the analysis panel — model picker, "Read workspace files" / "Query the org" toggles, and an optional "what should the analysis focus on?" field — without sending anything yet, so you can set it up first. The panel scrolls into view and flashes briefly since it sits below the summary/issues/log output and is easy to miss otherwise. Click **Run analysis** to actually send the log through the VS Code Language Model API (GitHub Copilot), the same mechanism as AI scripts.
 
-Debug logs are far too large for any context window, so the model receives a *briefing* — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context.
+Debug logs are far too large for any context window, so the model receives a _briefing_ — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context.
 
 The analysis always covers: what happened, the root cause with line references, governor-limit pressure, ranked concrete fixes, **which log levels to use next time**, and what it is unsure about. That last recommendation comes back as a one-click **Apply these levels** button that pre-fills the trace-flag form above, so the next repro captures exactly what was missing.
 
@@ -523,11 +534,11 @@ Only keys present in a layer override the previous layer — omitted keys keep t
 
 **`debugLogs.noise`** keys — all optional:
 
-| Key                  | Type     | Default                                                                      | Description                                                     |
-| -------------------- | -------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `maxEmptyBytes`      | number   | `0` (off)                                                                    | Opt-in: successful logs at or below this size count as empty without reading them |
-| `maxEmptyDurationMs` | number   | `0` (off)                                                                    | Opt-in: successful logs at or below this duration count as empty without reading them |
-| `operationPatterns`  | string[] | `["/aura", "aura.", "VFRemoting", "Lightning", "PushTopic", "ApexRestApi"]`   | Case-insensitive substrings matched against the log's operation |
+| Key                  | Type     | Default                                                                     | Description                                                                           |
+| -------------------- | -------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `maxEmptyBytes`      | number   | `0` (off)                                                                   | Opt-in: successful logs at or below this size count as empty without reading them     |
+| `maxEmptyDurationMs` | number   | `0` (off)                                                                   | Opt-in: successful logs at or below this duration count as empty without reading them |
+| `operationPatterns`  | string[] | `["/aura", "aura.", "VFRemoting", "Lightning", "PushTopic", "ApexRestApi"]` | Case-insensitive substrings matched against the log's operation                       |
 
 ### Example `force-cockpit/config.yaml`
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
 import { QueryService } from '../services/QueryService';
+import { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import { QueryStateStore } from '../services/QueryStateStore';
 import { RestCallService } from '../services/RestCallService';
 import { RestCallStateStore } from '../services/RestCallStateStore';
@@ -119,6 +120,7 @@ export class MainPanel {
       restCallService: new RestCallService(connectionManager),
       restCallStateStore: new RestCallStateStore(context.workspaceState),
       describeService,
+      soqlDiagnostics: new SoqlDiagnosticsService(connectionManager, describeService),
       features: this._features,
       operations: this._operations,
       onReady: () => this._sendOrgInfo(),

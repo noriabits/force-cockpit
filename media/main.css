@@ -452,21 +452,93 @@ body {
   opacity: 0.7;
 }
 
-.soql-textarea {
-  width: 100%;
-  padding: 8px 10px;
+/* The textarea sits on top of a <pre> that renders the same text tokenized. The
+   textarea alone drives layout (the overlay is absolutely positioned over it), so
+   rows="4" and the vertical resize handle behave exactly as they did before. */
+.soql-editor-stack {
+  position: relative;
   background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
   border-radius: 3px;
+}
+
+.soql-editor-stack:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Every metric below must match on BOTH layers or the coloured text drifts out
+   of alignment with the caret. Change one, change the other. */
+.soql-textarea,
+.soql-highlight {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 2;
+  /* Reserve the scrollbar gutter on BOTH layers. Without it, a long query grows a
+     scrollbar on the textarea only, narrowing its content box, and the two layers
+     start wrapping at different columns. */
+  scrollbar-gutter: stable;
+}
+
+.soql-textarea {
+  position: relative;
+  z-index: 1;
+  display: block;
+  background: transparent;
+  /* Transparent text: the overlay underneath renders the visible, coloured copy.
+     The caret keeps its own colour so it stays visible. */
+  color: transparent;
+  caret-color: var(--vscode-editorCursor-foreground, var(--vscode-input-foreground));
   resize: vertical;
   outline: none;
 }
 
-.soql-textarea:focus {
-  border-color: var(--vscode-focusBorder);
+.soql-textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+}
+
+.soql-textarea::selection {
+  background-color: var(--vscode-editor-selectionBackground, rgba(100, 150, 220, 0.4));
+}
+
+.soql-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--vscode-input-foreground);
+}
+
+/* Token colours — theme-aware VS Code variables, never bare hex, so light and
+   high-contrast themes stay readable. */
+.soql-highlight .tok-keyword {
+  color: var(--vscode-charts-blue, #569cd6);
+  font-weight: 600;
+}
+
+.soql-highlight .tok-function {
+  color: var(--vscode-charts-purple, #c586c0);
+}
+
+.soql-highlight .tok-string {
+  color: var(--vscode-debugTokenExpression-string, #ce9178);
+}
+
+.soql-highlight .tok-number {
+  color: var(--vscode-debugTokenExpression-number, #b5cea8);
+}
+
+.soql-highlight .tok-operator {
+  color: var(--vscode-charts-orange, #d7ba7d);
 }
 
 /* ── REST tab ──────────────────────────────────────────────────────────── */
@@ -1120,6 +1192,60 @@ body {
 .error-box:empty,
 .success-box:empty {
   display: none;
+}
+
+/* Quick Query error box: the verbatim Salesforce message, then any diagnostics
+   worked out host-side. The raw message keeps .error-box's pre-wrap so its caret
+   line and column marker still line up; the diagnostics below it read as prose. */
+.query-error-raw {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.query-error-sep {
+  margin: 10px 0;
+  border-top: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
+  opacity: 0.5;
+}
+
+.query-diag {
+  margin-top: 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--vscode-charts-blue, #569cd6);
+  white-space: normal;
+}
+
+.query-diag--warning {
+  border-left-color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.query-diag-title {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.query-diag-detail {
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
+.query-diag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.query-diag-suggestions-label {
+  opacity: 0.8;
+}
+
+.query-diag-suggestion {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background-color: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.1));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
 }
 
 /* Category pills (shared: built-in utils + yaml scripts) */

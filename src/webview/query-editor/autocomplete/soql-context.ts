@@ -6,6 +6,8 @@
  * DOM-free and dependency-free so it can be unit-tested directly.
  */
 
+import { SOQL_CLAUSES } from '../soql-keywords';
+
 export type SoqlContext =
   | { kind: 'none' }
   | { kind: 'object'; token: string; replaceStart: number; replaceEnd: number }
@@ -26,17 +28,39 @@ export type SoqlContext =
       replaceEnd: number;
     };
 
-const CLAUSE_PATTERNS: { clause: string; re: RegExp }[] = [
-  { clause: 'SELECT', re: /\bSELECT\b/gi },
-  { clause: 'FROM', re: /\bFROM\b/gi },
-  { clause: 'WHERE', re: /\bWHERE\b/gi },
-  { clause: 'GROUP', re: /\bGROUP\s+BY\b/gi },
-  { clause: 'ORDER', re: /\bORDER\s+BY\b/gi },
-  { clause: 'HAVING', re: /\bHAVING\b/gi },
-  { clause: 'LIMIT', re: /\bLIMIT\b/gi },
-];
+// Derived from the shared vocabulary so the tokenizer and the autocomplete can
+// never disagree about what a clause keyword is.
+const CLAUSE_PATTERNS: { clause: string; re: RegExp }[] = SOQL_CLAUSES.map(({ key, words }) => ({
+  clause: key,
+  re: new RegExp(`\\b${words.split(/\s+/).join('\\s+')}\\b`, 'gi'),
+}));
 
 const FIELD_CLAUSES = new Set(['SELECT', 'WHERE', 'GROUP', 'ORDER', 'HAVING']);
+
+/** Character ranges covered by single-quoted literals, as [start, end) pairs. */
+function stringRanges(text: string): [number, number][] {
+  const ranges: [number, number][] = [];
+  let open = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "'" || text[i - 1] === '\\') continue;
+    if (open < 0) open = i;
+    else {
+      ranges.push([open, i + 1]);
+      open = -1;
+    }
+  }
+  if (open >= 0) ranges.push([open, text.length]);
+  return ranges;
+}
+
+/**
+ * True when `index` sits inside a quoted literal. Keyword scanning must skip
+ * those — a query like `WHERE Name LIKE '%with%'` otherwise reads the literal's
+ * "with" as a WITH clause and stops offering field suggestions after it.
+ */
+function inRanges(ranges: [number, number][], index: number): boolean {
+  return ranges.some(([start, end]) => index >= start && index < end);
+}
 
 /** Last identifier-ish token (incl. dots) ending at `pos`. */
 function tokenBefore(text: string, pos: number): { token: string; start: number } {
@@ -47,12 +71,15 @@ function tokenBefore(text: string, pos: number): { token: string; start: number 
 
 /** The clause keyword governing the cursor (the nearest one before it). */
 function currentClause(before: string): string | null {
+  const strings = stringRanges(before);
   let best: { clause: string; index: number } | null = null;
   for (const { clause, re } of CLAUSE_PATTERNS) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     let last = -1;
-    while ((m = re.exec(before)) !== null) last = m.index;
+    while ((m = re.exec(before)) !== null) {
+      if (!inRanges(strings, m.index)) last = m.index;
+    }
     if (last >= 0 && (!best || last > best.index)) best = { clause, index: last };
   }
   return best?.clause ?? null;
@@ -60,8 +87,13 @@ function currentClause(before: string): string | null {
 
 /** First object named after FROM, or null. */
 function fromObjectOf(text: string): string | null {
-  const m = /\bFROM\s+([A-Za-z0-9_]+)/i.exec(text);
-  return m ? m[1] : null;
+  const strings = stringRanges(text);
+  const re = /\bFROM\s+([A-Za-z0-9_]+)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (!inRanges(strings, m.index)) return m[1];
+  }
+  return null;
 }
 
 /** True when the cursor sits inside an unterminated single-quoted string. */

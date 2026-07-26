@@ -25,6 +25,7 @@ export default [
         requestAnimationFrame: 'readonly',
         cancelAnimationFrame: 'readonly',
         IntersectionObserver: 'readonly',
+        ResizeObserver: 'readonly',
         HTMLInputElement: 'readonly',
         HTMLSelectElement: 'readonly',
         HTMLTextAreaElement: 'readonly',

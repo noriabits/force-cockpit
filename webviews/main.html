@@ -172,13 +172,18 @@
             </div>
             <div class="query-editor">
               <div class="query-tab-bar" id="query-tab-bar"></div>
-              <textarea
-                id="soql-input"
-                class="soql-textarea"
-                spellcheck="false"
-                placeholder="SELECT Id, Name FROM Account LIMIT 10"
-                rows="4"
-              ></textarea>
+              <!-- The <pre> renders the tokenized query underneath a transparent
+                   textarea; both layers share one CSS metrics rule so they align. -->
+              <div class="soql-editor-stack" id="soql-editor-stack">
+                <pre class="soql-highlight" id="soql-highlight" aria-hidden="true"></pre>
+                <textarea
+                  id="soql-input"
+                  class="soql-textarea"
+                  spellcheck="false"
+                  placeholder="SELECT Id, Name FROM Account LIMIT 10"
+                  rows="4"
+                ></textarea>
+              </div>
               <div class="query-autocomplete" id="query-autocomplete" style="display: none"></div>
               <div class="query-toolbar">
                 <button class="btn btn-primary" id="btn-run-query">Run Query</button>
