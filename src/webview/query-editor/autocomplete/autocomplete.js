@@ -1,10 +1,11 @@
 // @ts-check
 // SOQL autocomplete dropdown for the Overview Quick Query. Computes the cursor
 // context (soql-context.ts), fetches the needed describe metadata lazily via the
-// describe cache, renders a suggestion list anchored below the textarea, and
+// describe cache, renders a suggestion list anchored below the caret line, and
 // inserts the chosen value with textarea.setRangeText. Keyboard: ↑/↓ move,
 // Enter/Tab insert, Esc dismiss; Ctrl+Space forces suggestions.
 import { analyzeSoql } from './soql-context';
+import { getCaretCoordinates } from './caret-position';
 
 /**
  * @typedef {Object} AutocompleteCtx
@@ -13,15 +14,11 @@ import { analyzeSoql } from './soql-context';
  * @property {ReturnType<import('./describe-cache').createDescribeCache>} describeCache
  * @property {() => boolean} isConnected
  * @property {() => void} onInsert  Called after a value is inserted (sync tab state).
- * @property {HTMLElement} [anchorEl]  Element the dropdown is positioned under.
- *   Defaults to the textarea; pass the highlight stack wrapper when the textarea
- *   is no longer offset-positioned against .query-editor.
  */
 
 /** @param {AutocompleteCtx} ctx */
 export function createAutocomplete(ctx) {
   const { textarea, dropdownEl, describeCache, isConnected, onInsert } = ctx;
-  const anchorEl = ctx.anchorEl || textarea;
 
   /** @type {{ label: string, detail: string, insert: string, reopen: boolean }[]} */
   let items = [];
@@ -65,10 +62,44 @@ export function createAutocomplete(ctx) {
       });
       dropdownEl.appendChild(row);
     });
-    dropdownEl.style.top = anchorEl.offsetTop + anchorEl.offsetHeight + 2 + 'px';
-    dropdownEl.style.left = anchorEl.offsetLeft + 'px';
+    // Must flip visible before measuring: offsetParent reads null while the
+    // element still has display:none, which would silently mis-anchor the
+    // dropdown against document.body instead of its real positioned ancestor.
     dropdownEl.style.display = '';
+    positionDropdown();
     open = true;
+  }
+
+  /**
+   * Anchors the dropdown just below the caret's own (wrapped) line, not the
+   * bottom of the whole textarea — otherwise editing a field in the middle of
+   * an already-written multi-line query pops the list up far from the caret,
+   * which reads as "no suggestions" even though the DOM node is there.
+   */
+  function positionDropdown() {
+    const caretPos = pendingReplace ? pendingReplace.replaceEnd : textarea.selectionStart;
+    const { top: caretTop, left: caretLeft, lineHeight } = getCaretCoordinates(textarea, caretPos);
+    // getCaretCoordinates measures from the mirror's padding edge (offsetTop is
+    // relative to the offsetParent's padding edge), while getBoundingClientRect
+    // returns the textarea's outer border edge — add the border widths back in
+    // so the two frames of reference line up.
+    const textareaStyle = getComputedStyle(textarea);
+    const borderTop = parseFloat(textareaStyle.borderTopWidth) || 0;
+    const borderLeft = parseFloat(textareaStyle.borderLeftWidth) || 0;
+    const posParent = /** @type {HTMLElement} */ (dropdownEl.offsetParent) || document.body;
+    const parentRect = posParent.getBoundingClientRect();
+    const textareaRect = textarea.getBoundingClientRect();
+    const top =
+      textareaRect.top -
+      parentRect.top +
+      borderTop +
+      caretTop -
+      textarea.scrollTop +
+      lineHeight +
+      2;
+    const left = textareaRect.left - parentRect.left + borderLeft + caretLeft - textarea.scrollLeft;
+    dropdownEl.style.top = top + 'px';
+    dropdownEl.style.left = left + 'px';
   }
 
   /** @param {number} i */
@@ -92,6 +123,36 @@ export function createAutocomplete(ctx) {
   /** @param {string} token @param {string} candidate */
   function matches(token, candidate) {
     return candidate.toLowerCase().includes(token.toLowerCase());
+  }
+
+  // SOQL's FIELDS() shorthand — the only three variants Salesforce documents.
+  // These are literal syntax, not real field names, so they never come back
+  // from a describe call and would otherwise be invisible to autocomplete.
+  // Only valid directly in the SELECT list (never WHERE/GROUP BY/ORDER BY/
+  // HAVING) and never on a relationship path (no `Account.FIELDS(ALL)`).
+  const FIELDS_SHORTHAND = [
+    { insert: 'FIELDS(ALL)', detail: 'All fields (max 200 rows)' },
+    { insert: 'FIELDS(STANDARD)', detail: 'Standard fields only' },
+    { insert: 'FIELDS(CUSTOM)', detail: 'Custom fields only' },
+  ];
+
+  /**
+   * @param {import('./soql-context').SoqlContext & { kind: 'field' }} ctxResult
+   * @param {string} token
+   */
+  function fieldsShorthandSuggestions(ctxResult, token) {
+    if (ctxResult.clause !== 'SELECT' || ctxResult.relationshipPath.length > 0) return [];
+    // Gate on the bare word "FIELDS", not the full "FIELDS(ALL)" string: once
+    // the user has typed the opening paren the identifier-token parser only
+    // sees what's inside it (e.g. "AL"), and replacing that with the full
+    // "FIELDS(ALL)" string would duplicate the "FIELDS(" already on screen.
+    if (!matches(token, 'FIELDS')) return [];
+    return FIELDS_SHORTHAND.map((f) => ({
+      label: f.insert,
+      detail: f.detail,
+      insert: f.insert,
+      reopen: false,
+    }));
   }
 
   /**
@@ -158,7 +219,8 @@ export function createAutocomplete(ctx) {
           insert: f.name,
           reopen: false,
         }));
-      next = [...rels, ...fields].slice(0, 50);
+      const fieldsShorthand = fieldsShorthandSuggestions(ctxResult, token);
+      next = [...fieldsShorthand, ...rels, ...fields].slice(0, 50);
     } else if (ctxResult.kind === 'picklist') {
       const obj = await describeCache.getSObject(ctxResult.fromObject);
       if (mySeq !== seq || !obj) return;

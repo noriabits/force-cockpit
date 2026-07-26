@@ -41,7 +41,6 @@ const historyDropdown = /** @type {HTMLElement} */ (
 );
 const btnSaveQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-save-query'));
 const autocompleteEl = /** @type {HTMLElement} */ (document.getElementById('query-autocomplete'));
-const editorStack = /** @type {HTMLElement} */ (document.getElementById('soql-editor-stack'));
 const highlightEl = /** @type {HTMLElement} */ (document.getElementById('soql-highlight'));
 
 // Auto-uppercase SOQL keywords (SELECT, FROM, WHERE, AND, ...) as the user
@@ -145,12 +144,15 @@ const describeCache = createDescribeCache({ vscode });
 createAutocomplete({
   textarea: soqlInput,
   dropdownEl: autocompleteEl,
-  // The textarea is now offset-positioned against the highlight stack, so the
-  // dropdown anchors to the stack instead.
-  anchorEl: editorStack,
   describeCache,
   isConnected: () => !!win.__orgConnected,
-  onInsert: () => tabs.onActiveEdited(),
+  onInsert: () => {
+    // setRangeText doesn't fire an `input` event, so the highlighter never
+    // sees the insertion on its own — refresh it explicitly (same reason
+    // every other programmatic textarea.value write in this file does).
+    highlighter.refresh();
+    tabs.onActiveEdited();
+  },
 });
 
 // Clear the visible results on disconnect (the active tab's in-memory results

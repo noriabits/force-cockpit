@@ -21,6 +21,7 @@ describe('analyzeSoql', () => {
       expect(ctx.fromObject).toBe('Account');
       expect(ctx.token).toBe('Na');
       expect(ctx.relationshipPath).toEqual([]);
+      expect(ctx.clause).toBe('SELECT');
     }
   });
 
@@ -38,12 +39,16 @@ describe('analyzeSoql', () => {
   it('suggests fields in WHERE', () => {
     const ctx = at('SELECT Id FROM Account WHERE Ind|');
     expect(ctx.kind).toBe('field');
-    if (ctx.kind === 'field') expect(ctx.token).toBe('Ind');
+    if (ctx.kind === 'field') {
+      expect(ctx.token).toBe('Ind');
+      expect(ctx.clause).toBe('WHERE');
+    }
   });
 
   it('suggests fields in ORDER BY', () => {
     const ctx = at('SELECT Id FROM Account ORDER BY Crea|');
     expect(ctx.kind).toBe('field');
+    if (ctx.kind === 'field') expect(ctx.clause).toBe('ORDER');
   });
 
   it('suggests picklist values inside a quoted literal compared to a field', () => {

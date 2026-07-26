@@ -18,6 +18,9 @@ export type SoqlContext =
       token: string;
       replaceStart: number;
       replaceEnd: number;
+      // The governing clause (SELECT/WHERE/GROUP/ORDER/HAVING) — the autocomplete
+      // layer needs this to know FIELDS(ALL)/STANDARD/CUSTOM only belong in SELECT.
+      clause: string;
     }
   | {
       kind: 'picklist';
@@ -153,6 +156,7 @@ export function analyzeSoql(text: string, cursor: number): SoqlContext {
       token,
       replaceStart,
       replaceEnd: cursor,
+      clause,
     };
   }
 

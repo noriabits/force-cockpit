@@ -37,6 +37,7 @@ export default [
         navigator: 'readonly',
         CSS: 'readonly',
         Event: 'readonly',
+        getComputedStyle: 'readonly',
       },
     },
     rules: {
