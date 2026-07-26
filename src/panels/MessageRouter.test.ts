@@ -36,11 +36,11 @@ vi.mock('fs', () => ({ promises: { writeFile } }));
 
 import { MessageRouter } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
-import type { QueryService } from '../services/QueryService';
-import type { QueryStateStore } from '../services/QueryStateStore';
-import type { RestCallService } from '../services/RestCallService';
-import type { RestCallStateStore } from '../services/RestCallStateStore';
-import type { DescribeService } from '../services/DescribeService';
+import type { QueryService } from '../services/soql/QueryService';
+import type { QueryStateStore } from '../services/soql/QueryStateStore';
+import type { RestCallService } from '../services/rest/RestCallService';
+import type { RestCallStateStore } from '../services/rest/RestCallStateStore';
+import type { DescribeService } from '../services/describe/DescribeService';
 import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule } from '../features/FeatureModule';
 import type { OperationRegistry } from './OperationRegistry';

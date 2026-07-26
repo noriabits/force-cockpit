@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { ConnectionManager } from '../../../salesforce/connection';
-import type { DescribeService } from '../../../services/DescribeService';
+import type { DescribeService } from '../../../services/describe/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';

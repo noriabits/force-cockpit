@@ -1,4 +1,4 @@
-import type { ConnectionManager } from '../salesforce/connection';
+import type { ConnectionManager } from '../../salesforce/connection';
 import type { DescribeDiskCache } from './DescribeDiskCache';
 
 /** Lightweight projection of a global sObject entry sent to the webview. */

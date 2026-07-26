@@ -1,4 +1,4 @@
-import type { ConnectionManager, HttpMethod } from '../salesforce/connection';
+import type { ConnectionManager, HttpMethod } from '../../salesforce/connection';
 
 export interface HeaderEntry {
   key: string;

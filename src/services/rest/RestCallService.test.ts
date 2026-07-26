@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RestCallService } from './RestCallService';
-import type { ConnectionManager } from '../salesforce/connection';
+import type { ConnectionManager } from '../../salesforce/connection';
 
 function makeMock(requestImpl?: (...args: unknown[]) => unknown): ConnectionManager {
   return {

@@ -14,15 +14,15 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { ConnectionManager } from '../salesforce/connection';
-import type { QueryService } from '../services/QueryService';
-import type { QueryStateStore, SavedQuery, QueryTab } from '../services/QueryStateStore';
-import type { RestCallService } from '../services/RestCallService';
+import type { QueryService } from '../services/soql/QueryService';
+import type { QueryStateStore, SavedQuery, QueryTab } from '../services/soql/QueryStateStore';
+import type { RestCallService } from '../services/rest/RestCallService';
 import type {
   RestCallStateStore,
   HeaderEntry,
   SavedRestCall,
-} from '../services/RestCallStateStore';
-import type { DescribeService } from '../services/DescribeService';
+} from '../services/rest/RestCallStateStore';
+import type { DescribeService } from '../services/describe/DescribeService';
 import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';

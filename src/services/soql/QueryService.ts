@@ -1,4 +1,4 @@
-import type { ConnectionManager } from '../salesforce/connection';
+import type { ConnectionManager } from '../../salesforce/connection';
 
 export interface QueryResult {
   records: Record<string, unknown>[];

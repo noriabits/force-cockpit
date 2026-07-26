@@ -1,7 +1,7 @@
 // Org-facing tools offered to the model: schema lookup and read-only SOQL.
 // Both are host-executed — the model can only propose a call.
 import type { ConnectionManager } from '../../../salesforce/connection';
-import type { DescribeService } from '../../DescribeService';
+import type { DescribeService } from '../../describe/DescribeService';
 import { stripRecordAttributes } from '../../../utils/salesforce';
 import { stringArg, type ToolHandler } from './ToolHandler';
 

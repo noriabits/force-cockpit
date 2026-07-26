@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { QueryService } from './QueryService';
-import type { ConnectionManager } from '../salesforce/connection';
+import type { ConnectionManager } from '../../salesforce/connection';
 
 function makeMock(overrides: Partial<ConnectionManager> = {}): ConnectionManager {
   return {

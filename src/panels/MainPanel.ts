@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { ConnectionManager, ConnectionChangedEvent } from '../salesforce/connection';
-import { QueryService } from '../services/QueryService';
+import { QueryService } from '../services/soql/QueryService';
 import { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
-import { QueryStateStore } from '../services/QueryStateStore';
-import { RestCallService } from '../services/RestCallService';
-import { RestCallStateStore } from '../services/RestCallStateStore';
-import type { DescribeService } from '../services/DescribeService';
+import { QueryStateStore } from '../services/soql/QueryStateStore';
+import { RestCallService } from '../services/rest/RestCallService';
+import { RestCallStateStore } from '../services/rest/RestCallStateStore';
+import type { DescribeService } from '../services/describe/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../features/FeatureModule';
 import type { CockpitConfig } from '../utils/config';
 import { WebviewAssets } from './WebviewAssets';

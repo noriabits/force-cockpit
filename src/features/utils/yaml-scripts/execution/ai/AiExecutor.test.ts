@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionManager } from '../../../../../salesforce/connection';
-import { DescribeService } from '../../../../../services/DescribeService';
+import { DescribeService } from '../../../../../services/describe/DescribeService';
 import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { YamlScript } from '../../types';
 import { AiExecutor } from './AiExecutor';

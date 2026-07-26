@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SoqlDiagnosticsService } from './SoqlDiagnosticsService';
-import { DescribeService } from '../DescribeService';
+import { DescribeService } from '../describe/DescribeService';
 import type { ConnectionManager } from '../../salesforce/connection';
 
 const FLS_ERROR =

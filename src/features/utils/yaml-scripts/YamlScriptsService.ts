@@ -1,5 +1,5 @@
 import type { ConnectionManager } from '../../../salesforce/connection';
-import type { DescribeService } from '../../../services/DescribeService';
+import type { DescribeService } from '../../../services/describe/DescribeService';
 import { loadYamlItems } from '../../../utils/yaml-loader';
 import { ScriptParser } from './parsing/ScriptParser';
 import {

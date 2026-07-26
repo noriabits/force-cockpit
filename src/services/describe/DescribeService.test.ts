@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DescribeService } from './DescribeService';
 import type { DescribeDiskCache } from './DescribeDiskCache';
-import type { ConnectionManager } from '../salesforce/connection';
+import type { ConnectionManager } from '../../salesforce/connection';
 
 function makeMock(overrides: Partial<ConnectionManager> = {}): ConnectionManager {
   return {

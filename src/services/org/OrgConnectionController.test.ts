@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ConnectionManager } from '../salesforce/connection';
-import type { OrgDetails } from '../utils/sfCli';
+import type { ConnectionManager } from '../../salesforce/connection';
+import type { OrgDetails } from '../../utils/sfCli';
 import { OrgConnectionController, OrgConnectionDeps } from './OrgConnectionController';
 
 function org(target: string): OrgDetails {

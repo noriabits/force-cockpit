@@ -4,7 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
-import { DescribeService } from '../../../services/DescribeService';
+import { DescribeService } from '../../../services/describe/DescribeService';
 import type { LmGateway } from '../../../services/ai/types';
 import { SkillsRepository } from './skills/SkillsRepository';
 

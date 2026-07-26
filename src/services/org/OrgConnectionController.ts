@@ -1,5 +1,5 @@
-import { ConnectionManager } from '../salesforce/connection';
-import { OrgDetails } from '../utils/sfCli';
+import { ConnectionManager } from '../../salesforce/connection';
+import { OrgDetails } from '../../utils/sfCli';
 
 /**
  * Environment dependencies for {@link OrgConnectionController}. All `vscode` and

@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { ConnectionManager } from '../../../salesforce/connection';
-import type { DescribeService } from '../../../services/DescribeService';
+import type { DescribeService } from '../../../services/describe/DescribeService';
 import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { LogAnalyzer } from './ai/LogAnalyzer';

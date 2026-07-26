@@ -14,9 +14,9 @@ import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
 import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
-import { OrgConnectionController } from './services/OrgConnectionController';
-import { DescribeService } from './services/DescribeService';
-import { DescribeDiskCache } from './services/DescribeDiskCache';
+import { OrgConnectionController } from './services/org/OrgConnectionController';
+import { DescribeService } from './services/describe/DescribeService';
+import { DescribeDiskCache } from './services/describe/DescribeDiskCache';
 import { VsCodeLmGateway } from './services/ai/LmGateway';
 import { VsCodeWorkspaceSearch } from './services/ai/WorkspaceSearch';
 

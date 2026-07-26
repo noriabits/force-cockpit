@@ -3,7 +3,7 @@
 // the gateway, describe service and workspace search are injected, exactly like
 // the yaml-scripts AiExecutor.
 import type { ConnectionManager } from '../../../../salesforce/connection';
-import type { DescribeService } from '../../../../services/DescribeService';
+import type { DescribeService } from '../../../../services/describe/DescribeService';
 import { AiConversation, type ModelFallback } from '../../../../services/ai/AiConversation';
 import {
   createDescribeObjectTool,
