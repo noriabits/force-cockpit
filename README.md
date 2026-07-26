@@ -78,11 +78,14 @@ The editor supports:
 
   This matters most for permissions. Salesforce rejects a field you're not allowed to _see_ with the same `No such column 'X' on entity 'Y'` message it uses for a genuine typo, so you end up hunting for a spelling mistake that isn't there. Force Cockpit checks the field against the org's full metadata and tells you which it is:
 
-  > 🔒 **`AssetReferenceId__c` exists but field-level security is hiding it** — The field is defined on QuoteLineItem (Asset Reference Id, Text), but your user has no Read access to it. Ask an admin to grant Read on this field via a profile or permission set.
+  > 🔒 **`AssetReferenceId__c` exists but field-level security is hiding it** — The field is defined on QuoteLineItem (Asset Reference Id, Text), but your user has no Read access to it. Ask an admin to assign you one of the permission sets below, or add Read access to this field on one you already have.
+  > **Granted by:** `Sales_Ops_Extended (Permission Set)` `Field_Access_PSG (Permission Set Group)`
+
+  It also names _which_ permission set or permission set group would actually fix it, so you're not just told "ask an admin" — you can ask for a specific one. If nothing currently grants it, it says so instead of guessing.
 
   If the field really doesn't exist you get a **Did you mean:** list of the closest names instead. The same applies to mistyped relationships (`Accont.Name`) and objects, including objects that exist but that your user cannot access.
 
-  Reading the full field list needs the **View Setup and Configuration** permission. Without it you still get suggestions — the message just says that a field hidden by field-level security couldn't be ruled out.
+  Reading the full field list, and looking up which permission set grants it, both need the **View Setup and Configuration** permission. Without it you still get suggestions — the message just says that a field hidden by field-level security couldn't be ruled out.
 
 The results table supports:
 

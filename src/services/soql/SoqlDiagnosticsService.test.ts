@@ -12,12 +12,39 @@ function field(name: string, extra: Record<string, unknown> = {}) {
   return { name, label: name, type: 'string', referenceTo: [], picklistValues: [], ...extra };
 }
 
+/** A FieldPermissions row granted via a standalone Permission Set. */
+function permissionSetGrant(name: string) {
+  return {
+    PermissionsRead: true,
+    Parent: {
+      Name: name,
+      IsOwnedByProfile: false,
+      PermissionSetGroupId: null,
+      PermissionSetGroup: null,
+    },
+  };
+}
+
+/** A FieldPermissions row granted via a Permission Set Group's aggregate permission set. */
+function permissionSetGroupGrant(groupLabel: string) {
+  return {
+    PermissionsRead: true,
+    Parent: {
+      Name: `X${Math.random()}`, // the aggregate's own name is never shown to the user
+      IsOwnedByProfile: false,
+      PermissionSetGroupId: '0PG000000000001',
+      PermissionSetGroup: { MasterLabel: groupLabel },
+    },
+  };
+}
+
 function makeMock(overrides: Record<string, unknown> = {}): ConnectionManager {
   return {
     getCurrentOrg: () => ({ orgId: '00Dxx' }),
     describeSObject: vi.fn().mockResolvedValue({ name: 'QuoteLineItem', fields: [] }),
     describeGlobal: vi.fn().mockResolvedValue({ sobjects: [] }),
     toolingQuery: vi.fn().mockResolvedValue({ records: [] }),
+    query: vi.fn().mockResolvedValue({ records: [] }),
     ...overrides,
   } as unknown as ConnectionManager;
 }
@@ -96,6 +123,111 @@ describe('SoqlDiagnosticsService', () => {
       expect(describeSObject).toHaveBeenCalledTimes(2); // cache-populating call + diagnosis's fresh call
       expect(diagnostic.severity).toBe('warning');
       expect(diagnostic.title).toContain('field-level security');
+    });
+
+    it('names a standalone permission set that would grant the missing access', async () => {
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [
+            {
+              QualifiedApiName: 'AssetReferenceId__c',
+              Label: 'Asset Reference Id',
+              DataType: 'Text(255)',
+            },
+          ],
+        }),
+        query: vi.fn().mockResolvedValue({ records: [permissionSetGrant('Sales_Ops_Extended')] }),
+      });
+
+      const [diagnostic] = await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(diagnostic.grantedBy).toEqual(['Sales_Ops_Extended (Permission Set)']);
+      expect(diagnostic.detail).toContain('assign you one of the permission sets below');
+    });
+
+    it('names a permission set group by its MasterLabel, not the aggregate PermissionSet name', async () => {
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [
+            {
+              QualifiedApiName: 'AssetReferenceId__c',
+              Label: 'Asset Reference Id',
+              DataType: 'Text(255)',
+            },
+          ],
+        }),
+        query: vi
+          .fn()
+          .mockResolvedValue({ records: [permissionSetGroupGrant('Field_Access_PSG')] }),
+      });
+
+      const [diagnostic] = await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(diagnostic.grantedBy).toEqual(['Field_Access_PSG (Permission Set Group)']);
+    });
+
+    it('sends SObjectType/Field/IsOwnedByProfile/PermissionsRead scoped to the entity and field', async () => {
+      const query = vi.fn().mockResolvedValue({ records: [] });
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [{ QualifiedApiName: 'AssetReferenceId__c', Label: null, DataType: null }],
+        }),
+        query,
+      });
+
+      await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(query).toHaveBeenCalledTimes(1);
+      const soql = query.mock.calls[0][0] as string;
+      expect(soql).toContain('FROM FieldPermissions');
+      expect(soql).toContain("SObjectType = 'QuoteLineItem'");
+      expect(soql).toContain("Field = 'QuoteLineItem.AssetReferenceId__c'");
+      expect(soql).toContain('Parent.IsOwnedByProfile = false');
+      expect(soql).toContain('PermissionsRead = true');
+    });
+
+    it('says so when no permission set currently grants the field either', async () => {
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [{ QualifiedApiName: 'AssetReferenceId__c', Label: null, DataType: null }],
+        }),
+        query: vi.fn().mockResolvedValue({ records: [] }),
+      });
+
+      const [diagnostic] = await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(diagnostic.grantedBy).toBeUndefined();
+      expect(diagnostic.detail).toContain('No permission set or permission set group currently');
+    });
+
+    it('falls back to the generic admin message when FieldPermissions is not queryable', async () => {
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [{ QualifiedApiName: 'AssetReferenceId__c', Label: null, DataType: null }],
+        }),
+        query: vi.fn().mockRejectedValue(new Error('INSUFFICIENT_ACCESS')),
+      });
+
+      const [diagnostic] = await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(diagnostic.grantedBy).toBeUndefined();
+      expect(diagnostic.detail).toContain(
+        'Ask an admin to grant Read on this field via a profile or permission set.',
+      );
+    });
+
+    it('caps the number of permission sets listed', async () => {
+      const grants = Array.from({ length: 20 }, (_, i) => permissionSetGrant(`PS_${i}`));
+      const cm = makeMock({
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [{ QualifiedApiName: 'AssetReferenceId__c', Label: null, DataType: null }],
+        }),
+        query: vi.fn().mockResolvedValue({ records: grants }),
+      });
+
+      const [diagnostic] = await makeService(cm).diagnose('SELECT ...', FLS_ERROR);
+
+      expect(diagnostic.grantedBy).toHaveLength(15);
     });
 
     it('queries FieldDefinition scoped to the entity', async () => {

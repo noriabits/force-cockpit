@@ -10,6 +10,7 @@
  * @property {string} title
  * @property {string} detail
  * @property {string[]} [suggestions]
+ * @property {string[]} [grantedBy]
  */
 
 const SEVERITY_ICON = { warning: '🔒', info: 'ℹ️' };
@@ -19,6 +20,25 @@ const SEVERITY_ICON = { warning: '🔒', info: 'ℹ️' };
  */
 export function createQueryErrorView(ctx) {
   const { errorEl } = ctx;
+
+  /** @param {string} label @param {string[]} items */
+  function buildChipRow(label, items) {
+    const row = document.createElement('div');
+    row.className = 'query-diag-chips';
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'query-diag-chips-label';
+    labelEl.textContent = label;
+    row.appendChild(labelEl);
+
+    for (const item of items) {
+      const chip = document.createElement('code');
+      chip.className = 'query-diag-chip';
+      chip.textContent = item;
+      row.appendChild(chip);
+    }
+    return row;
+  }
 
   /** @param {SoqlDiagnostic} diagnostic */
   function buildDiagnostic(diagnostic) {
@@ -36,21 +56,11 @@ export function createQueryErrorView(ctx) {
     box.appendChild(detail);
 
     if (diagnostic.suggestions && diagnostic.suggestions.length > 0) {
-      const list = document.createElement('div');
-      list.className = 'query-diag-suggestions';
+      box.appendChild(buildChipRow('Did you mean:', diagnostic.suggestions));
+    }
 
-      const label = document.createElement('span');
-      label.className = 'query-diag-suggestions-label';
-      label.textContent = 'Did you mean:';
-      list.appendChild(label);
-
-      for (const name of diagnostic.suggestions) {
-        const chip = document.createElement('code');
-        chip.className = 'query-diag-suggestion';
-        chip.textContent = name;
-        list.appendChild(chip);
-      }
-      box.appendChild(list);
+    if (diagnostic.grantedBy && diagnostic.grantedBy.length > 0) {
+      box.appendChild(buildChipRow('Granted by:', diagnostic.grantedBy));
     }
 
     return box;

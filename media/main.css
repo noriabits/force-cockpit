@@ -1228,7 +1228,8 @@ body {
   line-height: 1.5;
 }
 
-.query-diag-suggestions {
+/* Shared chip row: "Did you mean:" suggestions and "Granted by:" permission sets */
+.query-diag-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1236,11 +1237,11 @@ body {
   margin-top: 6px;
 }
 
-.query-diag-suggestions-label {
+.query-diag-chips-label {
   opacity: 0.8;
 }
 
-.query-diag-suggestion {
+.query-diag-chip {
   padding: 1px 6px;
   border-radius: 3px;
   background-color: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.1));

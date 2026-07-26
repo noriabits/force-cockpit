@@ -12,6 +12,8 @@ export interface SoqlDiagnostic {
   title: string;
   detail: string;
   suggestions?: string[];
+  /** Permission sets / permission set groups that would grant the missing access. */
+  grantedBy?: string[];
 }
 
 /** One field as the Tooling API's FieldDefinition reports it (not FLS-filtered). */
@@ -21,8 +23,28 @@ interface FieldDefinitionRow extends Record<string, unknown> {
   DataType: string | null;
 }
 
+/**
+ * One FieldPermissions row, standard (non-Tooling) API. `Parent` is the owning
+ * PermissionSet. A `PermissionSetGroupId` on THAT record (not on the group itself)
+ * means it is the hidden "aggregate" PermissionSet Salesforce auto-generates to
+ * represent a Permission Set Group's combined access — `PermissionSetGroup` is
+ * only populated in that case.
+ */
+interface FieldPermissionRow extends Record<string, unknown> {
+  PermissionsRead: boolean;
+  Parent: {
+    Name: string;
+    IsOwnedByProfile: boolean;
+    PermissionSetGroupId: string | null;
+    PermissionSetGroup: { MasterLabel: string } | null;
+  };
+}
+
 /** API names are interpolated into SOQL string literals — validate, never escape. */
 const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/;
+
+/** Cap on how many permission-set names are listed in one diagnostic. */
+const MAX_GRANTS_SHOWN = 15;
 
 /**
  * Explains *why* a SOQL query failed, beyond what Salesforce says.
@@ -33,10 +55,15 @@ const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/;
  * API's `FieldDefinition` is NOT FLS-filtered, so comparing the two tells us
  * whether the field genuinely does not exist or merely is not visible.
  *
- * Everything here is best-effort. `FieldDefinition` needs "View Setup and
- * Configuration"; without it the Tooling query throws and diagnosis quietly
- * degrades to describe-only suggestions. `diagnose` never throws and never
- * changes the outcome of the query itself.
+ * When a field is hidden by FLS, it also queries `FieldPermissions` (standard
+ * API — every field/object grant a profile or permission set makes is a row
+ * there) to name which permission set or permission set group, if any, would
+ * grant Read — so the fix is "assign PSG X" rather than "ask an admin and hope".
+ *
+ * Everything here is best-effort. `FieldDefinition`/`FieldPermissions` need "View
+ * Setup and Configuration"; without it the query throws and diagnosis quietly
+ * degrades (describe-only suggestions; no permission-set names). `diagnose`
+ * never throws and never changes the outcome of the query itself.
  *
  * Every describe lookup here uses `describeService`'s `*Fresh` methods, never
  * the cached ones. `DescribeService`'s normal cache is fine for autocomplete —
@@ -102,6 +129,24 @@ export class SoqlDiagnosticsService {
       const match = all.find((f) => f.QualifiedApiName.toLowerCase() === field.toLowerCase());
       if (match) {
         const describedAs = [match.Label, match.DataType].filter(Boolean).join(', ');
+        const grants = await this.fieldPermissionGrants(entity, match.QualifiedApiName);
+        const grantedBy = grants
+          ?.map((g) => this.describeGrantSource(g))
+          .slice(0, MAX_GRANTS_SHOWN);
+
+        let adminAction: string;
+        if (!grants) {
+          adminAction = 'Ask an admin to grant Read on this field via a profile or permission set.';
+        } else if (grants.length === 0) {
+          adminAction =
+            'No permission set or permission set group currently grants Read on this field ' +
+            'either — an admin will need to add it to one.';
+        } else {
+          adminAction =
+            'Ask an admin to assign you one of the permission sets below, or add Read access ' +
+            'to this field on one you already have.';
+        }
+
         return [
           {
             severity: 'warning',
@@ -109,8 +154,8 @@ export class SoqlDiagnosticsService {
             detail:
               `The field is defined on ${entity}${describedAs ? ` (${describedAs})` : ''}, but ` +
               `your user has no Read access to it. Salesforce reports hidden fields as ` +
-              `"No such column", so this is a permission problem, not a typo. Ask an admin ` +
-              `to grant Read on this field via a profile or permission set.`,
+              `"No such column", so this is a permission problem, not a typo. ${adminAction}`,
+            ...(grantedBy && grantedBy.length > 0 ? { grantedBy } : {}),
           },
         ];
       }
@@ -166,6 +211,43 @@ export class SoqlDiagnosticsService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Which permission sets / permission set groups grant Read on `entity.field`.
+   * `null` when the lookup itself failed (missing setup permission, no
+   * connection) — distinct from `[]`, which means the query succeeded and
+   * genuinely found no grant. Standard (non-Tooling) query — `FieldPermissions`
+   * isn't exposed over the Tooling API.
+   */
+  private async fieldPermissionGrants(
+    entity: string,
+    field: string,
+  ): Promise<FieldPermissionRow[] | null> {
+    if (!SAFE_IDENTIFIER.test(entity) || !SAFE_IDENTIFIER.test(field)) return null;
+
+    try {
+      const result = await this.connectionManager.query<FieldPermissionRow>(
+        `SELECT Parent.Name, Parent.IsOwnedByProfile, Parent.PermissionSetGroupId, ` +
+          `Parent.PermissionSetGroup.MasterLabel, PermissionsRead ` +
+          `FROM FieldPermissions ` +
+          `WHERE SObjectType = '${entity}' AND Field = '${entity}.${field}' ` +
+          `AND Parent.IsOwnedByProfile = false AND PermissionsRead = true ` +
+          `ORDER BY Parent.Name LIMIT 200`,
+      );
+      return result.records ?? [];
+    } catch {
+      return null;
+    }
+  }
+
+  /** "Sales_Ops_Extended (Permission Set)" / "Field_Access (Permission Set Group)". */
+  private describeGrantSource(row: FieldPermissionRow): string {
+    if (row.Parent.PermissionSetGroupId) {
+      const label = row.Parent.PermissionSetGroup?.MasterLabel ?? row.Parent.Name;
+      return `${label} (Permission Set Group)`;
+    }
+    return `${row.Parent.Name} (Permission Set)`;
   }
 
   // ── Relationships ───────────────────────────────────────────────────────────
