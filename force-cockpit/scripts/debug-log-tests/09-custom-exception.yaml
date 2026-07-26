@@ -1,0 +1,21 @@
+name: 🧨 9. Caught DML failure, rethrown
+description: >-
+  Catches a DML failure, logs it at ERROR level, rolls back, then rethrows — the shape most real
+  integrations fail in. Tests EXCEPTION_THROWN *and* FATAL_ERROR in one log, DML counters, and
+  whether the AI reads past the rethrow to the original cause. Fails by design; nothing is saved.
+apex: |
+  Savepoint sp = Database.setSavepoint();
+
+  try {
+      System.debug('processing order SO-2002');
+      // Account.Name is required → DmlException.
+      insert new Account();
+      System.debug('never reached');
+  } catch (DmlException e) {
+      Database.rollback(sp);
+      System.debug(LoggingLevel.ERROR, 'insert failed: ' + e.getDmlMessage(0));
+      System.debug(LoggingLevel.ERROR, 'status code: ' + e.getDmlStatusCode(0));
+      throw new IllegalArgumentException(
+          'Could not save the order account: ' + e.getDmlMessage(0)
+      );
+  }

@@ -1,0 +1,24 @@
+name: 🔥 5. CPU pressure (near the limit)
+description: >-
+  Burns most of the 10 s CPU budget without exceeding it, so "Maximum CPU time" lands in the
+  amber/red band. Tests the limit bars and the `governor-limit` warning (fires at 80%). Read-only.
+  Best with the "Governor limits / performance" preset.
+apex: |
+  Long startCpu = Limits.getCpuTime();
+  Long target = 8000;   // ms of CPU to burn — under the 10,000 ms limit
+  Integer rounds = 0;
+  String sink = '';
+
+  while (Limits.getCpuTime() - startCpu < target) {
+      // Deliberately wasteful work.
+      Map<String, Integer> scratch = new Map<String, Integer>();
+      for (Integer i = 0; i < 2000; i++) {
+          scratch.put('k' + i, i * i);
+      }
+      sink = String.valueOf(scratch.size());
+      rounds++;
+  }
+
+  System.debug('rounds: ' + rounds + ' (sink ' + sink + ')');
+  System.debug('CPU used: ' + (Limits.getCpuTime() - startCpu) + ' / ' + Limits.getLimitCpuTime() + ' ms');
+  System.debug('heap used: ' + Limits.getHeapSize() + ' / ' + Limits.getLimitHeapSize());

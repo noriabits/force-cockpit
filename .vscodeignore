@@ -25,3 +25,4 @@ out/**
 !dist/**
 force-cockpit/**
 scripts/**
+*.log

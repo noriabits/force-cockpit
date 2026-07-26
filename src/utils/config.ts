@@ -2,17 +2,30 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
+/** Tuning for the Debug Logs tab's "hide empty logs" filter. */
+export interface DebugLogNoiseConfig {
+  /** Logs at or below this size (bytes) count as empty. */
+  maxEmptyBytes?: number;
+  /** Logs at or below this duration (ms) count as empty. */
+  maxEmptyDurationMs?: number;
+  /** Case-insensitive substrings matched against ApexLog.Operation. */
+  operationPatterns?: string[];
+}
+
 export interface CockpitConfig {
   apiVersion: string;
   protectedSandboxes: string[];
   /** Workspace-relative dirs scanned for Agent Skills (AI scripts), in priority order. */
   skillsPaths: string[];
+  /** Optional overrides for the Debug Logs noise filter (`debugLogs.noise` in config.yaml). */
+  debugLogNoise: DebugLogNoiseConfig;
 }
 
 const DEFAULTS: CockpitConfig = {
   apiVersion: '66.0',
   protectedSandboxes: [],
   skillsPaths: ['.claude/skills', '.github/skills'],
+  debugLogNoise: {},
 };
 
 export function loadConfig(extensionPath: string, userBasePath: string): CockpitConfig {
@@ -47,7 +60,30 @@ function mergeFromFile(config: CockpitConfig, filePath: string): void {
     if (Array.isArray(obj.skillsPaths)) {
       config.skillsPaths = obj.skillsPaths.filter((s): s is string => typeof s === 'string');
     }
+    mergeDebugLogNoise(config, obj.debugLogs);
   } catch {
     // Malformed YAML or read error — silently use existing config values
   }
+}
+
+/** `debugLogs: { noise: { maxEmptyBytes, maxEmptyDurationMs, operationPatterns } }` */
+function mergeDebugLogNoise(config: CockpitConfig, debugLogs: unknown): void {
+  if (typeof debugLogs !== 'object' || debugLogs === null) return;
+  const noise = (debugLogs as Record<string, unknown>).noise;
+  if (typeof noise !== 'object' || noise === null) return;
+  const obj = noise as Record<string, unknown>;
+  const merged: DebugLogNoiseConfig = { ...config.debugLogNoise };
+
+  if (typeof obj.maxEmptyBytes === 'number' && obj.maxEmptyBytes >= 0) {
+    merged.maxEmptyBytes = obj.maxEmptyBytes;
+  }
+  if (typeof obj.maxEmptyDurationMs === 'number' && obj.maxEmptyDurationMs >= 0) {
+    merged.maxEmptyDurationMs = obj.maxEmptyDurationMs;
+  }
+  if (Array.isArray(obj.operationPatterns)) {
+    merged.operationPatterns = obj.operationPatterns.filter(
+      (s): s is string => typeof s === 'string',
+    );
+  }
+  config.debugLogNoise = merged;
 }

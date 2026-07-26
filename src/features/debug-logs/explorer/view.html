@@ -1,0 +1,180 @@
+<!-- Debug Logs: trace-flag manager, log list, log viewer, AI analysis. -->
+<section class="card dbg-card" id="dbg-trace-card">
+  <div class="card-header">
+    <h3 class="card-title">🎯 Trace flags</h3>
+    <span class="status-hint" id="dbg-trace-status"></span>
+  </div>
+
+  <div class="dbg-field">
+    <span class="dbg-label" id="dbg-entity-label">Trace</span>
+    <div class="dbg-seg" id="dbg-entity-seg">
+      <button type="button" class="dbg-seg-btn active" data-entity="me">Me</button>
+      <button type="button" class="dbg-seg-btn" data-entity="system">Automated Process</button>
+      <button type="button" class="dbg-seg-btn" data-entity="user">Search user…</button>
+      <button type="button" class="dbg-seg-btn" data-entity="apex">Apex class / trigger…</button>
+    </div>
+  </div>
+
+  <div class="dbg-entity-hint" id="dbg-entity-hint"></div>
+
+  <div class="dbg-field dbg-search-row" id="dbg-entity-search-row" style="display: none">
+    <div class="input-with-paste" style="flex: 1; min-width: 0">
+      <input
+        type="text"
+        class="text-input"
+        id="dbg-entity-search"
+        spellcheck="false"
+        placeholder="Type a name…"
+      />
+      <button type="button" class="paste-btn" data-tooltip="Paste from clipboard">📋</button>
+    </div>
+  </div>
+  <div class="dbg-entity-results" id="dbg-entity-results"></div>
+
+  <div class="dbg-selected" id="dbg-selected-entity" style="display: none"></div>
+
+  <div class="dbg-field">
+    <span class="dbg-label" id="dbg-level-label">Debug level</span>
+    <select class="text-input dbg-select" id="dbg-preset"></select>
+    <button type="button" class="btn btn-ghost" id="dbg-custom-toggle">Custom…</button>
+    <span class="dbg-label" id="dbg-duration-label">for</span>
+    <select class="text-input dbg-select dbg-select--narrow" id="dbg-duration"></select>
+    <button type="button" class="btn btn-primary" id="dbg-start-trace">Start tracing</button>
+  </div>
+
+  <div class="dbg-preset-hint" id="dbg-preset-hint"></div>
+  <div class="dbg-custom-levels" id="dbg-custom-levels" style="display: none"></div>
+
+  <div class="dbg-flags" id="dbg-flags"></div>
+  <div class="error-box" id="dbg-trace-error" style="display: none"></div>
+</section>
+
+<section class="card dbg-card" id="dbg-list-card">
+  <div class="card-header">
+    <h3 class="card-title">📋 Logs</h3>
+    <span class="status-hint" id="dbg-list-status"></span>
+  </div>
+
+  <div class="dbg-list-toolbar">
+    <input
+      type="text"
+      class="text-input dbg-filter-input"
+      id="dbg-log-filter"
+      data-no-generic-filter
+      spellcheck="false"
+      placeholder="Filter logs…"
+    />
+    <span class="query-match-count" id="dbg-log-count"></span>
+    <label class="dbg-check" data-tooltip="Show only logs that ended with an exception">
+      <input type="checkbox" id="dbg-errors-only" /> Errors only
+    </label>
+    <label
+      class="dbg-check"
+      id="dbg-hide-empty-label"
+      data-tooltip="Hide logs whose transaction did nothing observable — no debug output, no error, no SOQL and no DML"
+    >
+      <input type="checkbox" id="dbg-hide-empty" /> Hide empty logs
+    </label>
+    <label class="dbg-check" data-tooltip="Poll the org for new logs while this tab is open">
+      <input type="checkbox" id="dbg-live-tail" /> Live tail
+    </label>
+    <span class="query-toolbar-spacer"></span>
+    <button type="button" class="btn btn-ghost" id="dbg-refresh-logs">Refresh</button>
+    <button type="button" class="btn btn-ghost" id="dbg-delete-selected" disabled>Delete</button>
+    <button type="button" class="btn btn-ghost" id="dbg-delete-all">Delete all</button>
+  </div>
+
+  <div class="dbg-hidden-chip" id="dbg-hidden-chip" style="display: none"></div>
+
+  <div class="table-wrapper dbg-table-wrapper">
+    <table class="results-table dbg-log-table">
+      <thead id="dbg-log-thead"></thead>
+      <tbody id="dbg-log-tbody"></tbody>
+    </table>
+  </div>
+  <div class="dbg-empty" id="dbg-list-empty">No logs yet.</div>
+  <div class="error-box" id="dbg-list-error" style="display: none"></div>
+</section>
+
+<section class="card dbg-card" id="dbg-viewer-card" style="display: none">
+  <div class="card-header">
+    <h3 class="card-title" id="dbg-viewer-title">🔍 Log</h3>
+    <span class="status-hint" id="dbg-viewer-status"></span>
+  </div>
+
+  <div class="dbg-viewer-meta" id="dbg-viewer-meta"></div>
+  <div class="feature-actions dbg-viewer-actions">
+    <button type="button" class="btn btn-ghost" id="dbg-open-raw">Open raw in editor</button>
+    <button type="button" class="btn btn-ghost" id="dbg-copy-log">Copy to clipboard</button>
+    <button type="button" class="btn btn-primary" id="dbg-analyze">✨ Analyze with AI</button>
+    <button type="button" class="btn btn-ghost" id="dbg-close-viewer">Close</button>
+  </div>
+
+  <div class="dbg-summary" id="dbg-summary"></div>
+  <div class="dbg-issues" id="dbg-issues"></div>
+
+  <div class="dbg-view-modes">
+    <div class="dbg-seg" id="dbg-mode-seg">
+      <button type="button" class="dbg-seg-btn active" data-mode="pretty">Pretty</button>
+      <button type="button" class="dbg-seg-btn" data-mode="tree">Tree</button>
+      <button type="button" class="dbg-seg-btn" data-mode="queries">Queries</button>
+      <button type="button" class="dbg-seg-btn" data-mode="raw">Raw</button>
+    </div>
+    <input
+      type="text"
+      class="text-input dbg-filter-input"
+      id="dbg-log-search"
+      data-no-generic-filter
+      spellcheck="false"
+      placeholder="Search in log…"
+    />
+    <span class="query-match-count" id="dbg-search-count"></span>
+    <button type="button" class="btn btn-ghost btn-icon" id="dbg-search-prev">▲</button>
+    <button type="button" class="btn btn-ghost btn-icon" id="dbg-search-next">▼</button>
+    <label class="dbg-check">
+      <input type="checkbox" id="dbg-hide-noise" checked /> Hide noise
+    </label>
+  </div>
+  <div class="dbg-chips" id="dbg-chips"></div>
+
+  <pre class="dbg-log-output" id="dbg-log-output"></pre>
+  <div class="dbg-tree" id="dbg-log-tree" style="display: none"></div>
+  <div class="dbg-query-table-wrap" id="dbg-query-table-wrap" style="display: none"></div>
+  <button
+    type="button"
+    class="btn btn-ghost dbg-load-more"
+    id="dbg-load-more"
+    style="display: none"
+  >
+    Load more lines
+  </button>
+
+  <div class="dbg-ai" id="dbg-ai" style="display: none">
+    <div class="dbg-ai-toolbar">
+      <select class="text-input dbg-select" id="dbg-ai-model"></select>
+      <label class="dbg-check">
+        <input type="checkbox" id="dbg-ai-workspace" checked /> Read workspace files
+      </label>
+      <label class="dbg-check"> <input type="checkbox" id="dbg-ai-org" /> Query the org </label>
+      <span class="query-toolbar-spacer"></span>
+      <button type="button" class="btn btn-ghost" id="dbg-ai-open-markdown">
+        Open as markdown
+      </button>
+      <button type="button" class="btn btn-ghost" id="dbg-ai-save">Save analysis</button>
+      <button type="button" class="btn btn-ghost" id="dbg-ai-copy">Copy</button>
+    </div>
+    <div class="dbg-ai-question">
+      <input
+        type="text"
+        class="text-input"
+        id="dbg-ai-question"
+        spellcheck="false"
+        placeholder="Optional: what should the analysis focus on?"
+      />
+    </div>
+    <pre class="dbg-ai-output" id="dbg-ai-output"></pre>
+    <div class="dbg-apply-levels" id="dbg-apply-levels" style="display: none"></div>
+  </div>
+
+  <div class="error-box" id="dbg-viewer-error" style="display: none"></div>
+</section>

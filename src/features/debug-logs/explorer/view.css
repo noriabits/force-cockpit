@@ -1,0 +1,656 @@
+/* Debug Logs tab. Colors come from VSCode theme variables only. */
+
+.dbg-card {
+  margin-bottom: 12px;
+}
+
+/* ── Shared bits ─────────────────────────────────────────────────────── */
+
+.dbg-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.dbg-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.dbg-select {
+  min-width: 180px;
+}
+
+.dbg-select--narrow {
+  min-width: 110px;
+}
+
+.dbg-seg {
+  display: inline-flex;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dbg-seg-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-foreground);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dbg-seg-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.dbg-seg-btn.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.dbg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.dbg-check--sub {
+  padding-left: 4px;
+  opacity: 0.85;
+}
+
+.dbg-empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  padding: 8px 0;
+}
+
+.dbg-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.dbg-warning {
+  margin-top: 4px;
+  color: var(--vscode-editorWarning-foreground);
+  font-size: 12px;
+}
+
+/* ── Trace flags ─────────────────────────────────────────────────────── */
+
+.dbg-entity-hint,
+.dbg-hint-desc {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.dbg-preset-hint {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--vscode-focusBorder);
+  background: var(--vscode-textBlockQuote-background);
+}
+
+.dbg-hint-when {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.dbg-hint-levels {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  word-break: break-all;
+}
+
+.dbg-entity-results {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.dbg-entity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-foreground);
+  padding: 5px 4px;
+  cursor: pointer;
+}
+
+.dbg-entity-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.dbg-entity-sub {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+
+.dbg-selected {
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background: var(--vscode-editor-inactiveSelectionBackground);
+  font-size: 12px;
+}
+
+.dbg-selected-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-custom-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dbg-custom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.dbg-flags {
+  margin-top: 8px;
+}
+
+.dbg-flag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-top: 1px solid var(--vscode-panel-border);
+  font-size: 12px;
+}
+
+.dbg-flag-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dbg-flag-countdown {
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+}
+
+.dbg-stop-btn {
+  color: var(--vscode-errorForeground);
+}
+
+/* ── Log list ────────────────────────────────────────────────────────── */
+
+.dbg-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.dbg-filter-input {
+  min-width: 180px;
+}
+
+.dbg-table-wrapper {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.dbg-log-table td,
+.dbg-log-table th {
+  white-space: nowrap;
+}
+
+.dbg-log-row {
+  cursor: pointer;
+}
+
+.dbg-log-row--error td {
+  color: var(--vscode-errorForeground);
+}
+
+.dbg-log-row--open td {
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.dbg-log-row--empty td {
+  opacity: 0.55;
+}
+
+.dbg-col-check {
+  width: 24px;
+}
+
+.dbg-hidden-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 6px;
+}
+
+/* ── Viewer ──────────────────────────────────────────────────────────── */
+
+.dbg-viewer-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.dbg-meta-item {
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-status--ok {
+  color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.dbg-status--error {
+  color: var(--vscode-errorForeground);
+}
+
+.dbg-viewer-actions {
+  margin-bottom: 10px;
+}
+
+.dbg-summary-counts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.dbg-count-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-count-value {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+
+.dbg-count-chip--warn {
+  border-color: var(--vscode-editorWarning-foreground);
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.dbg-limit-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
+
+.dbg-limit-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-limit-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background);
+  overflow: hidden;
+}
+
+.dbg-limit-fill {
+  height: 100%;
+  background: var(--vscode-charts-green);
+}
+
+.dbg-limit-fill--warn {
+  background: var(--vscode-charts-yellow);
+}
+
+.dbg-limit-fill--critical {
+  background: var(--vscode-charts-red);
+}
+
+.dbg-issues {
+  margin-bottom: 10px;
+}
+
+.dbg-issue {
+  border-left: 3px solid var(--vscode-panel-border);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  background: var(--vscode-textBlockQuote-background);
+  font-size: 12px;
+}
+
+.dbg-issue--clickable {
+  cursor: pointer;
+}
+
+.dbg-issue--critical {
+  border-left-color: var(--vscode-errorForeground);
+}
+
+.dbg-issue--warning {
+  border-left-color: var(--vscode-editorWarning-foreground);
+}
+
+.dbg-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dbg-issue-sev {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-issue-line {
+  color: var(--vscode-textLink-foreground);
+  font-family: var(--vscode-editor-font-family);
+}
+
+.dbg-issue-detail,
+.dbg-issue-fix {
+  color: var(--vscode-descriptionForeground);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.dbg-issue-evidence {
+  margin: 4px 0 0;
+  padding: 4px 6px;
+  overflow-x: auto;
+  font-size: 11px;
+  background: var(--vscode-editor-background);
+}
+
+.dbg-view-modes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.dbg-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.dbg-chip {
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+
+.dbg-chip.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-button-background);
+}
+
+.dbg-log-output {
+  max-height: 460px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 4px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.dbg-line {
+  display: block;
+}
+
+.dbg-line-no {
+  display: inline-block;
+  min-width: 52px;
+  padding-right: 8px;
+  text-align: right;
+  color: var(--vscode-editorLineNumber-foreground);
+  user-select: none;
+}
+
+.dbg-line--errors .dbg-line-text,
+.dbg-line--error .dbg-line-text {
+  color: var(--vscode-errorForeground);
+}
+
+.dbg-line--userDebug .dbg-line-text {
+  color: var(--vscode-charts-blue);
+}
+
+.dbg-line--soql .dbg-line-text {
+  color: var(--vscode-charts-purple);
+}
+
+.dbg-line--dml .dbg-line-text {
+  color: var(--vscode-charts-orange);
+}
+
+.dbg-line--limits .dbg-line-text,
+.dbg-line--callouts .dbg-line-text {
+  color: var(--vscode-charts-yellow);
+}
+
+.dbg-line--codeUnits .dbg-line-text {
+  color: var(--vscode-charts-green);
+}
+
+.dbg-line--noise .dbg-line-text {
+  opacity: 0.6;
+}
+
+.dbg-line--highlight {
+  background: var(--vscode-editor-findMatchHighlightBackground);
+}
+
+.dbg-load-more {
+  margin-top: 6px;
+}
+
+/* ── Execution tree ──────────────────────────────────────────────────── */
+
+.dbg-tree {
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid var(--vscode-panel-border);
+  padding: 6px;
+  font-size: 12px;
+}
+
+.dbg-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 1px 0;
+  cursor: pointer;
+}
+
+.dbg-tree-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.dbg-tree-toggle {
+  width: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.dbg-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbg-tree-name--codeUnit {
+  font-weight: 600;
+}
+
+.dbg-tree-bar {
+  height: 4px;
+  max-width: 120px;
+  border-radius: 2px;
+  background: var(--vscode-charts-blue);
+}
+
+.dbg-tree-timing {
+  color: var(--vscode-descriptionForeground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Query plan table ────────────────────────────────────────────────── */
+
+.dbg-query-legend {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 8px;
+}
+
+.dbg-query-table-scroll {
+  max-height: 460px;
+  overflow: auto;
+}
+
+/* Base look (borders, padding, hover) comes from the shared .results-table
+   class — this table only adds the sortable-header cursor and its own
+   column-width tweaks. Only sortable headers get the pointer cursor — the
+   leading Actions column header is intentionally plain/unclickable. */
+.dbg-query-sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dbg-query-actions {
+  white-space: nowrap;
+}
+
+.dbg-query-actions .btn {
+  margin-right: 2px;
+}
+
+/* Specificity must beat .results-table td's nowrap/ellipsis/max-width — the
+   full query text is the point of this table, not a truncated preview. */
+.dbg-query-table td.dbg-query-text {
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: unset;
+  font-family: var(--vscode-editor-font-family);
+}
+
+.dbg-rating-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.dbg-rating-badge--critical {
+  background: color-mix(in srgb, var(--vscode-charts-red, #f14c4c) 22%, transparent);
+  color: var(--vscode-charts-red, #f14c4c);
+}
+
+.dbg-rating-badge--warning {
+  background: color-mix(in srgb, var(--vscode-charts-yellow, #cca700) 22%, transparent);
+  color: var(--vscode-charts-yellow, #cca700);
+}
+
+.dbg-rating-badge--good {
+  background: color-mix(in srgb, var(--vscode-charts-green, #89d185) 22%, transparent);
+  color: var(--vscode-charts-green, #89d185);
+}
+
+.dbg-rating-badge--unknown {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ── AI panel ────────────────────────────────────────────────────────── */
+
+.dbg-ai {
+  margin-top: 12px;
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: 10px;
+}
+
+.dbg-ai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.dbg-ai-question {
+  margin-bottom: 6px;
+}
+
+.dbg-ai-question input {
+  width: 100%;
+}
+
+.dbg-ai-output {
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dbg-apply-levels {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.dbg-apply-reason {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}

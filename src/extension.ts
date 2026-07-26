@@ -9,6 +9,7 @@ import { featureRegistry } from './features/registry';
 import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
 import { createExecutionLogsFeature } from './features/utils/execution-logs/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
+import { createDebugLogsFeature } from './features/debug-logs/explorer/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
@@ -16,6 +17,8 @@ import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
 import { OrgConnectionController } from './services/OrgConnectionController';
 import { DescribeService } from './services/DescribeService';
 import { DescribeDiskCache } from './services/DescribeDiskCache';
+import { VsCodeLmGateway } from './services/ai/LmGateway';
+import { VsCodeWorkspaceSearch } from './services/ai/WorkspaceSearch';
 
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
@@ -50,6 +53,11 @@ export function activate(context: vscode.ExtensionContext): void {
   // map on top. Cleared on manual org refresh so schema is re-pulled on demand.
   const describeDiskCache = new DescribeDiskCache(path.join(userBasePath, '.describe-cache'));
   const describeService = new DescribeService(connectionManager, describeDiskCache);
+
+  // The two vscode-facing AI adapters, built once and shared by every consumer
+  // (AI scripts and the debug-log analyzer).
+  const lmGateway = new VsCodeLmGateway();
+  const workspaceSearch = new VsCodeWorkspaceSearch();
 
   // Status bar item: shows Sandbox / Production indicator
   setupOrgTypeStatusBar(context, connectionManager, () => cockpitConfig);
@@ -93,10 +101,21 @@ export function activate(context: vscode.ExtensionContext): void {
       workspaceState: context.workspaceState,
       skillsPaths: cockpitConfig.skillsPaths,
       describeService,
+      gateway: lmGateway,
+      workspaceSearch,
       postToWebview: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
     }),
     monitoringFeature.factory,
     createExecutionLogsFeature(path.join(userBasePath, 'logs')),
+    createDebugLogsFeature({
+      workspaceState: context.workspaceState,
+      describeService,
+      gateway: lmGateway,
+      workspaceSearch,
+      logsPath: path.join(userBasePath, 'logs'),
+      // Read through the closure so a live config.yaml reload takes effect.
+      getNoiseOptions: () => cockpitConfig.debugLogNoise,
+    }),
   ];
 
   // Background auto-refresh: keeps notification-enabled dashboards polling even when

@@ -1,0 +1,18 @@
+name: 🔁 3. SOQL inside a loop
+description: >-
+  Runs the same query 12 times from one source line — the classic bulkification bug. Tests the
+  `soql-in-loop` detector (fires at 5+ from one line) and the AI's "Recommended fixes" section.
+  Read-only. Best with the "SOQL / database deep dive" preset.
+apex: |
+  List<Account> accounts = [SELECT Id, Name FROM Account LIMIT 12];
+  System.debug('looping over ' + accounts.size() + ' accounts');
+
+  Integer totalContacts = 0;
+  for (Account a : accounts) {
+      // ⚠ The query is INSIDE the loop — one round trip per account.
+      List<Contact> contacts = [SELECT Id, Name FROM Contact WHERE AccountId = :a.Id];
+      totalContacts += contacts.size();
+      System.debug(a.Name + ' → ' + contacts.size() + ' contacts');
+  }
+
+  System.debug('total contacts: ' + totalContacts);

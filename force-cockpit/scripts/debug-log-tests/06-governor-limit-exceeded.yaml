@@ -1,0 +1,19 @@
+name: 🚨 6. Governor limit exceeded (101 SOQL queries)
+description: >-
+  Issues 101 queries in one transaction and dies on System.LimitException. Tests a limit at 100%,
+  the `exception` + `governor-limit` + `soql-in-loop` detectors together, and the failure
+  notification when Live tail is on. Read-only — it fails by design.
+apex: |
+  // The SOQL limit is 100 per transaction; the 101st throws.
+  Integer queries = 0;
+  System.debug('SOQL limit for this transaction: ' + Limits.getLimitQueries());
+
+  for (Integer i = 0; i <= 101; i++) {
+      List<Account> ignored = [SELECT Id FROM Account LIMIT 1];
+      queries++;
+      if (Math.mod(i, 25) == 0) {
+          System.debug('queries so far: ' + queries + ' (used ' + Limits.getQueries() + ')');
+      }
+  }
+
+  System.debug('never reached — the 101st query throws first');

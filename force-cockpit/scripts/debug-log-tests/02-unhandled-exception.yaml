@@ -1,0 +1,22 @@
+name: 💥 2. Unhandled exception (NullPointerException)
+description: >-
+  De-references a null value and dies. Tests the `exception` detector, the FATAL_ERROR line and
+  its stack frame, the red row in the log list, the "Errors" chip, and the AI root-cause section.
+  The script itself reports an error — that is the point; the org still writes the log. Read-only.
+apex: |
+  System.debug('starting order calculation');
+
+  Map<String, Object> order = new Map<String, Object>{
+      'id' => 'SO-1001',
+      'amount' => 250,
+      'customer' => null      // <- the missing piece
+  };
+  System.debug('built order: ' + JSON.serialize(order));
+
+  String customer = (String) order.get('customer');
+  System.debug('about to read the customer name');
+
+  // customer is null → de-referencing it throws a NullPointerException.
+  System.debug('customer name length: ' + customer.length());
+
+  System.debug('never reached');

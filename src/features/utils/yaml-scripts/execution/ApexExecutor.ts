@@ -1,6 +1,7 @@
 import type { ConnectionManager } from '../../../../salesforce/connection';
 import { assertApexSuccess, filterUserDebugLines } from '../../../apexUtils';
 import type { ExecuteScriptResult, YamlScript } from '../types';
+import { DEFAULT_APEX_LOG_LEVELS } from './defaultApexLogLevels';
 
 export class ApexExecutor {
   constructor(private readonly connectionManager: ConnectionManager) {}
@@ -8,7 +9,7 @@ export class ApexExecutor {
   async execute(script: YamlScript): Promise<ExecuteScriptResult> {
     try {
       const apexResult = await this.connectionManager.executeAnonymousWithDebugLog(script.script, {
-        logLevels: { Apex_code: 'DEBUG' },
+        logLevels: DEFAULT_APEX_LOG_LEVELS,
       });
       assertApexSuccess(apexResult);
       const debugLog = apexResult.debugLog ?? '';

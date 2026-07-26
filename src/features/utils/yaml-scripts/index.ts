@@ -4,8 +4,7 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import type { DescribeService } from '../../../services/DescribeService';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
-import { VsCodeLmGateway } from './execution/ai/LmGateway';
-import { VsCodeWorkspaceSearch } from './execution/ai/WorkspaceSearch';
+import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import { SkillsRepository } from './skills/SkillsRepository';
 import { splitItemId, resolveYamlPath } from '../../../utils/yamlRepository';
 
@@ -17,13 +16,15 @@ export function createYamlScriptsFeature(paths: {
   workspaceState: vscode.Memento;
   skillsPaths: string[];
   describeService: DescribeService;
+  /** Shared with the debug-log analyzer — built once in extension.ts. */
+  gateway: LmGateway;
+  workspaceSearch: WorkspaceSearch;
   /** Push an out-of-band message to the webview (e.g. editor-save → form sync). */
   postToWebview: (message: unknown) => void;
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
-    const gateway = new VsCodeLmGateway();
+    const { gateway, workspaceSearch } = paths;
     const skillsRepo = new SkillsRepository(paths.workspaceRoot, paths.skillsPaths);
-    const workspaceSearch = new VsCodeWorkspaceSearch();
     const service = new YamlScriptsService(
       connectionManager,
       paths,

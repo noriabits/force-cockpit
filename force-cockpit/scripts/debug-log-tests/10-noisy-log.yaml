@@ -1,0 +1,22 @@
+name: 📚 10. Noisy log (big output)
+description: >-
+  Emits ~2,000 debug lines plus heap and variable churn. Tests the chunked rendering ("Load more"),
+  the "Hide noise" toggle, the category chips, in-log search, and the AI digest's middle-truncation
+  of huge debug output. Read-only. Run it with "Deep trace" to also test log truncation.
+apex: |
+  System.debug('== generating a noisy log ==');
+
+  List<String> buffer = new List<String>();
+  for (Integer i = 0; i < 2000; i++) {
+      String line = 'row ' + i + ' | value=' + (i * 7) + ' | hash=' + String.valueOf(i).hashCode();
+      buffer.add(line);
+      System.debug(line);
+  }
+
+  System.debug('serialised payload: ' + JSON.serialize(new Map<String, Object>{
+      'count' => buffer.size(),
+      'first' => buffer[0],
+      'last' => buffer[buffer.size() - 1]
+  }));
+  System.debug('heap used: ' + Limits.getHeapSize() + ' / ' + Limits.getLimitHeapSize());
+  System.debug('== done ==');

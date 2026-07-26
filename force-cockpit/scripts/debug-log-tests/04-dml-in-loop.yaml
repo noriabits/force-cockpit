@@ -1,0 +1,21 @@
+name: ↩️ 4. DML inside a loop (rolled back)
+description: >-
+  Inserts 8 Accounts one at a time inside a loop, then rolls the whole thing back with a
+  savepoint — nothing is persisted. Tests the `dml-in-loop` detector and the DML/limit counters.
+  Writes then undoes data: do not run it on production.
+apex: |
+  // Everything below is undone by the rollback at the end.
+  Savepoint sp = Database.setSavepoint();
+
+  try {
+      for (Integer i = 0; i < 8; i++) {
+          Account a = new Account(Name = 'FC Debug Log Test ' + i);
+          // ⚠ DML INSIDE the loop — one statement per record.
+          insert a;
+          System.debug('inserted ' + a.Name + ' (' + a.Id + ')');
+      }
+      System.debug('inserted 8 accounts, about to roll back');
+  } finally {
+      Database.rollback(sp);
+      System.debug('rolled back — no records were kept');
+  }

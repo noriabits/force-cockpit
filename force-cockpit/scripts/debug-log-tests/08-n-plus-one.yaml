@@ -1,0 +1,22 @@
+name: 🧩 8. N+1 query pattern
+description: >-
+  Runs the same query shape 12 times from three different source lines, so it is an N+1 rather
+  than a single loop. Tests the `n-plus-one` detector (same normalised query 10+ times across
+  lines) and the query-rows counter. Read-only.
+apex: |
+  List<Account> accounts = [SELECT Id, Name FROM Account LIMIT 12];
+  Integer found = 0;
+
+  for (Account a : accounts) {
+      // Three separate call sites, each issuing the same query shape.
+      if (Math.mod(found, 3) == 0) {
+          found += [SELECT COUNT() FROM Contact WHERE AccountId = :a.Id];
+      } else if (Math.mod(found, 3) == 1) {
+          found += [SELECT COUNT() FROM Contact WHERE AccountId = :a.Id AND Email != null];
+      } else {
+          found += [SELECT COUNT() FROM Contact WHERE AccountId = :a.Id AND Phone != null];
+      }
+  }
+
+  System.debug('contacts counted: ' + found);
+  System.debug('queries used: ' + Limits.getQueries() + ' / ' + Limits.getLimitQueries());

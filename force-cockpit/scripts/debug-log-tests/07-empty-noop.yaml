@@ -1,0 +1,12 @@
+name: 🫥 7. Empty transaction (no-op)
+description: >-
+  Does arithmetic and nothing else — no debug output, no query, no DML. Produces exactly the kind
+  of log the "Hide empty logs" filter is meant to remove: tick the filter (and "check log
+  contents") and this one should disappear behind the "N hidden" chip.
+apex: |
+  // Deliberately observable to nobody: no System.debug, no SOQL, no DML.
+  Integer total = 0;
+  for (Integer i = 0; i < 50; i++) {
+      total += i;
+  }
+  Boolean unused = total > 0;

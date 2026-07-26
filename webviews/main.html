@@ -72,6 +72,15 @@
       >
         🛰️ REST
       </button>
+      <button
+        class="tab"
+        data-tab="debug-logs"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-debug-logs"
+      >
+        🐞 Debug Logs
+      </button>
     </nav>
 
     <!-- Production org warning -->
@@ -392,6 +401,21 @@
 
           <div id="rest-error" class="error-box" style="display: none"></div>
         </section>
+      </div>
+      <!-- ═══════════════════ TAB: Debug Logs ═══════════════════ -->
+      <div class="tab-content" id="tab-debug-logs" role="tabpanel">
+        <section class="card">
+          <div class="card-header">
+            <h3 class="card-title">🐞 Debug Logs</h3>
+          </div>
+          <p class="card-description">
+            Set trace flags on any user — including the Automated Process user that Setup cannot
+            reach — then read the resulting Apex logs here: filtered by category, summarised against
+            the governor limits, and explained by AI.
+          </p>
+        </section>
+
+        <!-- features:debug-logs -->
       </div>
     </main>
 

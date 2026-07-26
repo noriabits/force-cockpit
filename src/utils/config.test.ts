@@ -27,7 +27,34 @@ describe('loadConfig', () => {
       apiVersion: '66.0',
       protectedSandboxes: [],
       skillsPaths: ['.claude/skills', '.github/skills'],
+      debugLogNoise: {},
     });
+  });
+
+  it('reads debugLogs.noise overrides from user config', () => {
+    fs.writeFileSync(
+      path.join(userDir, 'config.yaml'),
+      [
+        'debugLogs:',
+        '  noise:',
+        '    maxEmptyBytes: 4096',
+        '    maxEmptyDurationMs: 20',
+        '    operationPatterns:',
+        '      - /aura',
+        '      - MyBatch',
+      ].join('\n'),
+    );
+    const config = loadConfig(extensionDir, userDir);
+    expect(config.debugLogNoise).toEqual({
+      maxEmptyBytes: 4096,
+      maxEmptyDurationMs: 20,
+      operationPatterns: ['/aura', 'MyBatch'],
+    });
+  });
+
+  it('ignores a malformed debugLogs block', () => {
+    fs.writeFileSync(path.join(userDir, 'config.yaml'), 'debugLogs: not-an-object');
+    expect(loadConfig(extensionDir, userDir).debugLogNoise).toEqual({});
   });
 
   it('reads a skillsPaths override from user config', () => {

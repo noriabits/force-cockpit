@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import { DescribeService } from '../../../services/DescribeService';
-import type { LmGateway } from './execution/ai/types';
+import type { LmGateway } from '../../../services/ai/types';
 import { SkillsRepository } from './skills/SkillsRepository';
 
 // These tests never execute AI scripts, so a memory-only DescribeService suffices.
@@ -360,7 +360,9 @@ describe('YamlScriptsService — executeScript orchestration', () => {
     expect(result.success).toBe(true);
     expect(mock.executeAnonymousWithDebugLog).toHaveBeenCalledWith(
       "System.debug('value');",
-      expect.objectContaining({ logLevels: { Apex_code: 'DEBUG' } }),
+      expect.objectContaining({
+        logLevels: expect.objectContaining({ Apex_code: 'DEBUG', Db: 'INFO' }),
+      }),
     );
   });
 });

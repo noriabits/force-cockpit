@@ -4,7 +4,12 @@ import { DescribeService } from '../../../../../services/DescribeService';
 import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
 import type { YamlScript } from '../../types';
 import { AiExecutor } from './AiExecutor';
-import type { ChatEvent, ChatRequest, LmGateway, WorkspaceSearch } from './types';
+import type {
+  ChatEvent,
+  ChatRequest,
+  LmGateway,
+  WorkspaceSearch,
+} from '../../../../../services/ai/types';
 
 /** Build an AiExecutor whose describe path goes through a real (memory-only) DescribeService over the same cm. */
 function makeExecutor(

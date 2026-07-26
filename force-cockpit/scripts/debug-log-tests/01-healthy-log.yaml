@@ -1,0 +1,21 @@
+name: 🟢 1. Healthy transaction
+description: >-
+  Baseline log: debug output, one query, some serialisation. Use it to check the summary strip,
+  the limit bars, the Pretty view and the category chips. Run with the "Balanced" preset. (The
+  execution Tree only gets deep for real classes/triggers — anonymous Apex is a single code unit.)
+apex: |
+  System.debug('== healthy transaction start ==');
+
+  List<Account> accounts = [SELECT Id, Name, Industry FROM Account LIMIT 10];
+  System.debug('loaded ' + accounts.size() + ' accounts');
+
+  Map<String, Integer> byIndustry = new Map<String, Integer>();
+  for (Account a : accounts) {
+      String key = String.isBlank(a.Industry) ? 'None' : a.Industry;
+      byIndustry.put(key, (byIndustry.containsKey(key) ? byIndustry.get(key) : 0) + 1);
+  }
+  System.debug('accounts by industry: ' + JSON.serializePretty(byIndustry));
+
+  System.debug('queries: ' + Limits.getQueries() + ' / ' + Limits.getLimitQueries());
+  System.debug('CPU: ' + Limits.getCpuTime() + ' / ' + Limits.getLimitCpuTime() + ' ms');
+  System.debug('== healthy transaction end ==');

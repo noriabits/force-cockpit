@@ -6,7 +6,7 @@
 [![Release](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml/badge.svg)](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/noriabits/force-cockpit)](https://github.com/noriabits/force-cockpit/blob/main/LICENSE)
 
-A VSCode cockpit for Salesforce orgs, built around your own automation. Connect via the SF CLI, then write Apex, shell, JavaScript, or AI-powered scripts — organized into folders and categories — to automate whatever your workflow needs, plus SOQL querying, REST calls, and live monitoring dashboards, all without leaving VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
+A VSCode cockpit for Salesforce orgs, built around your own automation. Connect via the SF CLI, then write Apex, shell, JavaScript, or AI-powered scripts — organized into folders and categories — to automate whatever your workflow needs, plus SOQL querying, REST calls, live monitoring dashboards, and AI-explained debug logs, all without leaving VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
 
 ---
 
@@ -58,6 +58,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | **Utils**      | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                               |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                       |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response |
+| **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
 
 ---
 
@@ -187,6 +188,8 @@ apex: |
 | AI         | Orange | Yes          | Streamed model analysis                 |
 
 **JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
+
+Apex scripts run at a fixed log level (`Apex Code: DEBUG`, `System: DEBUG`, everything else `INFO`) so the log includes SOQL/DML statements and code-unit detail, not just your own `System.debug()` lines — the "Show only USER_DEBUG lines" checkbox narrows the view when you don't need the rest. This level is independent of anything configured in the Debug Logs tab: Salesforce always honors the log level a script execution explicitly requests over an org-wide trace flag, so a Debug Logs preset has no effect on a yaml-script's own log.
 
 ### AI scripts
 
@@ -438,6 +441,65 @@ Your last request (method, endpoint, body, headers) is saved per workspace and r
 
 ---
 
+## Debug Logs Tab
+
+The Debug Logs tab covers the whole debugging loop without leaving VSCode: turn logging on, watch the logs arrive, make sense of them, and get an explanation.
+
+### 1. Set a trace flag
+
+Choose **what to trace**:
+
+- **Me** — the user you are connected as.
+- **Automated Process** — async work (platform-event triggers, resumed flows, batch retries) logs under the Automated Process user, separately from whoever triggered it. Setup cannot create a trace flag for these system users at all; Force Cockpit does it through the Tooling API. Other platform/integration users are listed here too.
+- **Search user…** — any user in the org, by name or username.
+- **Apex class / trigger…** — creates a `CLASS_TRACING` flag that raises the log levels *inside* one class or trigger without generating its own log. Combined with a quiet user-level flag, this is how you get `FINEST` detail on the suspect code without truncating the log.
+
+Then choose a **debug level**. Each preset explains itself in the dropdown and in the hint underneath — what it is for, what it captures, and the exact category levels it applies:
+
+| Preset                          | When to use it                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Balanced** ⭐ *Recommended*    | The default, and the right answer when you don't know which to pick. Debug output, which classes ran, every SOQL/DML statement and the limit summary — without truncating. |
+| **USER_DEBUG only (quiet)**     | You only care about your own `System.debug()` lines and want the smallest possible log.                        |
+| **SOQL / database deep dive**   | A query is slow, non-selective or returns the wrong rows. Full query text, row counts and timings.             |
+| **Flow & Process Builder**      | A Flow or record-triggered automation misbehaves — shows flow elements *and* their variable values.            |
+| **Integration / callouts**      | An outbound callout fails — logs the full request and response bodies.                                         |
+| **Governor limits / performance** | The transaction hits (or nearly hits) a limit — full cumulative-usage breakdown.                             |
+| **Deep trace (FINEST)**         | Last resort. Every statement and variable assignment; fills the 20 MB budget fast, so pair it with a class trace. |
+| **Production-safe (errors)**    | Tracing on production or a busy integration user. Preselected automatically on sensitive orgs.                 |
+
+Or open **Custom…** to set all eight categories by hand. Pick a duration (15 minutes to the 24-hour platform maximum) and press **Start tracing**. Salesforce allows only one active trace flag per entity, so starting a trace on something already traced updates the existing flag instead of failing. Active flags are listed with a live countdown and **Extend** / **Stop** buttons.
+
+### 2. Read the log list
+
+Logs are listed newest first, sortable, with a text filter and:
+
+- **Errors only** — only transactions that ended with an exception.
+- **Hide empty logs** — a real org fills this list with Lightning/Aura round-trips and no-op triggers. "Empty" means *the transaction did nothing observable*: no debug output, no error, no SOQL and no DML. Force Cockpit checks the log bodies to decide that (fetched in small batches and cached), plus a free pre-filter on the operation name for recognisable UI chatter. Size and duration are deliberately **not** used — a useful anonymous-Apex log is only ~1.5 KB and runs in a few milliseconds, so "small" would hide exactly what you came for. A `N hidden as empty` chip with a **Show** button means nothing ever disappears silently, and a failed transaction is never hidden however small it is.
+- **Live tail** — polls the org while the tab is open; a new failed transaction raises a notification. On by default.
+
+### 3. Make sense of one log
+
+Click a log to open it:
+
+- **Summary** — statement counts, query rows, and a bar per governor limit, coloured as it approaches the ceiling. A `⚠ truncated` chip appears when Salesforce cut the log short.
+- **Issues** — built-in rules flag SOQL or DML in a loop, N+1 query patterns, governor-limit pressure, unhandled exceptions with their stack frames, recursive triggers, very wide queries, and truncation. Click one to jump to the line.
+- **Pretty / Tree / Queries / Raw** — Pretty colour-codes lines by category with multi-select chips (Errors, USER_DEBUG, SOQL, DML, Callouts, Limits, Code units, Flow, Validation) and a default-on **Hide noise** toggle; Tree is the call tree with total/self milliseconds and a timeline bar; **Queries** is a sortable table of every SOQL statement in the transaction, each rated **Full scan** / **Not selective** / **Selective** / **Unknown** from its query plan (leading operation, indexed field, cardinality vs. object size, Salesforce's own relative-cost estimate) so a poorly-performing query stands out without reading raw lines — click a row to jump to it in Pretty; Raw is the untouched text. Search jumps between matches in any mode.
+
+### 4. Ask AI what happened
+
+**✨ Analyze with AI** sends the log for analysis through the VS Code Language Model API (GitHub Copilot), the same mechanism as AI scripts.
+
+Debug logs are far too large for any context window, so the model receives a *briefing* — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context.
+
+The analysis always covers: what happened, the root cause with line references, governor-limit pressure, ranked concrete fixes, **which log levels to use next time**, and what it is unsure about. That last recommendation comes back as a one-click **Apply these levels** button that pre-fills the trace-flag form above, so the next repro captures exactly what was missing.
+
+Use **Open as markdown** for a rendered view, **Save analysis** to write it into `force-cockpit/logs/` (where it shows up under Utils → Logs), or **Copy**.
+
+> [!NOTE]
+> Trace flags and debug logs consume org resources, and logs are retained for 24 hours (or 7 days for logs collected via a trace flag on another user). Delete logs you no longer need with the **Delete** / **Delete all** buttons.
+
+---
+
 ## Configuration
 
 Most extension settings are managed via a `config.yaml` file — making them easy to share across a team by committing the file to git.
@@ -457,6 +519,15 @@ Only keys present in a layer override the previous layer — omitted keys keep t
 | `apiVersion`         | string   | `"66.0"`                               | Salesforce API version for all API calls                                     |
 | `protectedSandboxes` | string[] | `[]`                                   | Sandbox org names that require confirmation before destructive actions       |
 | `skillsPaths`        | string[] | `[".claude/skills", ".github/skills"]` | Workspace-relative folders scanned for Agent Skills attachable to AI scripts |
+| `debugLogs.noise`    | object   | see below                              | Thresholds for the Debug Logs tab's "Hide empty logs" filter                 |
+
+**`debugLogs.noise`** keys — all optional:
+
+| Key                  | Type     | Default                                                                      | Description                                                     |
+| -------------------- | -------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `maxEmptyBytes`      | number   | `0` (off)                                                                    | Opt-in: successful logs at or below this size count as empty without reading them |
+| `maxEmptyDurationMs` | number   | `0` (off)                                                                    | Opt-in: successful logs at or below this duration count as empty without reading them |
+| `operationPatterns`  | string[] | `["/aura", "aura.", "VFRemoting", "Lightning", "PushTopic", "ApexRestApi"]`   | Case-insensitive substrings matched against the log's operation |
 
 ### Example `force-cockpit/config.yaml`
 
@@ -468,6 +539,14 @@ protectedSandboxes:
 skillsPaths:
   - .claude/skills
   - .github/skills
+debugLogs:
+  noise:
+    # Optional shortcut: skip reading the body of very small/fast logs.
+    maxEmptyBytes: 4096
+    maxEmptyDurationMs: 100
+    operationPatterns:
+      - /aura
+      - VFRemoting
 ```
 
 ### VSCode setting

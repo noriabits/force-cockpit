@@ -63,6 +63,11 @@ export class ConnectionManager extends EventEmitter {
     this._apiVersion = version;
   }
 
+  /** The API version used for jsforce connections and REST/Tooling endpoint paths. */
+  get apiVersion(): string {
+    return this._apiVersion;
+  }
+
   get isConnected(): boolean {
     return this._connection !== null;
   }

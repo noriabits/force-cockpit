@@ -12,7 +12,7 @@ import { ApexExecutor } from './execution/ApexExecutor';
 import { CommandExecutor } from './execution/CommandExecutor';
 import { JsExecutor } from './execution/JsExecutor';
 import { AiExecutor } from './execution/ai/AiExecutor';
-import type { LmGateway, WorkspaceSearch } from './execution/ai/types';
+import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
 import type { SkillsRepository } from './skills/SkillsRepository';
 import type { ExecuteScriptResult, SaveScriptInput, YamlScript } from './types';

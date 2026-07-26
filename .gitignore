@@ -10,3 +10,4 @@ vitest.config.js.map
 .DS_Store
 .claude
 .codegraph/
+*.log
