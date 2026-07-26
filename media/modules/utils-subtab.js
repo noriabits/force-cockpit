@@ -1,6 +1,6 @@
 // @ts-check
-// Utils tab — sub-tab switching (Scripts / Built-in / Logs) and the combined
-// text + category filter for the Built-in sub-tab.
+// Scripts tab (formerly Utils) — sub-tab switching (Custom / Built-in / Logs) and the
+// combined text + category filter for the Built-in sub-tab.
 
 (function () {
   // ── Sub-tab switching ───────────────────────────────────────────────────

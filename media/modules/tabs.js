@@ -1,6 +1,7 @@
 // @ts-check
-// Top-level tab switching (Overview / Utils / Monitoring). Also resets any active
-// feature filter in the tab being left so the user sees all content when they return.
+// Top-level tab switching (Overview / Scripts / SOQL / Monitoring / REST / Debug Logs).
+// Also resets any active feature filter in the tab being left so the user sees all
+// content when they return.
 
 (function () {
   const tabBar = /** @type {HTMLElement | null} */ (document.getElementById('tab-bar'));

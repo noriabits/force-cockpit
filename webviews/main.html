@@ -45,9 +45,6 @@
       >
         🔍 Overview
       </button>
-      <button class="tab" data-tab="soql" role="tab" aria-selected="false" aria-controls="tab-soql">
-        ⚡ SOQL
-      </button>
       <button
         class="tab"
         data-tab="utils"
@@ -55,7 +52,10 @@
         aria-selected="false"
         aria-controls="tab-utils"
       >
-        🛠️ Utils
+        📜 Scripts
+      </button>
+      <button class="tab" data-tab="soql" role="tab" aria-selected="false" aria-controls="tab-soql">
+        ⚡ SOQL
       </button>
       <button
         class="tab"
@@ -170,6 +170,50 @@
         </div>
       </div>
 
+      <!-- ═══════════════════ TAB: Scripts (formerly Utils) ═══════════════════ -->
+      <div class="tab-content" id="tab-utils" role="tabpanel">
+        <section class="card">
+          <div class="card-header">
+            <h3 class="card-title">📜 Scripts</h3>
+          </div>
+          <p class="card-description">
+            A collection of reusable utilities for common Salesforce operations. Click on any
+            utility below to expand it and get started.
+          </p>
+        </section>
+
+        <div class="utils-sub-tab-bar">
+          <button class="utils-sub-tab active" data-utils-tab="scripts">📜 Custom</button>
+          <button class="utils-sub-tab" data-utils-tab="built-in">🔩 Built-in</button>
+          <button class="utils-sub-tab" data-utils-tab="logs">📋 Logs</button>
+        </div>
+
+        <!-- Sub-tab: Built-in -->
+        <div class="utils-sub-tab-panel" id="utils-sub-tab-built-in">
+          <div class="feature-filter">
+            <input
+              type="text"
+              class="text-input feature-filter-input"
+              id="utils-builtin-search"
+              data-no-generic-filter
+              placeholder="Filter features..."
+            />
+          </div>
+          <div class="category-pills" id="utils-builtin-pills"></div>
+          <!-- features:utils -->
+        </div>
+
+        <!-- Sub-tab: Custom (id kept as "scripts" for JS/route compatibility) -->
+        <div class="utils-sub-tab-panel active" id="utils-sub-tab-scripts">
+          <!-- features:utils-scripts -->
+        </div>
+
+        <!-- Sub-tab: Logs -->
+        <div class="utils-sub-tab-panel" id="utils-sub-tab-logs">
+          <!-- features:utils-logs -->
+        </div>
+      </div>
+
       <!-- ═══════════════════ TAB: SOQL ═══════════════════ -->
       <div class="tab-content" id="tab-soql" role="tabpanel">
         <section class="card">
@@ -256,50 +300,6 @@
 
           <div id="query-error" class="error-box" style="display: none"></div>
         </section>
-      </div>
-
-      <!-- ═══════════════════ TAB: Utils ═══════════════════ -->
-      <div class="tab-content" id="tab-utils" role="tabpanel">
-        <section class="card">
-          <div class="card-header">
-            <h3 class="card-title">🛠️ Utilities</h3>
-          </div>
-          <p class="card-description">
-            A collection of reusable utilities for common Salesforce operations. Click on any
-            utility below to expand it and get started.
-          </p>
-        </section>
-
-        <div class="utils-sub-tab-bar">
-          <button class="utils-sub-tab active" data-utils-tab="scripts">📜 Scripts</button>
-          <button class="utils-sub-tab" data-utils-tab="built-in">🔩 Built-in</button>
-          <button class="utils-sub-tab" data-utils-tab="logs">📋 Logs</button>
-        </div>
-
-        <!-- Sub-tab: Built-in -->
-        <div class="utils-sub-tab-panel" id="utils-sub-tab-built-in">
-          <div class="feature-filter">
-            <input
-              type="text"
-              class="text-input feature-filter-input"
-              id="utils-builtin-search"
-              data-no-generic-filter
-              placeholder="Filter features..."
-            />
-          </div>
-          <div class="category-pills" id="utils-builtin-pills"></div>
-          <!-- features:utils -->
-        </div>
-
-        <!-- Sub-tab: Scripts -->
-        <div class="utils-sub-tab-panel active" id="utils-sub-tab-scripts">
-          <!-- features:utils-scripts -->
-        </div>
-
-        <!-- Sub-tab: Logs -->
-        <div class="utils-sub-tab-panel" id="utils-sub-tab-logs">
-          <!-- features:utils-logs -->
-        </div>
       </div>
       <!-- ═══════════════════ TAB: Monitoring ═══════════════════ -->
       <div class="tab-content" id="tab-monitoring" role="tabpanel">

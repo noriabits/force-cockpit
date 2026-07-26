@@ -55,8 +55,8 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**   | Org info card and storage usage bars (Data Storage and File Storage)                                                                                                                                                                                     |
+| **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                                                                       |
-| **Utils**      | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                                    |
 | **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
@@ -69,44 +69,9 @@ The Overview tab shows org connection details and storage usage bars (Data Stora
 
 ---
 
-## SOQL Tab
+## Scripts Tab — YAML Scripts
 
-The SOQL tab provides a full-featured query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`).
-
-The editor supports:
-
-- **Keyword highlighting** — clauses, functions, string and number literals and comparison operators are colour-coded as you type, using your VS Code theme's colours.
-- **Auto-capitalized keywords** — `select`, `from`, `where`, `and`, `order by`… are uppercased automatically the moment you finish typing them, matching the Salesforce documentation convention. Object and field names are left exactly as you typed them — including standard objects like `Order` or `Group`, which are never mistaken for the `ORDER`/`GROUP` clause keywords.
-- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
-- **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
-- **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
-- **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
-- **Explained errors** — when a query fails, the Salesforce error is shown exactly as returned, with an explanation added underneath.
-
-  This matters most for permissions. Salesforce rejects a field you're not allowed to _see_ with the same `No such column 'X' on entity 'Y'` message it uses for a genuine typo, so you end up hunting for a spelling mistake that isn't there. Force Cockpit checks the field against the org's full metadata and tells you which it is:
-
-  > 🔒 **`AssetReferenceId__c` exists but field-level security is hiding it** — The field is defined on QuoteLineItem (Asset Reference Id, Text), but your user has no Read access to it. Ask an admin to assign you one of the permission sets below, or add Read access to this field on one you already have.
-  > **Granted by:** `Sales_Ops_Extended (Permission Set)` `Field_Access_PSG (Permission Set Group)`
-
-  It also names _which_ permission set or permission set group would actually fix it, so you're not just told "ask an admin" — you can ask for a specific one. If nothing currently grants it, it says so instead of guessing.
-
-  If the field really doesn't exist you get a **Did you mean:** list of the closest names instead. The same applies to mistyped relationships (`Accont.Name`) and objects, including objects that exist but that your user cannot access.
-
-  Reading the full field list, and looking up which permission set grants it, both need the **View Setup and Configuration** permission. Without it you still get suggestions — the message just says that a field hidden by field-level security couldn't be ruled out.
-
-The results table supports:
-
-- **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
-- **Sort** — click any column header to sort; click again to reverse.
-- **Copy column as IN-list** — click the **⧉** button on a column header to copy that column's values (deduped, as `'a', 'b', 'c'`) to the clipboard, ready to paste into another query's `IN (…)` clause. Respects the current filter.
-- **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
-- **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
-
----
-
-## Utils Tab — YAML Scripts
-
-<div align="center"><img src="media/utilsTab.png" alt="Utils Tab" /></div>
+<div align="center"><img src="media/utilsTab.png" alt="Scripts Tab" /></div>
 
 > Scripts can also be created and edited directly in the UI — no need to write YAML by hand.
 
@@ -121,7 +86,7 @@ The results table supports:
 > [!TIP]
 > Prefer hand-editing the raw YAML? When editing an existing script, click **📄 Open YAML** to open its underlying `.yaml` file in a VS Code editor tab. The edit form closes (you've switched to raw editing, so there's no risk of a stale form **Save** overwriting your changes), and the script list refreshes automatically when you save the file. (The button only appears when editing an existing script.)
 
-The **Scripts** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+The **Custom** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
@@ -190,7 +155,7 @@ Write `${variableName}` in your script code where you want the value substituted
 In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
 
 | Placeholder      | Description                                          |
-| ---------------- | ---------------------------------------------------- |
+| ---------------- | ----------------------------------------------------- |
 | `${orgUsername}` | Salesforce username (not alias) of the connected org |
 
 System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
@@ -202,7 +167,7 @@ apex: |
 ```
 
 | Type       | Badge  | Org required | Output                                  |
-| ---------- | ------ | ------------ | --------------------------------------- |
+| ---------- | ------ | ------------ | ---------------------------------------- |
 | Apex       | Blue   | Yes          | Debug log (USER_DEBUG filter available) |
 | Command    | Purple | No           | stdout/stderr                           |
 | JavaScript | Green  | No           | `log()` / `console.log()` output        |
@@ -252,6 +217,41 @@ How it works and why it's safe:
 ### Private scripts
 
 Check **Private** when creating or editing a script to save it to `force-cockpit/private/scripts/` instead of the shared folder. The extension automatically adds `force-cockpit/private/` to `.gitignore` on startup. Private scripts show a 🔒 badge and can be filtered with the **All / Shared / Private** control. You cannot save a private script with the same category + name as an existing shared one.
+
+---
+
+## SOQL Tab
+
+The SOQL tab provides a full-featured query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`).
+
+The editor supports:
+
+- **Keyword highlighting** — clauses, functions, string and number literals and comparison operators are colour-coded as you type, using your VS Code theme's colours.
+- **Auto-capitalized keywords** — `select`, `from`, `where`, `and`, `order by`… are uppercased automatically the moment you finish typing them, matching the Salesforce documentation convention. Object and field names are left exactly as you typed them — including standard objects like `Order` or `Group`, which are never mistaken for the `ORDER`/`GROUP` clause keywords.
+- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
+- **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
+- **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
+- **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
+- **Explained errors** — when a query fails, the Salesforce error is shown exactly as returned, with an explanation added underneath.
+
+  This matters most for permissions. Salesforce rejects a field you're not allowed to _see_ with the same `No such column 'X' on entity 'Y'` message it uses for a genuine typo, so you end up hunting for a spelling mistake that isn't there. Force Cockpit checks the field against the org's full metadata and tells you which it is:
+
+  > 🔒 **`AssetReferenceId__c` exists but field-level security is hiding it** — The field is defined on QuoteLineItem (Asset Reference Id, Text), but your user has no Read access to it. Ask an admin to assign you one of the permission sets below, or add Read access to this field on one you already have.
+  > **Granted by:** `Sales_Ops_Extended (Permission Set)` `Field_Access_PSG (Permission Set Group)`
+
+  It also names _which_ permission set or permission set group would actually fix it, so you're not just told "ask an admin" — you can ask for a specific one. If nothing currently grants it, it says so instead of guessing.
+
+  If the field really doesn't exist you get a **Did you mean:** list of the closest names instead. The same applies to mistyped relationships (`Accont.Name`) and objects, including objects that exist but that your user cannot access.
+
+  Reading the full field list, and looking up which permission set grants it, both need the **View Setup and Configuration** permission. Without it you still get suggestions — the message just says that a field hidden by field-level security couldn't be ruled out.
+
+The results table supports:
+
+- **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
+- **Sort** — click any column header to sort; click again to reverse.
+- **Copy column as IN-list** — click the **⧉** button on a column header to copy that column's values (deduped, as `'a', 'b', 'c'`) to the clipboard, ready to paste into another query's `IN (…)` clause. Respects the current filter.
+- **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
+- **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 
 ---
 
@@ -514,7 +514,7 @@ Debug logs are far too large for any context window, so the model receives a _br
 
 The analysis always covers: what happened, the root cause with line references, governor-limit pressure, ranked concrete fixes, **which log levels to use next time**, and what it is unsure about. That last recommendation comes back as a one-click **Apply these levels** button that pre-fills the trace-flag form above, so the next repro captures exactly what was missing.
 
-Use **Open as markdown** for a rendered view, **Save analysis** to write it into `force-cockpit/logs/` (where it shows up under Utils → Logs), or **Copy**.
+Use **Open as markdown** for a rendered view, **Save analysis** to write it into `force-cockpit/logs/` (where it shows up under Scripts → Logs), or **Copy**.
 
 > [!NOTE]
 > Trace flags and debug logs consume org resources, and logs are retained for 24 hours (or 7 days for logs collected via a trace flag on another user). Delete logs you no longer need with the **Delete** / **Delete all** buttons.
