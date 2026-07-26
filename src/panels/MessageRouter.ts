@@ -252,7 +252,7 @@ export class MessageRouter {
   }
 
   /**
-   * Writes a Quick Query export to a timestamped file in the workspace root and
+   * Writes a SOQL query export to a timestamped file in the workspace root and
    * opens it in the editor. Errors (no workspace folder, write failure) surface
    * via a native error message; otherwise fire-and-forget like openRecord.
    */

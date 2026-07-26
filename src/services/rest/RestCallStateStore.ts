@@ -46,7 +46,7 @@ const DEFAULT_CONFIG: RestCallConfig = { method: 'POST', endpoint: '', body: '',
 
 /**
  * Persists the REST tab's last request config, recent history, and saved/named requests
- * in workspaceState — the same store Quick Query uses (`QueryStateStore`'s pattern).
+ * in workspaceState — the same store the SOQL tab uses (`QueryStateStore`'s pattern).
  * Pure logic over an injected `Memento` for unit-testability.
  */
 export class RestCallStateStore {

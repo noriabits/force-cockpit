@@ -4,7 +4,7 @@ import { parseSoqlError, fromObjectOfQuery } from './soqlErrorParser';
 import { suggestNames } from './nameSuggest';
 
 /**
- * Extra findings appended below the verbatim Salesforce error in the Quick Query
+ * Extra findings appended below the verbatim Salesforce error in the SOQL tab's
  * results area. Purely additive — the raw SF message is never altered or replaced.
  */
 export interface SoqlDiagnostic {

@@ -48,7 +48,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let cockpitConfig = loadConfig(context.extensionPath, userBasePath);
   connectionManager.setApiVersion(cockpitConfig.apiVersion);
 
-  // Persistent, per-workspace describe cache shared by Quick Query autocomplete and
+  // Persistent, per-workspace describe cache shared by the SOQL tab's autocomplete and
   // AI scripts. The disk layer survives reloads; each consumer keeps a cheap in-memory
   // map on top. Cleared on manual org refresh so schema is re-pulled on demand.
   const describeDiskCache = new DescribeDiskCache(path.join(userBasePath, '.describe-cache'));

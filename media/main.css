@@ -1194,7 +1194,7 @@ body {
   display: none;
 }
 
-/* Quick Query error box: the verbatim Salesforce message, then any diagnostics
+/* SOQL query error box: the verbatim Salesforce message, then any diagnostics
    worked out host-side. The raw message keeps .error-box's pre-wrap so its caret
    line and column marker still line up; the diagnostics below it read as prose. */
 .query-error-raw {

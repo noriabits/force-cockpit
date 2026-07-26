@@ -1,5 +1,5 @@
 // @ts-check
-// SOQL Quick Query editor on the Overview tab — orchestrator. Wires:
+// SOQL query editor on the SOQL tab — orchestrator. Wires:
 //   - the shared textarea + Run/Clear + Cmd/Ctrl+Enter shortcut + Tooling toggle
 //   - the results table (filter, sortable columns, clickable record Ids, export)
 //   - multiple query tabs (tabs.js) with per-tab in-memory results

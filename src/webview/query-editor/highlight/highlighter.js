@@ -1,5 +1,5 @@
 // @ts-check
-// Syntax-highlight overlay for the Quick Query textarea. The textarea keeps its
+// Syntax-highlight overlay for the SOQL tab textarea. The textarea keeps its
 // own text transparent and sits on top of a <pre> that renders the same string
 // tokenized into coloured spans, so caret, selection and native editing all stay
 // exactly as they were.

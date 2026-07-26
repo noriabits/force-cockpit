@@ -1,5 +1,5 @@
 /**
- * The one SOQL vocabulary shared by the Quick Query editor's two consumers:
+ * The one SOQL vocabulary shared by the SOQL tab editor's two consumers:
  * the cursor-context analyser used for autocomplete (autocomplete/soql-context.ts)
  * and the syntax tokenizer used for highlighting (highlight/soql-tokens.ts).
  * Keeping the clause list here means the two can never drift apart.

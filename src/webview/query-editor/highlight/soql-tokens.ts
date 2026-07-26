@@ -1,5 +1,5 @@
 /**
- * Pure SOQL tokenizer for the Quick Query editor's highlight overlay. Scans the
+ * Pure SOQL tokenizer for the SOQL tab editor's highlight overlay. Scans the
  * query left to right and returns a gap-free, non-overlapping list of tokens that
  * covers the whole input, so the renderer can just concatenate them without any
  * index arithmetic of its own.

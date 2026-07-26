@@ -30,8 +30,8 @@ export interface DescribeSObjectProjection {
 /**
  * Caching wrapper over ConnectionManager's describe calls. Keeps lookups cheap with a
  * three-tier strategy: an in-memory map (per orgId), an optional persistent
- * {@link DescribeDiskCache} (survives reloads, shared across the window between Quick
- * Query autocomplete and AI scripts), and finally the server. Projected down to only
+ * {@link DescribeDiskCache} (survives reloads, shared across the window between the SOQL
+ * tab's autocomplete and AI scripts), and finally the server. Projected down to only
  * the fields consumers need.
  */
 export class DescribeService {

@@ -1,6 +1,6 @@
 // @ts-check
 // REST tab — call arbitrary REST / Apex REST endpoints on the connected org.
-// Mirrors the Quick Query module: talks to the host via win.__onMessage / postMessage,
+// Mirrors the SOQL query editor module: talks to the host via win.__onMessage / postMessage,
 // persists the last { method, endpoint, body, headers } through saveRestCallState, and
 // restores it on load via loadRestCallState. Bundled by esbuild into dist/webview/rest-call.js.
 // Wires three focused sub-modules: headers-editor.js (custom headers), history.js

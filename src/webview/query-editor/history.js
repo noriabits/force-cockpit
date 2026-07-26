@@ -1,5 +1,5 @@
 // @ts-check
-// Query history dropdown for the Overview Quick Query: a "History ▾" button that
+// Query history dropdown for the SOQL tab: a "History ▾" button that
 // opens a panel with two sections — Saved (named, removable) and Recent
 // (auto-recorded). Persistence lives host-side (QueryStateStore); this module
 // posts addQueryHistory / saveSavedQueries and re-renders on the host's replies.

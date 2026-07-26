@@ -39,7 +39,7 @@ const SAVED_CAP = 50;
 const DEFAULT_QUERY = 'SELECT Id FROM ';
 
 /**
- * Persists Quick Query tabs, recent history, and saved queries in workspaceState.
+ * Persists SOQL query tabs, recent history, and saved queries in workspaceState.
  * Pure logic over an injected `Memento` so it can be unit-tested with a fake store.
  */
 export class QueryStateStore {

@@ -1,5 +1,5 @@
 // @ts-check
-// Query tab bar for the Overview Quick Query. Owns the tab list, the active
+// Query tab bar for the SOQL tab. Owns the tab list, the active
 // index, and each tab's in-memory results (results are NOT persisted — only
 // name/query/useToolingApi are sent to the host via saveQueryTabs). The shared
 // textarea + Tooling checkbox are the live editing surface for the active tab.

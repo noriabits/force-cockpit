@@ -1,5 +1,5 @@
 // @ts-check
-// SOQL autocomplete dropdown for the Overview Quick Query. Computes the cursor
+// SOQL autocomplete dropdown for the SOQL tab. Computes the cursor
 // context (soql-context.ts), fetches the needed describe metadata lazily via the
 // describe cache, renders a suggestion list anchored below the caret line, and
 // inserts the chosen value with textarea.setRangeText. Keyboard: ↑/↓ move,

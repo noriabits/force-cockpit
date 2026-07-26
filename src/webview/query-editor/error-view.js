@@ -1,5 +1,5 @@
 // @ts-check
-// Renders a failed Quick Query into the #query-error box: the verbatim Salesforce
+// Renders a failed SOQL query into the #query-error box: the verbatim Salesforce
 // message first (its caret line and column marker are the point), then any
 // diagnostics the host worked out — most usefully "this field exists, field-level
 // security is hiding it", which the raw SF message reports as a missing column.

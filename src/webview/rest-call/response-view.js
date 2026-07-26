@@ -1,7 +1,7 @@
 // @ts-check
 // Response rendering for the REST tab: a color-coded status badge, a collapsible
 // response-headers list, and a pretty-printed JSON body with clickable Salesforce
-// record-Id links (same detector/click pattern as Quick Query's results-table.js
+// record-Id links (same detector/click pattern as the SOQL tab's results-table.js
 // and Monitoring's table-rendering.js). Also wires the Open-in-editor / Copy-to-
 // clipboard buttons below the body, sharing the same behaviors as yaml-scripts'
 // log viewer via the shared output-actions module.

@@ -1,5 +1,5 @@
 // @ts-check
-// Results table for the Overview Quick Query: owns the render state (cols, rows,
+// Results table for the SOQL tab: owns the render state (cols, rows,
 // filter text, sort col/dir) and rebuilds the table on filter/sort. Reuses the
 // pure filterRows/sortRows helpers and the record-id detector so a query result
 // gets the same sort + filter + clickable-Id behaviour as the monitoring tables.

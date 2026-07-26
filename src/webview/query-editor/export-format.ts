@@ -1,5 +1,5 @@
 /**
- * Pure formatters for exporting Quick Query results. No DOM, no vscode — the
+ * Pure formatters for exporting SOQL query results. No DOM, no vscode — the
  * caller passes the current (filtered + sorted) view and gets a string back to
  * hand to the host for writing to disk. Unit-tested in export-format.test.ts.
  */
