@@ -54,7 +54,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**   | Org info card and storage usage bars (Data Storage and File Storage)                                                                                                                                                                                     |
+| **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card for ad-hoc questions                                                                                                                       |
 | **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                                                                       |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
@@ -66,6 +66,24 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 ## Overview Tab
 
 The Overview tab shows org connection details and storage usage bars (Data Storage and File Storage).
+
+### Ask the AI
+
+Once connected, the Overview tab also shows an **Ask the AI** card for ad-hoc questions — no need to author a YAML script first. It uses the same [Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model) (GitHub Copilot) as AI scripts and the Debug Logs analysis panel, but as a **multi-turn conversation**: follow-up questions build on everything you already asked, including the results of any tool the model already ran.
+
+**Requirements:** GitHub Copilot must be enabled in VS Code, and an org must be connected (the card is hidden otherwise).
+
+Two read-only toggles control what the model can do this conversation:
+
+- **Read workspace files** — search and read workspace source/metadata (Apex, objects, fields, flows, LWC, permission sets…), same as AI scripts' `allow-read-workspace-files`.
+- **Query the org** — look up object schema (`describe_object`) and run **SELECT-only** SOQL, including against the **Tooling API** when needed (e.g. `FieldDefinition`, `EntityDefinition`, `ApexClass`) — the model picks which API a query needs on its own. It also knows which user you're connected as (no extra round-trip), so it can answer "do I have access to this field" instead of just describing the schema in the abstract. It can never write or modify data.
+
+> [!NOTE]
+> These two toggles are **locked once you ask your first question** — checking or unchecking them mid-conversation has no effect until you start a **New chat**. This keeps the model's declared tools consistent with what it already used earlier in the thread.
+
+Your workspace's [Agent Skills](#ai-scripts) are **always available with no picker** — the model sees the same short id + description catalogue AI scripts do and can pull a skill's full content on demand via `read_skill`. There's nothing to select: since the question changes every time, the model decides which skill (if any) is relevant.
+
+Use **New chat** to clear the conversation and unlock the toggles again. **Open as markdown** renders the whole conversation in VS Code's Markdown preview; **Copy** copies it as Markdown text. Switching orgs (or disconnecting) automatically starts a fresh conversation, since prior answers may reference org data from the previous connection.
 
 ---
 
@@ -205,11 +223,12 @@ How it works and why it's safe:
 
 - **You control the data step.** The `gather` SOQL/Apex is yours and runs exactly as written — the model never writes or chooses Apex, so there is **no risk of it modifying data**.
 - **The model only analyses.** It receives the gathered data + your prompt and replies with text.
-- **Optional follow-up queries.** With `allow-followup-queries: true`, the model may run additional **SOQL** queries (`SELECT` only) to pull more context. It can never run anything that writes.
+- **Optional follow-up queries.** With `allow-followup-queries: true`, the model may run additional **SOQL** queries (`SELECT` only) to pull more context — against the Standard API for everyday business data, or the **Tooling API** for metadata objects (`FieldDefinition`, `EntityDefinition`, `ApexClass`, `TraceFlag`…) when the model determines it needs to. It can never run anything that writes.
 - **Optional workspace file access.** With `allow-read-workspace-files: true`, the model can **search** workspace files by name (a case-insensitive regular expression — a plain word like `Selector` matches `OrderSelector`, `AccountSelector`) and **read** any matching source/metadata file (Apex, objects, fields, flows, LWC, permission sets…). Handy for diagnosing stack traces across your metadata. Anything excluded by your `.gitignore` (e.g. `force-cockpit/private/`) is never listed or read.
 - **Model picker.** Picking a model is **required** (the field is marked with a red `*`). The list is populated from the models Copilot offers — de-duplicated and sorted alphabetically — and **defaults to Copilot's "Auto"** model when it's available. If a script's saved model is no longer available at run time, Force Cockpit falls back to **Auto** (or the first available model), prepends a warning to the output, and shows a notification — so the run still completes. Note: some models don't support follow-up queries — gather + analyse still works regardless.
 - **Skills (reusable playbooks).** Tick **Skills** in the form to attach [Agent Skills](https://code.visualstudio.com/api) — markdown guides stored as `{skill-id}/SKILL.md` under `.claude/skills` or `.github/skills` in your workspace. The model sees a short catalogue (id + description) of the attached skills and can pull a skill's full content on demand via a tool; nothing is auto-injected. Override the scanned folders with `skillsPaths` in `force-cockpit/config.yaml`.
 - **Schema is cached locally.** Before querying, the model checks object fields via a `describe_object` tool. Results are cached per workspace under `force-cockpit/.describe-cache/` (git-ignored, 2-week expiry) and shared with the SOQL tab's autocomplete, so repeated lookups don't hit the org. Click the 🔄 refresh button next to the connection status to clear the cache and re-pull the latest schema.
+- **Knows who it's connected as.** The model always has access to your connected username (no round-trip needed) — since `describe_object`'s field list already reflects that user's field-level security, this lets it answer "can I see this field" directly instead of describing schema in the abstract.
 - **Open as markdown.** AI analysis is written in Markdown. Once a run finishes, an **Open as markdown** button (next to _Open in editor_ / _Copy to clipboard_) opens the output in VSCode's built-in Markdown preview — headings, lists, tables, and code blocks rendered nicely. Nothing is written to disk; it opens an in-memory untitled document. The gathered data is shown as a code block in the preview.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
@@ -510,7 +529,7 @@ Click a log to open it:
 
 **✨ Analyze with AI** opens the analysis panel — model picker, "Read workspace files" / "Query the org" toggles, and an optional "what should the analysis focus on?" field — without sending anything yet, so you can set it up first. The panel scrolls into view and flashes briefly since it sits below the summary/issues/log output and is easy to miss otherwise. Click **Run analysis** to actually send the log through the VS Code Language Model API (GitHub Copilot), the same mechanism as AI scripts.
 
-Debug logs are far too large for any context window, so the model receives a _briefing_ — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context.
+Debug logs are far too large for any context window, so the model receives a _briefing_ — metadata, the captured log levels, limit usage, detected issues, every error with its surrounding lines, and the debug output — and pulls anything else it needs on demand: it can search the full log, read any range of lines, and inspect the call tree. It can also read your workspace files (to open the Apex class named in a stack frame) and, if you tick **Query the org**, run read-only SOQL for extra context — including against the Tooling API for metadata objects, when it decides it needs to — and it knows which user is connected, so a question about "my" access has an answer.
 
 The analysis always covers: what happened, the root cause with line references, governor-limit pressure, ranked concrete fixes, **which log levels to use next time**, and what it is unsure about. That last recommendation comes back as a one-click **Apply these levels** button that pre-fills the trace-flag form above, so the next repro captures exactly what was missing.
 

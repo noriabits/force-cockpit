@@ -14,7 +14,7 @@ import { JsExecutor } from './execution/JsExecutor';
 import { AiExecutor } from './execution/ai/AiExecutor';
 import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
-import type { SkillsRepository } from './skills/SkillsRepository';
+import type { SkillsRepository } from '../../../services/skills/SkillsRepository';
 import type { ExecuteScriptResult, SaveScriptInput, YamlScript } from './types';
 
 export type { ExecuteScriptResult, SaveScriptInput, ScriptInput, YamlScript } from './types';

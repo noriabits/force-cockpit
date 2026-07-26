@@ -6,7 +6,7 @@ import { YamlScriptsService } from './YamlScriptsService';
 import type { ConnectionManager } from '../../../salesforce/connection';
 import { DescribeService } from '../../../services/describe/DescribeService';
 import type { LmGateway } from '../../../services/ai/types';
-import { SkillsRepository } from './skills/SkillsRepository';
+import { SkillsRepository } from '../../../services/skills/SkillsRepository';
 
 // These tests never execute AI scripts, so a memory-only DescribeService suffices.
 function makeDescribe(cm: ConnectionManager): DescribeService {

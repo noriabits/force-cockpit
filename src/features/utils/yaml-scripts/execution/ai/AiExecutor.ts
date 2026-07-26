@@ -8,19 +8,24 @@ import {
   type ModelFallback,
 } from '../../../../../services/ai/AiConversation';
 import {
+  createCurrentUserTool,
   createDescribeObjectTool,
   createRunSoqlTool,
   recordsToJson,
 } from '../../../../../services/ai/tools/orgTools';
-import { stringArg, type ToolHandler } from '../../../../../services/ai/tools/ToolHandler';
+import { type ToolHandler } from '../../../../../services/ai/tools/ToolHandler';
 import {
   createReadWorkspaceFileTool,
   createSearchWorkspaceFilesTool,
 } from '../../../../../services/ai/tools/workspaceTools';
+import {
+  buildSkillsCatalogue,
+  createReadSkillTool,
+} from '../../../../../services/ai/tools/skillTools';
 import type { ChatMessage, LmGateway, WorkspaceSearch } from '../../../../../services/ai/types';
 import { assertApexSuccess, filterUserDebugLines } from '../../../../apexUtils';
 import { DEFAULT_APEX_LOG_LEVELS } from '../defaultApexLogLevels';
-import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
+import type { SkillInfo, SkillsRepository } from '../../../../../services/skills/SkillsRepository';
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';
 
 const COMMON_GUIDANCE =
@@ -28,6 +33,9 @@ const COMMON_GUIDANCE =
   'Before writing any SOQL query, call describe_object to verify which fields are available ' +
   '— never invent or guess field API names. If a follow-up query tool is ' +
   'provided and you genuinely need more data, you may call it. ' +
+  'If asked about "my"/"I"/"me" access or field-level security, call get_current_user first ' +
+  "— describe_object already reflects that specific user's permissions, but you cannot say so " +
+  'without knowing who they are. ' +
   `You have a hard budget of ${DEFAULT_MAX_TOOL_ROUNDS} tool-call rounds for this task; spend them ` +
   'sparingly and prioritise the queries that matter most, because once the budget is ' +
   'exhausted you must answer with whatever data you already have.';
@@ -100,7 +108,7 @@ export class AiExecutor {
       }
 
       const selectedSkills = this.resolveSelectedSkills(script.skills);
-      const skillsSection = this.buildSkillsCatalogue(selectedSkills);
+      const skillsSection = buildSkillsCatalogue(selectedSkills);
       const preamble = script.gather ? GATHER_PREAMBLE : NO_GATHER_PREAMBLE;
 
       const messages: ChatMessage[] = [
@@ -111,7 +119,8 @@ export class AiExecutor {
       ];
       const tools: ToolHandler[] = [
         createDescribeObjectTool(this.describeService),
-        ...(selectedSkills.length ? [this.readSkillTool()] : []),
+        createCurrentUserTool(this.connectionManager),
+        ...(selectedSkills.length ? [createReadSkillTool(this.skills)] : []),
         ...(script.allowFollowupQueries ? [createRunSoqlTool(this.connectionManager)] : []),
         ...(script.allowReadWorkspaceFiles && this.workspaceSearch
           ? [
@@ -172,52 +181,5 @@ export class AiExecutor {
     if (!skillIds?.length) return [];
     const available = new Map(this.skills.listSkills().map((s) => [s.id, s]));
     return skillIds.map((id) => available.get(id)).filter((s): s is SkillInfo => !!s);
-  }
-
-  /** A markdown section listing the available skills, or '' when there are none. */
-  private buildSkillsCatalogue(selected: SkillInfo[]): string {
-    if (!selected.length) return '';
-    const lines = selected.map((s) => `- ${s.id}: ${s.description || s.name}`);
-    return (
-      `\n\n## Available skills\n` +
-      `Reusable playbooks you may consult. If one is relevant to the task, call ` +
-      `read_skill with its id to read its full guidance before writing your analysis.\n` +
-      lines.join('\n')
-    );
-  }
-
-  /** `read_skill` — script-specific, so it stays here rather than in the shared tools. */
-  private readSkillTool(): ToolHandler {
-    return {
-      spec: {
-        name: 'read_skill',
-        description:
-          'Read the full content of one of the available skills (a markdown playbook with ' +
-          'domain guidance) by its id. Call this when a listed skill is relevant to the task ' +
-          'before writing your analysis. Returns the skill body as markdown.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The id of the skill to read, taken from the "Available skills" list.',
-            },
-          },
-          required: ['skillId'],
-        },
-      },
-      run: (input, append) => {
-        const id = stringArg(input, 'skillId');
-        if (!id) return 'Error: no skill id provided.';
-        append(`\n\n[read_skill] ${id}\n`);
-        const body = this.skills.readSkill(id);
-        if (body === null) {
-          append(`→ error: unknown skill\n\n`);
-          return `Error: unknown skill "${id}".`;
-        }
-        append(`→ ${body.length} char(s)\n\n`);
-        return body;
-      },
-    };
   }
 }

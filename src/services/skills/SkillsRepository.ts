@@ -22,8 +22,10 @@ type SkillFrontmatter = {
  * containing a `SKILL.md` file with YAML frontmatter (`name` + `description`)
  * followed by a markdown body — the standard Agent Skills layout.
  *
- * vscode-free (pure `fs`/`path`/`js-yaml`) so it can be unit-tested and injected
- * into the vscode-free `AiExecutor`.
+ * vscode-free (pure `fs`/`path`/`js-yaml`) so it can be unit-tested and shared
+ * between the vscode-free `AiExecutor` (yaml-scripts) and `AskAiService`
+ * (Overview tab) — built once in `extension.ts` alongside the other shared AI
+ * adapters (`VsCodeLmGateway`, `VsCodeWorkspaceSearch`, `DescribeService`).
  */
 export class SkillsRepository {
   /**

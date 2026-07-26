@@ -1,0 +1,36 @@
+<section class="card" id="ask-ai-card">
+  <div class="card-header">
+    <h3 class="card-title">🤖 Ask the AI</h3>
+    <button type="button" class="btn btn-ghost" id="ask-ai-new">New chat</button>
+  </div>
+  <p class="card-description">
+    Ask ad-hoc questions about your org or workspace. Multi-turn — follow-ups build on what you
+    already asked. Read-only: it can look things up, never change data.
+  </p>
+
+  <div class="ask-ai-toolbar">
+    <select class="text-input ask-ai-select" id="ask-ai-model"></select>
+    <label class="ask-ai-check">
+      <input type="checkbox" id="ask-ai-workspace" checked /> Read workspace files
+    </label>
+    <label class="ask-ai-check">
+      <input type="checkbox" id="ask-ai-org" checked /> Query the org
+    </label>
+    <span class="query-toolbar-spacer"></span>
+    <button type="button" class="btn btn-ghost" id="ask-ai-open-markdown">Open as markdown</button>
+    <button type="button" class="btn btn-ghost" id="ask-ai-copy">Copy</button>
+  </div>
+
+  <pre class="ask-ai-output" id="ask-ai-output"></pre>
+
+  <div class="ask-ai-composer">
+    <textarea
+      class="text-input"
+      id="ask-ai-question"
+      rows="3"
+      spellcheck="false"
+      placeholder="Ask something…"
+    ></textarea>
+    <button type="button" class="btn btn-primary" id="ask-ai-send">Ask</button>
+  </div>
+</section>

@@ -27,6 +27,8 @@ export function buildAnalysisPreamble(options: {
     toolLines.push(
       '- `run_soql` / `describe_object`: read-only org context (record state, schema). Call ' +
         'describe_object before writing any SOQL — never guess field API names.',
+      '- `get_current_user`: the username you are connected as — call this if the log or the ' +
+        'user\'s question turns on "my"/"this user\'s" access or field-level security.',
     );
   }
 

@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionManager } from '../../../../../salesforce/connection';
 import { DescribeService } from '../../../../../services/describe/DescribeService';
-import type { SkillInfo, SkillsRepository } from '../../skills/SkillsRepository';
+import type { SkillsRepository } from '../../../../../services/skills/SkillsRepository';
 import type { YamlScript } from '../../types';
 import { AiExecutor } from './AiExecutor';
-import type {
-  ChatEvent,
-  ChatRequest,
-  LmGateway,
-  WorkspaceSearch,
-} from '../../../../../services/ai/types';
+import {
+  FakeGateway,
+  fakeConnectionManager,
+  fakeSkills,
+  fakeWorkspaceSearch,
+} from '../../../../../services/ai/__fixtures__/fakeGateway';
+import type { LmGateway, WorkspaceSearch } from '../../../../../services/ai/types';
 
 /** Build an AiExecutor whose describe path goes through a real (memory-only) DescribeService over the same cm. */
 function makeExecutor(
@@ -21,77 +22,8 @@ function makeExecutor(
   return new AiExecutor(cm, gw, skills, new DescribeService(cm), workspaceSearch);
 }
 
-/**
- * A WorkspaceSearch stub. `files` maps a relative path → content; searchFiles
- * regex-matches the file name, readFile looks one up.
- */
-function fakeWorkspaceSearch(files: Record<string, string> = {}): WorkspaceSearch {
-  const baseName = (p: string) => p.split('/').pop() ?? p;
-  return {
-    searchFiles: async (pattern: string) => {
-      const re = new RegExp(pattern, 'i');
-      const paths = Object.keys(files).filter((p) => re.test(baseName(p)));
-      return { paths, truncated: false };
-    },
-    readFile: async (relPath: string) =>
-      relPath in files
-        ? { path: relPath, content: files[relPath] }
-        : { error: `"${relPath}" not found` },
-  };
-}
-
-/** A SkillsRepository stub: a catalogue + a body lookup, no filesystem. */
-function fakeSkills(list: SkillInfo[] = [], bodies: Record<string, string> = {}): SkillsRepository {
-  return {
-    listSkills: () => list,
-    readSkill: (id: string) => bodies[id] ?? null,
-  } as unknown as SkillsRepository;
-}
-
-/** A scriptable LmGateway: each entry in `scripted` is the events for one send() call. */
-class FakeGateway implements LmGateway {
-  public readonly sends: ChatRequest[] = [];
-  constructor(private readonly scripted: ChatEvent[][]) {}
-  async listModels() {
-    return [];
-  }
-  async *send(req: ChatRequest): AsyncIterable<ChatEvent> {
-    // Snapshot the messages — AiExecutor mutates the same array across rounds.
-    this.sends.push({
-      modelId: req.modelId,
-      tools: req.tools,
-      messages: req.messages.map((m) => ({ ...m })),
-    });
-    for (const e of this.scripted[this.sends.length - 1] ?? []) yield e;
-  }
-}
-
-function makeCM(overrides: Partial<ConnectionManager> = {}): ConnectionManager {
-  return {
-    query: vi.fn(async () => ({
-      records: [{ Id: '001', Name: 'Acme' }],
-      totalSize: 1,
-      done: true,
-    })),
-    executeAnonymousWithDebugLog: vi.fn(async () => ({
-      compiled: true,
-      success: true,
-      compileProblem: null,
-      exceptionMessage: null,
-      exceptionStackTrace: null,
-      debugLog: '12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|payload-from-apex',
-    })),
-    describeSObject: vi.fn(async (name: string) => ({
-      name,
-      label: name,
-      fields: [
-        { name: 'Id', label: 'Record ID', type: 'id', referenceTo: [] },
-        { name: 'Name', label: `${name} Name`, type: 'string', referenceTo: [] },
-      ],
-    })),
-    getCurrentOrg: () => ({ username: 'u@example.com' }),
-    ...overrides,
-  } as unknown as ConnectionManager;
+function makeCM(overrides: Record<string, unknown> = {}): ConnectionManager {
+  return fakeConnectionManager(overrides) as unknown as ConnectionManager;
 }
 
 function aiScript(over: Partial<YamlScript> = {}): YamlScript {
@@ -127,8 +59,8 @@ describe('AiExecutor', () => {
     expect(result.debugLog).toContain('Hello world');
     expect(chunks.join('')).toContain('Hello world');
     expect(gw.sends[0].messages[0].text).toContain('Acme'); // gather data in the prompt
-    expect(gw.sends[0].tools).toHaveLength(1); // describe_object only, no follow-up
-    expect(gw.sends[0].tools[0].name).toBe('describe_object');
+    // describe_object + get_current_user only, no follow-up
+    expect(gw.sends[0].tools.map((t) => t.name)).toEqual(['describe_object', 'get_current_user']);
   });
 
   it('runs an apex gather and surfaces its debug output', async () => {
@@ -214,9 +146,10 @@ describe('AiExecutor', () => {
 
     expect(cm.query).toHaveBeenCalledTimes(2); // gather + follow-up
     expect(cm.query).toHaveBeenLastCalledWith('SELECT Id FROM Contact');
-    expect(gw.sends[0].tools).toHaveLength(2);
+    expect(gw.sends[0].tools).toHaveLength(3);
     expect(gw.sends[0].tools.map((t) => t.name)).toContain('describe_object');
     expect(gw.sends[0].tools.map((t) => t.name)).toContain('run_soql');
+    expect(gw.sends[0].tools.map((t) => t.name)).toContain('get_current_user');
     const round2 = gw.sends[1].messages;
     expect(round2.some((m) => m.role === 'assistant' && 'toolCalls' in m && m.toolCalls)).toBe(
       true,
@@ -225,11 +158,10 @@ describe('AiExecutor', () => {
     expect(result.success).toBe(true);
   });
 
-  it('offers only describe_object when follow-up is disabled', async () => {
+  it('offers describe_object + get_current_user (no run_soql) when follow-up is disabled', async () => {
     const gw = new FakeGateway([[{ kind: 'text', text: 'x' }]]);
     await makeExecutor(makeCM(), gw, fakeSkills()).execute(aiScript());
-    expect(gw.sends[0].tools).toHaveLength(1);
-    expect(gw.sends[0].tools[0].name).toBe('describe_object');
+    expect(gw.sends[0].tools.map((t) => t.name)).toEqual(['describe_object', 'get_current_user']);
   });
 
   it('calls describeSObject and returns a compact field list', async () => {

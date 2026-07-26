@@ -18,3 +18,8 @@ export function stringArg(input: Record<string, unknown>, name: string): string 
   const value = input[name];
   return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
 }
+
+/** Read a boolean argument from a model-supplied tool input (missing/falsy → false). */
+export function boolArg(input: Record<string, unknown>, name: string): boolean {
+  return input[name] === true;
+}

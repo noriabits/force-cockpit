@@ -5,7 +5,7 @@ import type { DescribeService } from '../../../services/describe/DescribeService
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
 import { YamlScriptsService, type SaveScriptInput } from './YamlScriptsService';
 import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
-import { SkillsRepository } from './skills/SkillsRepository';
+import type { SkillsRepository } from '../../../services/skills/SkillsRepository';
 import { splitItemId, resolveYamlPath } from '../../../utils/yamlRepository';
 
 export function createYamlScriptsFeature(paths: {
@@ -14,7 +14,8 @@ export function createYamlScriptsFeature(paths: {
   privatePath: string;
   workspaceRoot: string;
   workspaceState: vscode.Memento;
-  skillsPaths: string[];
+  /** Shared with AskAiService (Overview tab) — built once in extension.ts. */
+  skillsRepo: SkillsRepository;
   describeService: DescribeService;
   /** Shared with the debug-log analyzer — built once in extension.ts. */
   gateway: LmGateway;
@@ -23,8 +24,7 @@ export function createYamlScriptsFeature(paths: {
   postToWebview: (message: unknown) => void;
 }): FeatureModuleFactory {
   return (connectionManager: ConnectionManager): FeatureModule => {
-    const { gateway, workspaceSearch } = paths;
-    const skillsRepo = new SkillsRepository(paths.workspaceRoot, paths.skillsPaths);
+    const { gateway, workspaceSearch, skillsRepo } = paths;
     const service = new YamlScriptsService(
       connectionManager,
       paths,

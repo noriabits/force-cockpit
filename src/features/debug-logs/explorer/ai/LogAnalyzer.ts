@@ -6,6 +6,7 @@ import type { ConnectionManager } from '../../../../salesforce/connection';
 import type { DescribeService } from '../../../../services/describe/DescribeService';
 import { AiConversation, type ModelFallback } from '../../../../services/ai/AiConversation';
 import {
+  createCurrentUserTool,
   createDescribeObjectTool,
   createRunSoqlTool,
 } from '../../../../services/ai/tools/orgTools';
@@ -76,6 +77,7 @@ export class LogAnalyzer {
         ? [
             createDescribeObjectTool(this.describeService),
             createRunSoqlTool(this.connectionManager),
+            createCurrentUserTool(this.connectionManager),
           ]
         : []),
     ];

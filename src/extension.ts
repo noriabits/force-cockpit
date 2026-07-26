@@ -10,6 +10,7 @@ import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
 import { createExecutionLogsFeature } from './features/utils/execution-logs/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
 import { createDebugLogsFeature } from './features/debug-logs/explorer/index';
+import { createAskAiFeature } from './features/overview/ask-ai/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
@@ -19,6 +20,7 @@ import { DescribeService } from './services/describe/DescribeService';
 import { DescribeDiskCache } from './services/describe/DescribeDiskCache';
 import { VsCodeLmGateway } from './services/ai/LmGateway';
 import { VsCodeWorkspaceSearch } from './services/ai/WorkspaceSearch';
+import { SkillsRepository } from './services/skills/SkillsRepository';
 
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
@@ -58,6 +60,11 @@ export function activate(context: vscode.ExtensionContext): void {
   // (AI scripts and the debug-log analyzer).
   const lmGateway = new VsCodeLmGateway();
   const workspaceSearch = new VsCodeWorkspaceSearch();
+  // Agent Skills discovery, built once and shared by AI scripts and the
+  // Overview tab's ad-hoc "Ask the AI" chat. Note: skillsPaths is captured
+  // here at activation, so a live config.yaml reload does not pick up a
+  // changed `skillsPaths` list until the window reloads.
+  const skillsRepo = new SkillsRepository(workspaceRoot, cockpitConfig.skillsPaths);
 
   // Status bar item: shows Sandbox / Production indicator
   setupOrgTypeStatusBar(context, connectionManager, () => cockpitConfig);
@@ -99,7 +106,7 @@ export function activate(context: vscode.ExtensionContext): void {
       privatePath: path.join(userBasePath, 'private', 'scripts'),
       workspaceRoot,
       workspaceState: context.workspaceState,
-      skillsPaths: cockpitConfig.skillsPaths,
+      skillsRepo,
       describeService,
       gateway: lmGateway,
       workspaceSearch,
@@ -115,6 +122,13 @@ export function activate(context: vscode.ExtensionContext): void {
       logsPath: path.join(userBasePath, 'logs'),
       // Read through the closure so a live config.yaml reload takes effect.
       getNoiseOptions: () => cockpitConfig.debugLogNoise,
+    }),
+    createAskAiFeature({
+      workspaceState: context.workspaceState,
+      describeService,
+      gateway: lmGateway,
+      workspaceSearch,
+      skillsRepo,
     }),
   ];
 
