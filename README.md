@@ -195,7 +195,7 @@ apex: |
 
 **JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
 
-Apex scripts run at a fixed log level (`Apex Code: DEBUG`, `System: DEBUG`, everything else `INFO`) so the log includes SOQL/DML statements and code-unit detail, not just your own `System.debug()` lines — the "Show only USER_DEBUG lines" checkbox narrows the view when you don't need the rest. This level is independent of anything configured in the Debug Logs tab: Salesforce always honors the log level a script execution explicitly requests over an org-wide trace flag, so a Debug Logs preset has no effect on a yaml-script's own log.
+Apex scripts run at a quiet, fixed log level (`Apex Code: DEBUG`, `System: ERROR`, everything else `NONE`) — the log holds just your own `System.debug()` output plus any unhandled exception, nothing else. This level is independent of anything configured in the Debug Logs tab: Salesforce always honors the log level a script execution explicitly requests over an org-wide trace flag, so a Debug Logs preset has no effect on a yaml-script's own log.
 
 ### AI scripts
 

@@ -361,7 +361,7 @@ describe('YamlScriptsService — executeScript orchestration', () => {
     expect(mock.executeAnonymousWithDebugLog).toHaveBeenCalledWith(
       "System.debug('value');",
       expect.objectContaining({
-        logLevels: expect.objectContaining({ Apex_code: 'DEBUG', Db: 'INFO' }),
+        logLevels: expect.objectContaining({ Apex_code: 'DEBUG', Db: 'NONE' }),
       }),
     );
   });
