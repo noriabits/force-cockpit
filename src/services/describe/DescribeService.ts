@@ -58,6 +58,22 @@ export class DescribeService {
       return onDisk;
     }
 
+    return this.fetchGlobal(org);
+  }
+
+  /**
+   * Bypasses both cache tiers and re-fetches from the server (still repopulating
+   * the cache on return, so later calls benefit). Use this instead of
+   * {@link describeGlobal} when the answer must reflect object permissions as of
+   * right now — e.g. diagnosing a query failure right after an admin change —
+   * since the cache can otherwise serve an org-permission snapshot that is
+   * correct for autocomplete's purposes but already stale for that one.
+   */
+  async describeGlobalFresh(): Promise<DescribeGlobalProjection> {
+    return this.fetchGlobal(this.orgKey());
+  }
+
+  private async fetchGlobal(org: string): Promise<DescribeGlobalProjection> {
     const result = await this.connectionManager.describeGlobal();
     const projection: DescribeGlobalProjection = {
       sobjects: result.sobjects.map((s) => ({
@@ -83,6 +99,27 @@ export class DescribeService {
       return onDisk;
     }
 
+    return this.fetchSObject(org, key, name);
+  }
+
+  /**
+   * Bypasses both cache tiers and re-fetches from the server (still repopulating
+   * the cache on return). `describeSObject` is FLS-filtered by Salesforce as of
+   * whenever it was last fetched — after a permission change (an admin grants or
+   * revokes field access), a cached answer keeps reporting the *old* visibility.
+   * Field-level security diagnosis (SoqlDiagnosticsService) needs the field's
+   * visibility as of right now, so it always calls this instead.
+   */
+  async describeSObjectFresh(name: string): Promise<DescribeSObjectProjection> {
+    const org = this.orgKey();
+    return this.fetchSObject(org, `${org}:${name.toLowerCase()}`, name);
+  }
+
+  private async fetchSObject(
+    org: string,
+    key: string,
+    name: string,
+  ): Promise<DescribeSObjectProjection> {
     const result = await this.connectionManager.describeSObject(name);
     const projection: DescribeSObjectProjection = {
       name: result.name,

@@ -131,6 +131,73 @@ describe('DescribeService', () => {
     expect(cm.describeGlobal).not.toHaveBeenCalled();
   });
 
+  it('describeSObjectFresh bypasses a populated memory cache', async () => {
+    const cm = makeMock();
+    const svc = new DescribeService(cm);
+    await svc.describeSObject('Account'); // populate memory
+    await svc.describeSObjectFresh('Account');
+    expect(cm.describeSObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('describeSObjectFresh bypasses a disk-cache hit too', async () => {
+    const cm = makeMock();
+    const cached = { name: 'Account', fields: [] };
+    const disk = makeDiskCache({ readSObject: vi.fn(() => cached) as never });
+    const svc = new DescribeService(cm, disk);
+    const result = await svc.describeSObjectFresh('Account');
+    expect(cm.describeSObject).toHaveBeenCalledTimes(1);
+    expect(result.fields.length).toBeGreaterThan(0); // the live result, not the stale cached one
+  });
+
+  it('describeSObjectFresh still repopulates both cache tiers on return', async () => {
+    const cm = makeMock();
+    const disk = makeDiskCache();
+    const svc = new DescribeService(cm, disk);
+    await svc.describeSObjectFresh('Account');
+    expect(disk.writeSObject).toHaveBeenCalledWith(
+      'ORG1',
+      'Account',
+      expect.objectContaining({ name: 'Account' }),
+    );
+    await svc.describeSObject('Account'); // now served from the freshly-repopulated memory cache
+    expect(cm.describeSObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('describeSObjectFresh reflects a permission revoked after the last cache read', async () => {
+    // Regression: a user's FLS access to a field is revoked between two lookups.
+    // A diagnosis running right after that change must see the field disappear,
+    // not the stale "still visible" answer a cache would otherwise serve.
+    const cm = makeMock();
+    const svc = new DescribeService(cm);
+    const before = await svc.describeSObject('Account'); // cached: OwnerId visible
+    expect(before.fields.some((f) => f.name === 'OwnerId')).toBe(true);
+
+    (cm.describeSObject as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      name: 'Account',
+      fields: before.fields.filter((f) => f.name !== 'OwnerId'), // FLS revoked
+    });
+
+    const after = await svc.describeSObjectFresh('Account');
+    expect(after.fields.some((f) => f.name === 'OwnerId')).toBe(false);
+  });
+
+  it('describeGlobalFresh bypasses a populated memory cache', async () => {
+    const cm = makeMock();
+    const svc = new DescribeService(cm);
+    await svc.describeGlobal();
+    await svc.describeGlobalFresh();
+    expect(cm.describeGlobal).toHaveBeenCalledTimes(2);
+  });
+
+  it('describeGlobalFresh bypasses a disk-cache hit too', async () => {
+    const cm = makeMock();
+    const disk = makeDiskCache({ readGlobal: vi.fn(() => ({ sobjects: [] })) as never });
+    const svc = new DescribeService(cm, disk);
+    const result = await svc.describeGlobalFresh();
+    expect(cm.describeGlobal).toHaveBeenCalledTimes(1);
+    expect(result.sobjects.length).toBeGreaterThan(0);
+  });
+
   it('clearCache clears memory and the disk cache', async () => {
     const cm = makeMock();
     const disk = makeDiskCache();

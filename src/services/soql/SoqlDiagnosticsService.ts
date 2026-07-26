@@ -37,6 +37,14 @@ const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/;
  * Configuration"; without it the Tooling query throws and diagnosis quietly
  * degrades to describe-only suggestions. `diagnose` never throws and never
  * changes the outcome of the query itself.
+ *
+ * Every describe lookup here uses `describeService`'s `*Fresh` methods, never
+ * the cached ones. `DescribeService`'s normal cache is fine for autocomplete —
+ * schema and permissions rarely change mid-session — but diagnosis exists
+ * specifically to answer "can I read this right now", often run moments after an
+ * admin just changed that exact permission. A cache hit from before the change
+ * would report the field as visible and print the wrong verdict ("readable by
+ * your user") for the one case (FLS was just revoked) this feature exists to catch.
  */
 export class SoqlDiagnosticsService {
   /** Full field lists from the Tooling API, keyed `${orgId}:${entity}`. */
@@ -128,7 +136,7 @@ export class SoqlDiagnosticsService {
   /** Field API names the running user can actually see (FLS-filtered by Salesforce). */
   private async visibleFields(entity: string): Promise<string[]> {
     try {
-      const described = await this.describeService.describeSObject(entity);
+      const described = await this.describeService.describeSObjectFresh(entity);
       return described.fields.map((f) => f.name);
     } catch {
       return [];
@@ -171,7 +179,7 @@ export class SoqlDiagnosticsService {
 
     let names: string[];
     try {
-      const described = await this.describeService.describeSObject(entity);
+      const described = await this.describeService.describeSObjectFresh(entity);
       names = described.fields.map((f) => f.relationshipName).filter((n): n is string => !!n);
     } catch {
       return [];
@@ -195,7 +203,7 @@ export class SoqlDiagnosticsService {
   private async diagnoseObject(object: string): Promise<SoqlDiagnostic[]> {
     let visible: string[] = [];
     try {
-      const global = await this.describeService.describeGlobal();
+      const global = await this.describeService.describeGlobalFresh();
       visible = global.sobjects.map((s) => s.name);
     } catch {
       /* fall through — suggestions are optional */

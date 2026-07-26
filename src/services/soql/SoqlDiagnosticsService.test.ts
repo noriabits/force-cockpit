@@ -56,6 +56,48 @@ describe('SoqlDiagnosticsService', () => {
       expect(diagnostic.suggestions).toBeUndefined();
     });
 
+    it('reports FLS correctly even when a stale describe cache still shows the field as visible', async () => {
+      // Regression: a user's FLS access to a field is revoked, then they run the
+      // query. describeSObject was already cached from before the revoke (e.g. an
+      // earlier autocomplete lookup in the same session) and would still call the
+      // field visible if diagnosis used that cache instead of a fresh describe —
+      // producing exactly the misleading "readable by your user" verdict this
+      // feature exists to prevent.
+      const describeSObject = vi
+        .fn()
+        .mockResolvedValueOnce({
+          name: 'QuoteLineItem',
+          fields: [field('Id'), field('AssetReferenceId__c')], // visible: before the revoke
+        })
+        .mockResolvedValueOnce({
+          name: 'QuoteLineItem',
+          fields: [field('Id')], // hidden: after the revoke
+        });
+      const cm = makeMock({
+        describeSObject,
+        toolingQuery: vi.fn().mockResolvedValue({
+          records: [
+            {
+              QualifiedApiName: 'AssetReferenceId__c',
+              Label: 'Asset Reference Id',
+              DataType: 'Text(255)',
+            },
+          ],
+        }),
+      });
+      const describeService = new DescribeService(cm);
+      const service = new SoqlDiagnosticsService(cm, describeService);
+
+      // Populate the cache the way autocomplete would, before the FLS revoke.
+      await describeService.describeSObject('QuoteLineItem');
+
+      const [diagnostic] = await service.diagnose('SELECT ...', FLS_ERROR);
+
+      expect(describeSObject).toHaveBeenCalledTimes(2); // cache-populating call + diagnosis's fresh call
+      expect(diagnostic.severity).toBe('warning');
+      expect(diagnostic.title).toContain('field-level security');
+    });
+
     it('queries FieldDefinition scoped to the entity', async () => {
       const toolingQuery = vi.fn().mockResolvedValue({ records: [] });
       await makeService(makeMock({ toolingQuery })).diagnose('SELECT ...', FLS_ERROR);
