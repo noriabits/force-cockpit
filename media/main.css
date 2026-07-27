@@ -560,8 +560,40 @@ body {
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
-#rest-body {
-  margin-bottom: 8px;
+/* Standalone request-body editor. It deliberately does NOT reuse .soql-textarea:
+   that class paints its text transparent and relies on a .soql-highlight overlay
+   underneath, which only exists inside .soql-editor-stack. Here the textarea is
+   the only layer, so it carries its own background, border and foreground. */
+.rest-body-textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  tab-size: 2;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  outline: none;
+}
+
+.rest-body-textarea:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.rest-body-textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+}
+
+.rest-body-textarea::selection {
+  background-color: var(--vscode-editor-selectionBackground, rgba(100, 150, 220, 0.4));
 }
 
 .rest-response-body {
