@@ -183,7 +183,7 @@ export class MainPanel {
       return;
     }
     const orgDetails = await this.connectionManager.getOrganizationDetails();
-    const isProduction = !orgDetails.IsSandbox;
+    const isProduction = await this.connectionManager.isProductionOrg();
     const sandboxName = isProduction ? null : this.connectionManager.getSandboxName();
     const protectedSandboxes = this.config.protectedSandboxes.map((s) => s.toLowerCase());
     const isProtectedOrg =
