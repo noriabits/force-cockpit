@@ -989,6 +989,13 @@ body {
   white-space: nowrap;
 }
 
+/* SOQL query results: size the table to its content instead of stretching
+   columns to fill the wrapper, so narrow columns don't waste space. */
+#results-table {
+  width: auto;
+  table-layout: auto;
+}
+
 .results-table tbody tr:last-child td {
   border-bottom: none;
 }
