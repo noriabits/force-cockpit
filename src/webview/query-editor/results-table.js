@@ -160,6 +160,10 @@ export function createResultsTable(ctx) {
       for (const cell of row) {
         const td = document.createElement('td');
         td.innerHTML = cellHtml(cell);
+        if (cell != null) {
+          /** @type {any} */ (window).__setTooltip(td, cell);
+          td.setAttribute('data-tooltip-wrap', '');
+        }
         tr.appendChild(td);
       }
       tbody.appendChild(tr);

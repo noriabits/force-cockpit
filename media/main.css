@@ -989,11 +989,15 @@ body {
   white-space: nowrap;
 }
 
-/* SOQL query results: size the table to its content instead of stretching
-   columns to fill the wrapper, so narrow columns don't waste space. */
-#results-table {
-  width: auto;
-  table-layout: auto;
+/* SOQL query results: the shared 260px cap on .results-table td forces every
+   column to the same width, which both wastes space on narrow columns (e.g.
+   an 18-char Id) and clips wide ones early. Let the browser's table-layout:auto
+   size each column to its own content instead: narrow columns stay narrow and
+   the remaining width goes to whichever column actually has long content.
+   Overflow/ellipsis still applies once a column's real content exceeds the
+   width it's assigned. */
+#results-table td {
+  max-width: none;
 }
 
 .results-table tbody tr:last-child td {
@@ -1474,4 +1478,10 @@ body {
 }
 .fc-tooltip--visible {
   opacity: 1;
+}
+/* Modifier for long-form content (e.g. a full table cell value) where a
+   single-line tooltip would run off-screen. Opt in via `data-tooltip-wrap`. */
+.fc-tooltip--wrap {
+  white-space: normal;
+  max-width: 360px;
 }

@@ -35,8 +35,14 @@
   function show(target) {
     const text = target.getAttribute('data-tooltip');
     if (!text) return;
+    const wrap = target.hasAttribute('data-tooltip-wrap');
+    // For long-form cell content, only bother popping a tooltip that's actually
+    // clipped — once a column widens enough to show everything, a tooltip
+    // repeating the same visible text is just noise.
+    if (wrap && target.scrollWidth <= target.clientWidth) return;
     const el = ensureEl();
     el.textContent = text;
+    el.classList.toggle('fc-tooltip--wrap', wrap);
     el.style.display = 'block';
     // Measure after the text/display are set, then anchor to the target.
     const rect = target.getBoundingClientRect();
