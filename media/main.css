@@ -990,14 +990,13 @@ body {
 }
 
 /* SOQL query results: the shared 260px cap on .results-table td forces every
-   column to the same width, which both wastes space on narrow columns (e.g.
-   an 18-char Id) and clips wide ones early. Let the browser's table-layout:auto
-   size each column to its own content instead: narrow columns stay narrow and
-   the remaining width goes to whichever column actually has long content.
-   Overflow/ellipsis still applies once a column's real content exceeds the
-   width it's assigned. */
+   column to the same width, wasting space on narrow columns (e.g. an 18-char
+   Id). Raise the cap instead of dropping it — a narrow column's own content
+   stays well under this width so it's unaffected, while a long-text column
+   (e.g. Message__c) still ellipsizes at a readable width rather than growing
+   the table unboundedly and forcing horizontal scroll for one long value. */
 #results-table td {
-  max-width: none;
+  max-width: 480px;
 }
 
 .results-table tbody tr:last-child td {
