@@ -182,16 +182,27 @@ export class MainPanel {
       this._panel.webview.postMessage({ type: 'orgDisconnected' });
       return;
     }
-    const isProduction = await this.connectionManager.isProductionOrg();
+    const orgDetails = await this.connectionManager.getOrganizationDetails();
+    const isProduction = !orgDetails.IsSandbox;
     const sandboxName = isProduction ? null : this.connectionManager.getSandboxName();
     const protectedSandboxes = this.config.protectedSandboxes.map((s) => s.toLowerCase());
     const isProtectedOrg =
       !isProduction && protectedSandboxes.includes((sandboxName ?? '').toLowerCase());
     this._panel.webview.postMessage({
       type: 'orgConnected',
-      data: { ...org, sandboxName, isProtectedOrg },
+      data: { ...org, sandboxName, isProtectedOrg, instanceName: orgDetails.InstanceName },
     });
     void this._sendStorageLimits();
+    void this._sendReleaseInfo();
+  }
+
+  private async _sendReleaseInfo(): Promise<void> {
+    try {
+      const release = await this.connectionManager.getReleaseInfo();
+      this._panel.webview.postMessage({ type: 'releaseInfo', data: release });
+    } catch (err) {
+      this.outputChannel?.appendLine(`[Warn] Release info unavailable: ${String(err)}`);
+    }
   }
 
   private async _sendStorageLimits(): Promise<void> {

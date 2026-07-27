@@ -232,4 +232,81 @@ describe('ConnectionManager', () => {
       vi.unstubAllGlobals();
     });
   });
+
+  describe('getReleaseInfo()', () => {
+    function versionsResponse(versions: unknown) {
+      return {
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue(versions),
+        text: vi.fn().mockResolvedValue(''),
+      };
+    }
+
+    const versions = [
+      { label: 'Winter ’25', version: '62.0' },
+      { label: 'Summer ’26', version: '67.0' },
+      { label: 'Spring ’26', version: '66.0' },
+    ];
+
+    it('throws when not connected', async () => {
+      const cm = new ConnectionManager();
+      await expect(cm.getReleaseInfo()).rejects.toThrow();
+    });
+
+    it('returns the highest version and caches it per org', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      const fetchMock = vi.fn().mockResolvedValue(versionsResponse(versions));
+      vi.stubGlobal('fetch', fetchMock);
+
+      expect(await cm.getReleaseInfo()).toEqual({ apiVersion: '67.0', label: 'Summer ’26' });
+      expect(await cm.getReleaseInfo()).toEqual({ apiVersion: '67.0', label: 'Summer ’26' });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls[0][0]).toBe('https://example.my.salesforce.com/services/data');
+      vi.unstubAllGlobals();
+    });
+
+    it('compares versions numerically, not lexicographically', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          versionsResponse([
+            { label: 'A', version: '9.0' },
+            { label: 'B', version: '67.0' },
+          ]),
+        ),
+      );
+
+      expect((await cm.getReleaseInfo()).apiVersion).toBe('67.0');
+      vi.unstubAllGlobals();
+    });
+
+    it('re-fetches after disconnect clears the cache', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      const fetchMock = vi.fn().mockResolvedValue(versionsResponse(versions));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await cm.getReleaseInfo();
+      cm.disconnect();
+      await cm.connect(org());
+      await cm.getReleaseInfo();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      vi.unstubAllGlobals();
+    });
+
+    it('throws on an unexpected response shape', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(versionsResponse({ error: 'nope' })));
+
+      await expect(cm.getReleaseInfo()).rejects.toThrow(/services\/data/);
+      vi.unstubAllGlobals();
+    });
+  });
 });

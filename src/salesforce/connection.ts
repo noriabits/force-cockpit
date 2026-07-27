@@ -49,6 +49,12 @@ export interface OrganizationDetails extends Record<string, unknown> {
   NamespacePrefix: string | null;
 }
 
+/** Latest API version supported by the connected org, and its release label (e.g. "Summer '26"). */
+export interface ReleaseInfo {
+  apiVersion: string;
+  label: string;
+}
+
 const NOT_CONNECTED = 'Not connected to any Salesforce org.';
 
 export class ConnectionManager extends EventEmitter {
@@ -58,6 +64,7 @@ export class ConnectionManager extends EventEmitter {
   private _connectVersion = 0;
   private _apiVersion = '65.0';
   private _orgDetailsCache = new Map<string, OrganizationDetails>();
+  private _releaseInfoCache = new Map<string, ReleaseInfo>();
 
   setApiVersion(version: string): void {
     this._apiVersion = version;
@@ -125,6 +132,7 @@ export class ConnectionManager extends EventEmitter {
     this._connection = null;
     this._currentOrg = null;
     this._orgDetailsCache.clear();
+    this._releaseInfoCache.clear();
     this.emit('connectionChanged', { connected: false } as ConnectionChangedEvent);
   }
 
@@ -303,6 +311,30 @@ export class ConnectionManager extends EventEmitter {
     const details = result.records[0];
     this._orgDetailsCache.set(orgId, details);
     return details;
+  }
+
+  /**
+   * Latest API version the org supports, from the version-less `/services/data` endpoint
+   * (which lists every supported version). Distinct from `apiVersion`, which is the
+   * user-configured version this extension talks to the org with.
+   */
+  async getReleaseInfo(): Promise<ReleaseInfo> {
+    if (!this._currentOrg) throw new Error(NOT_CONNECTED);
+    const orgId = this._currentOrg.orgId;
+    const cached = this._releaseInfoCache.get(orgId);
+    if (cached) return cached;
+
+    const result = await this.request({ method: 'GET', url: '/services/data' });
+    const versions = result.body as { version?: string; label?: string }[];
+    if (!Array.isArray(versions) || versions.length === 0) {
+      throw new Error(`Unexpected /services/data response (status ${result.status}).`);
+    }
+    const latest = versions.reduce((a, b) =>
+      parseFloat(b.version ?? '0') > parseFloat(a.version ?? '0') ? b : a,
+    );
+    const info: ReleaseInfo = { apiVersion: latest.version ?? '', label: latest.label ?? '' };
+    this._releaseInfoCache.set(orgId, info);
+    return info;
   }
 
   async isProductionOrg(): Promise<boolean> {

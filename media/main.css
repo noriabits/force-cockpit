@@ -300,6 +300,16 @@ body {
   word-break: break-all;
 }
 
+.org-instance-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.org-instance-link:hover {
+  text-decoration: underline;
+}
+
 .info-value.mono {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 11px;

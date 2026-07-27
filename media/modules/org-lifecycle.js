@@ -21,6 +21,8 @@
   const orgUsername = /** @type {HTMLElement} */ (document.getElementById('org-username'));
   const orgId = /** @type {HTMLElement} */ (document.getElementById('org-id'));
   const orgInstance = /** @type {HTMLElement} */ (document.getElementById('org-instance'));
+  const orgInstanceName = /** @type {HTMLElement} */ (document.getElementById('org-instance-name'));
+  const orgRelease = /** @type {HTMLElement} */ (document.getElementById('org-release'));
   const productionWarning = /** @type {HTMLElement} */ (
     document.getElementById('production-warning')
   );
@@ -65,6 +67,12 @@
     orgUsername.textContent = org.username || '—';
     orgId.textContent = org.orgId || '—';
     orgInstance.textContent = org.instanceUrl || '—';
+    const instanceName = org.instanceName ? win.__escapeHtml(org.instanceName) : '';
+    const statusUrl = `https://status.salesforce.com/instances/${encodeURIComponent(org.instanceName || '')}`;
+    orgInstanceName.innerHTML = instanceName
+      ? `<a href="#" class="org-instance-link" data-url="${win.__escapeHtml(statusUrl)}">${instanceName} ↗</a>`
+      : '—';
+    orgRelease.textContent = '—';
 
     emptyState.style.display = 'none';
     connectingState.style.display = 'none';
@@ -99,11 +107,25 @@
     );
   });
 
+  win.__onMessage('releaseInfo', (/** @type {any} */ msg) => {
+    orgRelease.textContent = `${msg.data.label} (v${msg.data.apiVersion})`;
+  });
+
   win.__onMessage('orgDisconnected', () => {
     setDisconnected();
     Object.values(win.__featureHandlers).forEach(
       (/** @type {any} */ h) => h.onOrgDisconnected && h.onOrgDisconnected(),
     );
+  });
+
+  // ── Instance status page link ───────────────────────────────────────────
+  orgInstanceName.addEventListener('click', (event) => {
+    const target = /** @type {HTMLElement} */ (event.target);
+    if (target.tagName === 'A' && target.classList.contains('org-instance-link')) {
+      event.preventDefault();
+      const url = target.getAttribute('data-url');
+      if (url) vscode.postMessage({ type: 'openExternalUrl', url });
+    }
   });
 
   // ── Open in Browser button ──────────────────────────────────────────────
