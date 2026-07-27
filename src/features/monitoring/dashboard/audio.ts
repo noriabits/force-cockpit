@@ -20,9 +20,12 @@ interface PingCommand {
  *
  * The `Add-Type` line is only for `pwsh` (PowerShell 7): SoundPlayer lives in
  * System.dll on .NET Framework (always loaded in Windows PowerShell 5.1) but moved
- * to System.Windows.Extensions on .NET Core. `-ErrorAction SilentlyContinue`
- * overrides the preference above, so 5.1 — where the assembly does not exist and
- * is not needed — ignores it.
+ * to System.Windows.Extensions on .NET Core. On 5.1 the assembly does not exist and
+ * is not needed, but `Add-Type` raises that as a *terminating* exception, which
+ * `-ErrorAction` cannot silence (that parameter only governs non-terminating
+ * `WriteError` calls) — with `$ErrorActionPreference = 'Stop'` already set above,
+ * an unguarded call here would kill the whole script on 5.1 before SoundPlayer
+ * ever runs. `try/catch` is what actually swallows it.
  *
  * Written with single quotes only: the whole script travels as ONE argv element,
  * and libuv wraps any argument containing spaces in double quotes — an inner `"`
@@ -30,9 +33,9 @@ interface PingCommand {
  */
 const WINDOWS_PING_SCRIPT = [
   "$ErrorActionPreference = 'Stop';",
-  'Add-Type -AssemblyName System.Windows.Extensions -ErrorAction SilentlyContinue;',
+  'try { Add-Type -AssemblyName System.Windows.Extensions -ErrorAction SilentlyContinue } catch {}',
   "$m = Join-Path $env:WINDIR 'Media';",
-  "$f = @('Windows Notify System Generic.wav', 'notify.wav', 'ding.wav')",
+  "$f = @('Windows Pop-up Blocked.wav', 'Windows Notify System Generic.wav', 'notify.wav', 'ding.wav')",
   '| ForEach-Object { Join-Path $m $_ }',
   '| Where-Object { Test-Path $_ }',
   '| Select-Object -First 1;',
