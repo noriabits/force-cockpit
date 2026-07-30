@@ -516,7 +516,12 @@ body {
 }
 
 .soql-textarea::selection {
+  /* The textarea's own text is transparent (see above) and the coloured copy
+     lives in the .soql-highlight layer underneath, which an opaque selection
+     background would otherwise cover completely. Give selected text its own
+     visible colour so it doesn't vanish into the highlight rectangle. */
   background-color: var(--vscode-editor-selectionBackground, rgba(100, 150, 220, 0.4));
+  color: var(--vscode-editor-selectionForeground, var(--vscode-input-foreground));
 }
 
 .soql-highlight {
