@@ -119,13 +119,15 @@ export function createResponseView(ctx) {
   wireOpenInEditorButton(openEditorBtn, () => bodyEl.textContent || '', vscode);
   wireCopyToClipboardButton(copyBtn, () => bodyEl.textContent || '');
 
-  /** @param {{ status: number, statusText?: string, headers: Record<string, string>, body: unknown }} data */
+  /** @param {{ status: number, statusText?: string, headers: Record<string, string>, body: unknown, sessionRefreshed?: boolean }} data */
   function showResponse(data) {
     errorEl.style.display = 'none';
     const suffix = statusSuffix(data.status);
     metaEl.classList.remove(...STATUS_CLASSES);
     metaEl.classList.add(`rest-response-status--${suffix}`);
-    metaEl.textContent = `${data.status}${data.statusText ? ' ' + data.statusText : ''}`;
+    // The refreshed-session note explains the extra latency of the transparent replay.
+    const refreshedNote = data.sessionRefreshed ? ' · session refreshed' : '';
+    metaEl.textContent = `${data.status}${data.statusText ? ' ' + data.statusText : ''}${refreshedNote}`;
     bodyEl.classList.remove(...BODY_BORDER_CLASSES);
     bodyEl.classList.add(`rest-response-body--${suffix}`);
     bodyEl.innerHTML =

@@ -39,7 +39,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel('Force Cockpit');
   context.subscriptions.push(outputChannel);
 
-  const connectionManager = new ConnectionManager();
+  const connectionManager = new ConnectionManager({
+    log: (message) => outputChannel.appendLine(message),
+  });
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
   const builtInPath = path.join(context.extensionPath, 'force-cockpit');
@@ -233,6 +235,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {
+      if (!connectionManager.getCurrentOrg()) {
+        vscode.window.showWarningMessage('No org connected.');
+        return;
+      }
+      // frontdoor.jsp needs a live session id; nothing else validates the token on this
+      // path, so renew it up front rather than dropping the user on a login page.
+      await connectionManager.ensureValidSession();
       const org = connectionManager.getCurrentOrg();
       if (!org) {
         vscode.window.showWarningMessage('No org connected.');

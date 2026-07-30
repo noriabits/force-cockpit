@@ -11,6 +11,8 @@ export interface RestCallResult {
   headers: Record<string, string>;
   /** The parsed response body (object for JSON responses, string otherwise, undefined for 204). */
   body: unknown;
+  /** True when the session had expired and the call was replayed with a renewed token. */
+  sessionRefreshed?: boolean;
 }
 
 const VALID_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];

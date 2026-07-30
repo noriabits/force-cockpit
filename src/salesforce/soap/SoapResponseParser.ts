@@ -10,6 +10,24 @@ export interface ExecuteAnonymousSoapResult {
   debugLog: string;
 }
 
+/**
+ * True when the response is a SOAP fault caused by an expired/invalid session.
+ * `postSoapRequest` resolves with the raw XML whatever the HTTP status, so this is the
+ * only signal that the token embedded in the envelope was rejected.
+ */
+export function isSoapSessionExpired(xmlResponse: string): boolean {
+  if (!/<[^:]*:?Fault[\s>]/i.test(xmlResponse)) return false;
+  return /INVALID_SESSION_ID/i.test(xmlResponse);
+}
+
+/** The `faultstring` of a SOAP fault response, or null when the response is not a fault. */
+export function extractSoapFault(xmlResponse: string): string | null {
+  if (!/<[^:]*:?Fault[\s>]/i.test(xmlResponse)) return null;
+  const faultString = extractXmlValue(xmlResponse, 'faultstring');
+  const faultCode = extractXmlValue(xmlResponse, 'faultcode');
+  return faultString || faultCode || 'Unknown SOAP fault';
+}
+
 export function parseExecuteAnonymousResponse(xmlResponse: string): ExecuteAnonymousSoapResult {
   return {
     compiled: extractXmlValue(xmlResponse, 'compiled') === 'true',

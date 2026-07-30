@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { StateAggregator } from '@salesforce/core';
+import { AuthInfo, StateAggregator } from '@salesforce/core';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +22,41 @@ export interface OrgDetails extends SfOrg {
   accessToken: string;
   clientId?: string;
   loginUrl?: string;
+}
+
+/**
+ * jsforce `SessionRefreshFunc`-shaped callback: given the connection whose token expired,
+ * mints a new access token and hands it back. Typed structurally (rather than against
+ * jsforce's `Connection`) because it originates from @salesforce/core's own bundled copy
+ * of jsforce, which is a different type identity from our `@jsforce/jsforce-node`.
+ */
+export type SessionRefreshFn = (
+  conn: unknown,
+  callback: (err: Error | null, accessToken?: string) => void,
+) => void;
+
+/**
+ * The subset of `AuthInfo.getConnectionOptions()` we feed into a jsforce Connection.
+ * `refreshFn` is present for OAuth (web/JWT) orgs and absent for access-token-only auth.
+ */
+export interface OrgConnectionOptions {
+  instanceUrl?: string;
+  accessToken?: string;
+  oauth2?: { loginUrl?: string; clientId?: string; redirectUri?: string };
+  refreshFn?: SessionRefreshFn;
+}
+
+/**
+ * Auth options for the given org, including the `refreshFn` that lets jsforce renew an
+ * expired access token on its own. @salesforce/core's `refreshFn` covers both the OAuth
+ * refresh-token and JWT flows and persists the new token back to the auth file, so the
+ * `sf` CLI and this extension stay in sync.
+ *
+ * @param username - The resolved username (NOT an alias) — see {@link getOrgDetails}.
+ */
+export async function getConnectionOptions(username: string): Promise<OrgConnectionOptions> {
+  const authInfo = await AuthInfo.create({ username });
+  return authInfo.getConnectionOptions() as OrgConnectionOptions;
 }
 
 /**

@@ -7,25 +7,74 @@ import type { OrgDetails } from '../utils/sfCli';
 let autoResolveIdentity = true;
 const identityDeferreds: Array<{ resolve: () => void; reject: (e: unknown) => void }> = [];
 let connectionConstructorCount = 0;
+/** When set, identity() rejects with this — simulates a session jsforce cannot refresh. */
+let identityError: unknown = null;
+/** Runs on every identity() call — used to simulate jsforce's delegate swapping the token in. */
+let onIdentity: ((conn: FakeConnection) => void) | null = null;
+let identityCallCount = 0;
+/** The most recently constructed connection, so tests can inspect its config. */
+let lastConnection: FakeConnection | null = null;
+const queryMock = vi.fn();
 
-vi.mock('@jsforce/jsforce-node', () => ({
-  Connection: class {
-    instanceUrl: string;
-    accessToken: string;
-    version: string;
-    constructor(opts: { instanceUrl: string; accessToken: string; version: string }) {
-      connectionConstructorCount++;
-      this.instanceUrl = opts.instanceUrl;
-      this.accessToken = opts.accessToken;
-      this.version = opts.version;
-    }
-    identity() {
-      if (autoResolveIdentity) return Promise.resolve({});
-      return new Promise<void>((resolve, reject) =>
-        identityDeferreds.push({ resolve: () => resolve(), reject }),
-      );
-    }
-  },
+interface FakeConnection {
+  instanceUrl: string;
+  accessToken: string;
+  version: string;
+  oauth2?: unknown;
+  refreshFn?: unknown;
+}
+
+vi.mock('@jsforce/jsforce-node', async () => {
+  const { EventEmitter } = await import('events');
+  return {
+    Connection: class extends EventEmitter {
+      instanceUrl: string;
+      accessToken: string;
+      version: string;
+      oauth2?: unknown;
+      refreshFn?: unknown;
+      constructor(opts: {
+        instanceUrl: string;
+        accessToken: string;
+        version: string;
+        oauth2?: unknown;
+        refreshFn?: unknown;
+      }) {
+        super();
+        connectionConstructorCount++;
+        this.instanceUrl = opts.instanceUrl;
+        this.accessToken = opts.accessToken;
+        this.version = opts.version;
+        this.oauth2 = opts.oauth2;
+        this.refreshFn = opts.refreshFn;
+        lastConnection = this as unknown as FakeConnection;
+      }
+      identity() {
+        identityCallCount++;
+        if (identityError) return Promise.reject(identityError);
+        onIdentity?.(this as unknown as FakeConnection);
+        if (autoResolveIdentity) return Promise.resolve({});
+        return new Promise<void>((resolve, reject) =>
+          identityDeferreds.push({ resolve: () => resolve(), reject }),
+        );
+      }
+      query(soql: string) {
+        return queryMock(soql);
+      }
+    },
+  };
+});
+
+// Mocking sfCli keeps @salesforce/core out of these unit tests and lets each case decide
+// what the auth lookups return — including whether the org has a usable refreshFn.
+const getConnectionOptionsMock = vi.fn();
+const refreshOrgTokenMock = vi.fn();
+const getOrgDetailsMock = vi.fn();
+
+vi.mock('../utils/sfCli', () => ({
+  getConnectionOptions: (...args: unknown[]) => getConnectionOptionsMock(...args),
+  refreshOrgToken: (...args: unknown[]) => refreshOrgTokenMock(...args),
+  getOrgDetails: (...args: unknown[]) => getOrgDetailsMock(...args),
 }));
 
 import { ConnectionManager } from './connection';
@@ -40,9 +89,14 @@ function org(overrides: Partial<OrgDetails> = {}): OrgDetails {
   } as OrgDetails;
 }
 
-/** Flush enough microtasks for the parked identity().then chains to settle. */
+/**
+ * Flush enough microtasks for the parked identity().then chains to settle. The trailing
+ * macrotask tick also lets connect()'s awaited auth lookup resolve, so the jsforce
+ * Connection has actually been constructed by the time we inspect it.
+ */
 async function flush() {
   for (let i = 0; i < 5; i++) await Promise.resolve();
+  for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve));
 }
 
 describe('ConnectionManager', () => {
@@ -50,6 +104,19 @@ describe('ConnectionManager', () => {
     autoResolveIdentity = true;
     identityDeferreds.length = 0;
     connectionConstructorCount = 0;
+    identityError = null;
+    onIdentity = null;
+    identityCallCount = 0;
+    lastConnection = null;
+    queryMock.mockReset();
+    getConnectionOptionsMock.mockReset().mockResolvedValue({
+      instanceUrl: 'https://example.my.salesforce.com',
+      accessToken: 'TOKEN',
+      oauth2: { loginUrl: 'https://login.salesforce.com', clientId: 'PlatformCLI' },
+      refreshFn: () => {},
+    });
+    refreshOrgTokenMock.mockReset().mockResolvedValue(undefined);
+    getOrgDetailsMock.mockReset();
   });
 
   it('connect() establishes the connection and emits connectionChanged', async () => {
@@ -71,6 +138,7 @@ describe('ConnectionManager', () => {
 
     const first = cm.connect(org({ alias: 'a' }));
     expect(cm.connectingTarget).toBe('a');
+    await flush();
     // Second call to the same target returns immediately without a new Connection
     await cm.connect(org({ alias: 'a' }));
     expect(connectionConstructorCount).toBe(1);
@@ -87,6 +155,7 @@ describe('ConnectionManager', () => {
     cm.on('connectionChanged', (e) => events.push(e));
 
     const pending = cm.connect(org({ alias: 'a' }));
+    await flush();
     // Disconnect bumps the version, invalidating the in-flight connect
     cm.disconnect();
     identityDeferreds[0].resolve();
@@ -104,6 +173,7 @@ describe('ConnectionManager', () => {
 
     const firstPending = cm.connect(org({ alias: 'a' }));
     const secondPending = cm.connect(org({ alias: 'b' }));
+    await flush();
     expect(connectionConstructorCount).toBe(2);
 
     // Resolve the FIRST (older) connect last — it should be discarded as stale
@@ -123,6 +193,140 @@ describe('ConnectionManager', () => {
     expect(cm.isConnected).toBe(false);
     expect(cm.getCurrentOrg()).toBeNull();
     expect(cm.connectingTarget).toBeNull();
+  });
+
+  describe('refreshable auth', () => {
+    it('builds the connection from AuthInfo options so jsforce can self-refresh', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+
+      expect(getConnectionOptionsMock).toHaveBeenCalledWith('user@example.com');
+      expect(lastConnection?.oauth2).toEqual({
+        loginUrl: 'https://login.salesforce.com',
+        clientId: 'PlatformCLI',
+      });
+      expect(lastConnection?.refreshFn).toBeTypeOf('function');
+    });
+
+    it('falls back to the stored access token when AuthInfo options are unavailable', async () => {
+      getConnectionOptionsMock.mockRejectedValue(new Error('no auth file'));
+      const logged: string[] = [];
+      const cm = new ConnectionManager({ log: (m) => logged.push(m) });
+
+      await cm.connect(org({ accessToken: 'FALLBACK' }));
+
+      expect(cm.isConnected).toBe(true);
+      expect(lastConnection?.accessToken).toBe('FALLBACK');
+      expect(lastConnection?.refreshFn).toBeUndefined();
+      expect(logged.join('\n')).toContain('using the stored access token');
+    });
+
+    it("syncs the OrgDetails snapshot when jsforce emits 'refresh'", async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+
+      (lastConnection as unknown as { emit: (e: string, t: string) => void }).emit(
+        'refresh',
+        'RENEWED',
+      );
+
+      // buildOrgUrl() reads accessToken off this snapshot to build the frontdoor link
+      expect(cm.getCurrentOrg()?.accessToken).toBe('RENEWED');
+    });
+
+    it('ensureValidSession() reports false when the token was already valid', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+
+      expect(await cm.ensureValidSession()).toBe(false);
+    });
+
+    it('ensureValidSession() falls back to the SF CLI when jsforce cannot refresh', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org({ alias: 'myorg' }));
+      identityError = Object.assign(new Error('expired'), { errorCode: 'INVALID_SESSION_ID' });
+      getOrgDetailsMock.mockResolvedValue(org({ alias: 'myorg', accessToken: 'CLI_TOKEN' }));
+
+      expect(await cm.ensureValidSession()).toBe(true);
+      expect(refreshOrgTokenMock).toHaveBeenCalledWith('myorg');
+      // Patched in place — YAML JS scripts hold this very object
+      expect(lastConnection?.accessToken).toBe('CLI_TOKEN');
+      expect(cm.getCurrentOrg()?.accessToken).toBe('CLI_TOKEN');
+    });
+
+    it('ensureValidSession() reports false when both refresh tiers fail', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityError = new Error('expired');
+      getOrgDetailsMock.mockRejectedValue(new Error('no credentials'));
+
+      expect(await cm.ensureValidSession()).toBe(false);
+    });
+
+    it('collapses concurrent refreshes into a single attempt', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityCallCount = 0;
+      onIdentity = (conn) => {
+        conn.accessToken = 'TOKEN2';
+      };
+
+      const [a, b, c] = await Promise.all([
+        cm.ensureValidSession(),
+        cm.ensureValidSession(),
+        cm.ensureValidSession(),
+      ]);
+
+      expect([a, b, c]).toEqual([true, true, true]);
+      expect(identityCallCount).toBe(1);
+    });
+
+    it('retries a jsforce call once after renewing an expired session', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      onIdentity = (conn) => {
+        conn.accessToken = 'TOKEN2';
+      };
+      queryMock
+        .mockRejectedValueOnce(
+          Object.assign(new Error('expired'), {
+            errorCode: 'INVALID_SESSION_ID',
+          }),
+        )
+        .mockResolvedValueOnce({ records: [{ Id: '1' }] });
+
+      const result = await cm.query('SELECT Id FROM Account');
+
+      expect(result).toEqual({ records: [{ Id: '1' }] });
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not loop when the retried jsforce call fails again', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      onIdentity = (conn) => {
+        conn.accessToken = 'TOKEN2';
+      };
+      queryMock.mockRejectedValue(
+        Object.assign(new Error('expired'), { errorCode: 'INVALID_SESSION_ID' }),
+      );
+
+      await expect(cm.query('SELECT Id FROM Account')).rejects.toThrow('expired');
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('propagates non-session errors without attempting a refresh', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityCallCount = 0;
+      queryMock.mockRejectedValue(
+        Object.assign(new Error('bad field'), { errorCode: 'INVALID_FIELD' }),
+      );
+
+      await expect(cm.query('SELECT Nope FROM Account')).rejects.toThrow('bad field');
+      expect(queryMock).toHaveBeenCalledTimes(1);
+      expect(identityCallCount).toBe(0);
+    });
   });
 
   describe('request()', () => {
@@ -229,6 +433,86 @@ describe('ConnectionManager', () => {
       const result = await cm.request({ method: 'GET', url: '/x' });
 
       expect(result.body).toBe('hello');
+      vi.unstubAllGlobals();
+    });
+
+    /** The canonical Salesforce 401 body for a dead session. */
+    const invalidSession = [{ errorCode: 'INVALID_SESSION_ID', message: 'Session expired' }];
+
+    it('renews the session and replays the request on an expired-session 401', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      onIdentity = (conn) => {
+        conn.accessToken = 'TOKEN2';
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(fakeResponse({ status: 401, json: invalidSession }))
+        .mockResolvedValueOnce(fakeResponse({ status: 200, json: { ok: true } }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await cm.request({ method: 'POST', url: '/x', body: '{}' });
+
+      expect(result.status).toBe(200);
+      expect(result.sessionRefreshed).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // The replay carries the renewed token
+      expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer TOKEN2');
+      vi.unstubAllGlobals();
+    });
+
+    it('returns the original 401 when the session could not be renewed', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityError = new Error('expired');
+      getOrgDetailsMock.mockRejectedValue(new Error('no credentials'));
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(fakeResponse({ status: 401, json: invalidSession }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await cm.request({ method: 'GET', url: '/x' });
+
+      expect(result.status).toBe(401);
+      expect(result.sessionRefreshed).toBeUndefined();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      vi.unstubAllGlobals();
+    });
+
+    it('does not refresh on a 401 that a new token would not fix', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityCallCount = 0;
+      const fetchMock = vi.fn().mockResolvedValue(
+        fakeResponse({
+          status: 401,
+          json: [{ message: 'This session is not valid for use with the REST API' }],
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await cm.request({ method: 'GET', url: '/x' });
+
+      expect(result.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(identityCallCount).toBe(0);
+      vi.unstubAllGlobals();
+    });
+
+    it('does not refresh org credentials for a 401 from a third-party host', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      identityCallCount = 0;
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(fakeResponse({ status: 401, json: invalidSession }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await cm.request({ method: 'GET', url: 'https://other-host.example.com/x' });
+
+      expect(result.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(identityCallCount).toBe(0);
       vi.unstubAllGlobals();
     });
   });
