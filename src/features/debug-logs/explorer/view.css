@@ -150,10 +150,6 @@
   font-size: 12px;
 }
 
-.dbg-selected-label {
-  color: var(--vscode-descriptionForeground);
-}
-
 .dbg-custom-levels {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));

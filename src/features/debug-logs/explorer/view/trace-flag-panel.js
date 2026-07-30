@@ -194,7 +194,6 @@ export function createTraceFlagPanel(ctx) {
     const kindLabel =
       entity.kind === 'user' ? 'user' : entity.kind === 'apexClass' ? 'Apex class' : 'trigger';
     selectedEl.innerHTML =
-      `<span class="dbg-selected-label">Tracing</span> ` +
       `<strong>${escapeHtml(entity.name)}</strong> ` +
       `<span class="dbg-entity-sub">${escapeHtml(entity.subtitle)} · ${kindLabel}</span>`;
   }
