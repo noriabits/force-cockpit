@@ -50,34 +50,42 @@ function repeatedStatements(
   rule: string,
   label: string,
   suggestion: string,
+  signatureOf: (e: LogEvent) => string | null,
 ): LogIssue[] {
   const statements = events.filter((e) => e.event === eventName);
   // Group by source line when the `[42]` marker is present. Managed/external
-  // code logs `[EXTERNAL]` instead — fall back to the statement text there so
-  // the loop is still caught rather than silently dropped.
+  // code logs `[EXTERNAL]` instead — fall back to the statement signature there
+  // so the loop is still caught rather than silently dropped.
   const byOrigin = countBy(statements, (e) => {
     const line = sourceLineOf(e);
     if (line !== null) return `line:${line}`;
-    const text = e.fields[e.fields.length - 1] ?? '';
-    return text ? `text:${normalizeQuery(text)}` : null;
+    const signature = signatureOf(e);
+    return signature ? `text:${signature}` : null;
   });
   const issues: LogIssue[] = [];
   for (const [origin, group] of byOrigin) {
     if (group.length < LOOP_THRESHOLD) continue;
-    const where = origin.startsWith('line:')
-      ? `Source line ${origin.slice(5)}`
-      : 'The same statement';
-    issues.push({
-      rule,
-      severity: group.length >= LOOP_THRESHOLD * 4 ? 'critical' : 'warning',
-      title: `${label} executed ${group.length}× from the same line`,
-      detail:
-        `${where} ran ${group.length} times in this transaction, which is the ` +
-        `signature of a ${label.toLowerCase()} inside a loop.`,
-      lineNo: group[0].lineNo,
-      evidence: group.slice(0, 3).map((e) => truncate(e.raw)),
-      suggestion,
-    });
+    // A shared helper (e.g. a generic dynamic-query executor) can land many
+    // unrelated calls on one source line. Only count repeats of the *same*
+    // statement as a loop — not every call that merely shares a line.
+    const bySignature = countBy(group, (e) => signatureOf(e) ?? origin);
+    for (const sameStatement of bySignature.values()) {
+      if (sameStatement.length < LOOP_THRESHOLD) continue;
+      const where = origin.startsWith('line:')
+        ? `Source line ${origin.slice(5)}`
+        : 'The same statement';
+      issues.push({
+        rule,
+        severity: sameStatement.length >= LOOP_THRESHOLD * 4 ? 'critical' : 'warning',
+        title: `${label} executed ${sameStatement.length}× from the same line`,
+        detail:
+          `${where} ran ${sameStatement.length} times in this transaction, which is the ` +
+          `signature of a ${label.toLowerCase()} inside a loop.`,
+        lineNo: sameStatement[0].lineNo,
+        evidence: sameStatement.slice(0, 3).map((e) => truncate(e.raw)),
+        suggestion,
+      });
+    }
   }
   return issues;
 }
@@ -142,24 +150,49 @@ function exceptions(summary: LogSummary): LogIssue[] {
   }));
 }
 
+function triggerNameOf(e: LogEvent): string | null {
+  const ref = e.fields.find((f) => f.includes('__sfdc_trigger/'));
+  return ref ? ref.split('__sfdc_trigger/')[1] : null;
+}
+
 function recursiveTriggers(events: LogEvent[]): LogIssue[] {
-  const triggerRuns = events.filter(
-    (e) => e.event === 'CODE_UNIT_STARTED' && e.fields.some((f) => f.includes('__sfdc_trigger/')),
-  );
-  const byTrigger = countBy(triggerRuns, (e) => {
-    const ref = e.fields.find((f) => f.includes('__sfdc_trigger/'));
-    return ref ? ref.split('__sfdc_trigger/')[1] : null;
-  });
+  // Before/After halves of a single DML, or several separate top-level DML
+  // statements against the same object, both make a trigger "run" more than
+  // once in a transaction — that's normal. Genuine recursion is a trigger
+  // invocation starting while an earlier invocation of the *same* trigger
+  // hasn't finished yet (it re-entered itself via its own DML), so track
+  // nesting depth per trigger name rather than counting raw start events.
+  const depth = new Map<string, number>();
+  const runsByTrigger = new Map<string, LogEvent[]>();
+  const reentrant = new Set<string>();
+  for (const e of events) {
+    if (e.event === 'CODE_UNIT_STARTED') {
+      const name = triggerNameOf(e);
+      if (!name) continue;
+      const current = depth.get(name) ?? 0;
+      if (current > 0) reentrant.add(name);
+      depth.set(name, current + 1);
+      const runs = runsByTrigger.get(name);
+      if (runs) runs.push(e);
+      else runsByTrigger.set(name, [e]);
+    } else if (e.event === 'CODE_UNIT_FINISHED') {
+      const name = triggerNameOf(e);
+      if (!name) continue;
+      const current = depth.get(name) ?? 0;
+      if (current > 0) depth.set(name, current - 1);
+    }
+  }
   const issues: LogIssue[] = [];
-  for (const [name, runs] of byTrigger) {
-    if (runs.length < 2) continue;
+  for (const [name, runs] of runsByTrigger) {
+    if (!reentrant.has(name)) continue;
     issues.push({
       rule: 'recursive-trigger',
       severity: runs.length > 3 ? 'warning' : 'info',
-      title: `Trigger ${name} ran ${runs.length}× in one transaction`,
+      title: `Trigger ${name} re-entered itself (${runs.length} runs in one transaction)`,
       detail:
-        'A trigger firing more than once usually means a later update re-entered it — each ' +
-        'pass consumes the same governor limits again.',
+        'A later run of this trigger started before an earlier run on the same object finished — ' +
+        'the signature of the trigger re-triggering itself through its own DML, not just separate ' +
+        'updates later in the transaction.',
       lineNo: runs[0].lineNo,
       evidence: runs.slice(0, 3).map((e) => truncate(e.raw)),
       suggestion: 'Add a static recursion guard, or move the re-entrant update out of the trigger.',
@@ -221,6 +254,10 @@ export function detectIssues(events: LogEvent[], summary: LogSummary): LogIssue[
       'soql-in-loop',
       'SOQL query',
       'Move the query out of the loop: query once before the loop and index the results in a Map.',
+      (e) => {
+        const text = e.fields[e.fields.length - 1];
+        return text ? normalizeQuery(text) : null;
+      },
     ),
     ...repeatedStatements(
       events,
@@ -228,6 +265,11 @@ export function detectIssues(events: LogEvent[], summary: LogSummary): LogIssue[
       'dml-in-loop',
       'DML statement',
       'Collect the records in a list inside the loop and perform a single DML after it.',
+      (e) => {
+        const op = e.fields.find((f) => f.startsWith('Op:'));
+        const type = e.fields.find((f) => f.startsWith('Type:'));
+        return op && type ? `${op}|${type}` : null;
+      },
     ),
     ...repeatedQueries(events),
     ...wideQueries(events),
