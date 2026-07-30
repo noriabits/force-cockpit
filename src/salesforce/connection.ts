@@ -179,8 +179,11 @@ export class ConnectionManager extends EventEmitter {
       if (this._connectVersion !== version) return;
 
       this._connection = conn;
-      this._currentOrg = org;
-      this.emit('connectionChanged', { connected: true, org } as ConnectionChangedEvent);
+      this._currentOrg = this.syncOrgToken(org, conn);
+      this.emit('connectionChanged', {
+        connected: true,
+        org: this._currentOrg,
+      } as ConnectionChangedEvent);
     } finally {
       // Only clear our own target — a newer connect() may have already set a different one
       if (this._connectingTarget === target) this._connectingTarget = null;
@@ -226,6 +229,23 @@ export class ConnectionManager extends EventEmitter {
     }
   }
 
+  /**
+   * Reconciles the OrgDetails snapshot with the token the connection actually ended up
+   * holding. Two ways they diverge, both of which leave `buildOrgUrl`'s
+   * `frontdoor.jsp?sid=` pointing at a dead session:
+   *  - jsforce refreshed the token during connect()'s `identity()` probe. That fires
+   *    'refresh' before `_connection` is assigned, so {@link onTokenRefreshed} rightly
+   *    ignores it as a not-yet-current connection and the new token is dropped.
+   *  - {@link buildConnectionConfig} preferred AuthInfo's token over the OrgDetails one.
+   *
+   * Neither is self-healing: a later {@link ensureValidSession} sees a valid token,
+   * reports "nothing changed" and never rewrites the snapshot.
+   */
+  private syncOrgToken(org: OrgDetails, conn: jsforce.Connection): OrgDetails {
+    const token = conn.accessToken;
+    return token && token !== org.accessToken ? { ...org, accessToken: token } : org;
+  }
+
   private onTokenRefreshed(conn: jsforce.Connection, token: string): void {
     if (conn !== this._connection || !this._currentOrg) return;
     this._currentOrg = { ...this._currentOrg, accessToken: token };
@@ -243,9 +263,13 @@ export class ConnectionManager extends EventEmitter {
   async ensureValidSession(): Promise<boolean> {
     if (!this._connection) return false;
     if (!this._sessionRefresh) {
-      this._sessionRefresh = this.refreshSession().finally(() => {
-        this._sessionRefresh = null;
+      const pending: Promise<boolean> = this.refreshSession().finally(() => {
+        // Clear only our own entry: disconnect() may have dropped it already and a newer
+        // call registered its refresh in the meantime — nulling that would let the next
+        // caller start a second, redundant refresh.
+        if (this._sessionRefresh === pending) this._sessionRefresh = null;
       });
+      this._sessionRefresh = pending;
     }
     return this._sessionRefresh;
   }

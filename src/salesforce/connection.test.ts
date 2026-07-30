@@ -234,6 +234,84 @@ describe('ConnectionManager', () => {
       expect(cm.getCurrentOrg()?.accessToken).toBe('RENEWED');
     });
 
+    it('syncs the snapshot when the token is refreshed during connect()', async () => {
+      // jsforce renews inside identity(), i.e. before _connection is assigned — too early
+      // for the 'refresh' listener, which ignores connections that are not yet current.
+      onIdentity = (conn) => {
+        conn.accessToken = 'FRESH';
+        (conn as unknown as { emit: (e: string, t: string) => void }).emit('refresh', 'FRESH');
+      };
+      const cm = new ConnectionManager();
+
+      await cm.connect(org({ accessToken: 'STALE' }));
+
+      expect(cm.getCurrentOrg()?.accessToken).toBe('FRESH');
+    });
+
+    it('does not leave the snapshot stale after a connect-time refresh', async () => {
+      // Regression: ensureValidSession() cannot repair this later — the token is valid by
+      // then, so it reports "nothing changed" and never rewrites the snapshot.
+      onIdentity = (conn) => {
+        conn.accessToken = 'FRESH';
+      };
+      const cm = new ConnectionManager();
+      await cm.connect(org({ accessToken: 'STALE' }));
+
+      onIdentity = null; // token is now valid; identity() succeeds without changing it
+      expect(await cm.ensureValidSession()).toBe(false);
+      expect(cm.getCurrentOrg()?.accessToken).toBe('FRESH');
+    });
+
+    it('snapshots the AuthInfo token when it differs from the OrgDetails one', async () => {
+      getConnectionOptionsMock.mockResolvedValue({
+        instanceUrl: 'https://example.my.salesforce.com',
+        accessToken: 'FROM_AUTHINFO',
+        refreshFn: () => {},
+      });
+      const cm = new ConnectionManager();
+
+      await cm.connect(org({ accessToken: 'FROM_ORGDETAILS' }));
+
+      expect(lastConnection?.accessToken).toBe('FROM_AUTHINFO');
+      expect(cm.getCurrentOrg()?.accessToken).toBe('FROM_AUTHINFO');
+    });
+
+    it('emits connectionChanged carrying the reconciled token', async () => {
+      onIdentity = (conn) => {
+        conn.accessToken = 'FRESH';
+      };
+      const cm = new ConnectionManager();
+      const events: Array<{ connected: boolean; org?: { accessToken?: string } }> = [];
+      cm.on('connectionChanged', (e) => events.push(e));
+
+      await cm.connect(org({ accessToken: 'STALE' }));
+
+      expect(events[0].org?.accessToken).toBe('FRESH');
+    });
+
+    it('a superseded refresh does not clear a newer one', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org({ alias: 'a' }));
+
+      autoResolveIdentity = false; // park the refresh probes
+      const stale = cm.ensureValidSession();
+      cm.disconnect(); // clears _sessionRefresh while `stale` is still in flight
+
+      autoResolveIdentity = true;
+      await cm.connect(org({ alias: 'b' }));
+      autoResolveIdentity = false;
+      const current = cm.ensureValidSession();
+
+      identityDeferreds[0].resolve(); // the stale refresh settles last
+      await flush();
+
+      // Its finally() must not have nulled the entry `current` registered
+      expect((cm as unknown as { _sessionRefresh: unknown })._sessionRefresh).not.toBeNull();
+
+      identityDeferreds[1].resolve();
+      await Promise.all([stale, current]);
+    });
+
     it('ensureValidSession() reports false when the token was already valid', async () => {
       const cm = new ConnectionManager();
       await cm.connect(org());
