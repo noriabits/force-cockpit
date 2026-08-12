@@ -93,8 +93,8 @@ Use `${name}` anywhere in the script body (and, for `ai` scripts, in `gather.soq
 
 | Script kind | Escaping applied to `${var}` |
 |---|---|
-| `apex` | Backslashes and `'` doubled, newlines turned into literal `\n` — safe to drop straight into an Apex string literal `'${var}'` |
-| `js` | `JSON.stringify(value).slice(1, -1)` — safe inside a JS string literal `'${var}'` |
+| `apex` | Backslash-escaped exactly like Apex's own `String.escapeSingleQuotes` — `\` → `\\`, `'` → `\'`, newlines → literal `\n`. Safe to drop straight into an Apex string literal `'${var}'`. (Not `''`-doubling: Apex reads `''` as two adjacent literals with nothing joining them, which does not compile.) |
+| `js` | JSON string escaping, plus `'` → `\u0027`. Safe inside a JS string literal written either way — `'${var}'` or `"${var}"` — and still valid JSON, so `JSON.parse("${var}")` works |
 | `command` / `ai` | Raw, unescaped |
 
 There's one built-in **system placeholder**, always available without declaring it in `inputs:`: `${orgUsername}` — the connected org's username (empty string if no org is connected). If you declare a user input with the same name, your input wins.
@@ -372,7 +372,7 @@ then:
 Rules that apply to every combination:
 
 - **Values are always strings.** A marker's value is the rest of the line, so it may itself contain `=`.
-- **Escaping is the callee's job**, and it happens automatically for the callee's kind — an Apex callee gets `''`-doubled quotes, a JS callee gets JSON escaping. Pass raw values; never pre-escape.
+- **Escaping is the callee's job**, and it happens automatically for the callee's kind — an Apex callee gets backslash-escaped quotes, a JS callee gets JSON escaping. Pass raw values; never pre-escape.
 - **This covers placeholders only, not Apex you generate yourself.** A `js` script's inputs are escaped for JS; if that script then builds an Apex string and runs it via `executeApex`, those values are plain JS strings again and nothing has escaped them for Apex. Wrap each one in `apexValue(...)`.
 - **A name nothing published resolves to empty**, not to the literal text `${name}`. If the callee declares it `required: true`, you get a clear "Required input … is missing" instead of `${name}` reaching your org.
 - A `js` script's outputs come **only** from its own `setOutput` calls — it never inherits the outputs of scripts it called. To pass a callee's value further up, re-export it: `setOutput('accountId', r.outputs.accountId)`.

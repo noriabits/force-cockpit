@@ -3,6 +3,7 @@ import {
   escapeForType,
   substituteInputs,
   substituteSystemPlaceholders,
+  substituteVars,
   validateRequiredInputs,
 } from './PlaceholderResolver';
 import type { YamlScript } from '../types';
@@ -34,7 +35,15 @@ describe('escapeForType', () => {
   });
 
   it('js: also escapes single quotes, so single-quoted destinations stay safe', () => {
-    expect(escapeForType("O'Brien", 'js')).toBe("O\\'Brien");
+    expect(escapeForType("O'Brien", 'js')).toBe('O\\u0027Brien');
+  });
+
+  // \u0027 is chosen over \' precisely so both readings of the substituted text
+  // work: a JS string literal and JSON.parse of that same literal.
+  it('js: the escaped quote survives both a JS literal and JSON.parse', () => {
+    const escaped = escapeForType("O'Brien", 'js');
+    expect(eval(`'${escaped}'`)).toBe("O'Brien");
+    expect(JSON.parse(`"${escaped}"`)).toBe("O'Brien");
   });
 
   it('command: returns the raw value unchanged', () => {
@@ -59,6 +68,25 @@ describe('escapeForType', () => {
 
   it('js: escapes newlines via JSON (\\n → \\\\n in output)', () => {
     expect(escapeForType('a\nb', 'js')).toBe('a\\nb');
+  });
+});
+
+describe('substituteVars', () => {
+  // A value is data, never a replacement pattern: String.replace reads `$&` and
+  // friends in a replacement *string*, which would splice `${name}` back into the
+  // generated script. Values arrive from org data via a chained step's `with:`.
+  it.each([
+    ['A$&B', "String n = 'A$&B';"],
+    ['A$`B', "String n = 'A$`B';"],
+    ["A$'B", "String n = 'A$\\'B';"],
+    ['A$$B', "String n = 'A$$B';"],
+    ['A$1B', "String n = 'A$1B';"],
+  ])('inserts %j literally instead of reading it as a replacement pattern', (value, expected) => {
+    expect(substituteVars("String n = '${name}';", { name: value }, 'apex')).toBe(expected);
+  });
+
+  it('leaves an unescaped kind alone too', () => {
+    expect(substituteVars('echo "${name}"', { name: 'A$&B' }, 'command')).toBe('echo "A$&B"');
   });
 });
 

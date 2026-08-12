@@ -9,7 +9,11 @@ export function escapeForType(value: string, type: ScriptType): string {
       // JSON.stringify escapes \ and " for double-quoted destinations; scripts
       // also embed placeholders in single-quoted literals (e.g. `'${name}'`),
       // so ' must be escaped too or the value breaks out of the string.
-      return JSON.stringify(value).slice(1, -1).replace(/'/g, "\\'");
+      //
+      // \u0027 rather than \' because the result has to survive both readings:
+      // a JS string literal accepts either, but `\'` is not a legal JSON escape,
+      // so it would break a script doing JSON.parse("${payload}").
+      return JSON.stringify(value).slice(1, -1).replace(/'/g, '\\u0027');
     case 'command':
     case 'ai':
       return value;
@@ -38,7 +42,11 @@ export function substituteVars(
   for (const [key, raw] of Object.entries(vars)) {
     const escaped = escapeForType(raw, type);
     const pattern = new RegExp(`\\$\\{${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`, 'g');
-    result = result.replace(pattern, escaped);
+    // Replacer function, not a replacement string: a value carrying `$&`, `` $` ``,
+    // `$'` or `$$` would otherwise be read as a replacement pattern and splice the
+    // matched text back into the script. Org data reaches here through a chained
+    // step's `with:`, so the value is not always something the author typed.
+    result = result.replace(pattern, () => escaped);
   }
   return result;
 }

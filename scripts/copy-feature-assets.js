@@ -8,6 +8,12 @@ const path = require('path');
 const SRC_DIR = path.join(__dirname, '..', 'src', 'features');
 const DEST_DIR = path.join(__dirname, '..', 'dist', 'features');
 
+// Wiped alongside dist/features. Nothing is copied here — it holds only esbuild
+// output (dist/webview/rest-call.js), which the build regenerates. A bundle that
+// moves into a feature folder (as the SOQL editor did) would otherwise linger
+// here forever and ship inside every locally-built VSIX.
+const STALE_DIRS = [DEST_DIR, path.join(__dirname, '..', 'dist', 'webview')];
+
 /**
  * Recursively copy non-.ts files from src to dest.
  * Skips `view/` directories — those are ESM source bundled by esbuild
@@ -34,9 +40,9 @@ function copyAssets(src, dest) {
 }
 
 try {
-  // Clean destination first to remove stale files from deleted/renamed features
-  if (fs.existsSync(DEST_DIR)) {
-    fs.rmSync(DEST_DIR, { recursive: true, force: true });
+  // Clean destinations first to remove stale files from deleted/renamed features
+  for (const dir of STALE_DIRS) {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
   copyAssets(SRC_DIR, DEST_DIR);
   console.log('Feature assets copied: src/features/ → dist/features/');

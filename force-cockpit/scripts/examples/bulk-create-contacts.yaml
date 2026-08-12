@@ -12,8 +12,8 @@ inputs:
     type: textarea
     required: true
 js: |
-  // Double quotes: ${...} is JSON-escaped in a js script, which escapes " and
-  // newlines but not ', so single quotes would break on a name like O'Brien.
+  // ${...} is JSON-escaped in a js script (and ' becomes \u0027), so either
+  // quote style is safe here — double quotes just read more naturally.
   const accountId = "${accountId}";
   const names = input
     .parseLines("${lastNames}", ['lastName'])

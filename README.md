@@ -109,7 +109,10 @@ Use **New chat** to clear the conversation and unlock the toggles again. **Open 
 The **Custom** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 
 > [!TIP]
-> **Repository examples:** Ready-to-use YAML script examples are available under `force-cockpit/scripts/examples/`.
+> **Repository examples:** Ready-to-use YAML script examples are available under [`force-cockpit/scripts/examples/`](force-cockpit/scripts/examples). They live in this repo rather than inside the extension — copy the ones you want into your own `force-cockpit/scripts/` folder.
+
+> [!TIP]
+> **Writing scripts with an AI assistant?** This repo ships an [Agent Skill](force-cockpit/skills/force-cockpit-yaml-scripts/SKILL.md) documenting the full script schema — every field, the placeholder escaping rules, the JS sandbox API and the chaining model. Copy the `force-cockpit-yaml-scripts/` folder into your workspace's `.claude/skills/` (or `.github/skills/`) and your assistant will author valid scripts first time. That location is also where Force Cockpit's own AI scripts look for skills, so the same copy shows up in the **Skills** picker.
 
 ```yaml
 # Apex script — requires org connection
@@ -249,7 +252,7 @@ js: |
   }
 ```
 
-A loop, a value read back and per-item error handling — none of which `then:` can express. Both this and the `then:` example above ship under `force-cockpit/scripts/examples/`.
+A loop, a value read back and per-item error handling — none of which `then:` can express. Both this and the `then:` example above live in the repo under [`force-cockpit/scripts/examples/`](force-cockpit/scripts/examples) — copy them into your own `force-cockpit/scripts/` folder to try them.
 
 Because every call is a separate transaction, a script hands values on by publishing them — and any kind can hand a value to any other kind:
 
@@ -326,7 +329,7 @@ The editor supports:
 
 - **Keyword highlighting** — clauses, functions, string and number literals and comparison operators are colour-coded as you type, using your VS Code theme's colours.
 - **Auto-capitalized keywords** — `select`, `from`, `where`, `and`, `order by`… are uppercased automatically the moment you finish typing them, matching the Salesforce documentation convention. Object and field names are left exactly as you typed them — including standard objects like `Order` or `Group`, which are never mistaken for the `ORDER`/`GROUP` clause keywords.
-- **Query tabs** — keep several queries open at once. Use **+** to add a tab, double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tabs are named after the object in the `FROM` clause as you type — `Order`, and repeats get `Order (1)`, `Order (2)` — and picking a query from History or Saved renames the tab to match. Double-click to give a tab your own name instead; clear the name to hand it back to automatic naming. Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
+- **Query tabs** — keep several queries open at once. Use **+** to add a tab, **⧉** to clone the active one (query, name and Tooling toggle carried over), double-click a tab to rename it, and **×** to close it. New tabs start pre-filled with `SELECT Id FROM ` (cursor ready for the object name). Tabs are named after the object in the `FROM` clause as you type — `Order`, and repeats get `Order (1)`, `Order (2)` — and picking a query from History or Saved renames the tab to match. Double-click to give a tab your own name instead; clear the name to hand it back to automatic naming. Tab names and queries are saved per workspace and restored when you reopen the panel (results are not persisted).
 - **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
 - **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
 - **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
@@ -400,7 +403,7 @@ Monitoring configs support two levels of nesting: `{category}/{sub-category}/*.y
 
 ### Deleting a chart
 
-Click **Edit** on the card → click the red **Delete** button in the form → confirm in the modal. User and private charts are removed from disk. Built-in (bundled) charts cannot be deleted from disk, so they are hidden in your workspace instead — a "Restore hidden built-ins (N)" link appears in the top toolbar so you can bring them back.
+Click **Edit** on the card → click the red **Delete** button in the form → confirm in the modal. User and private charts are removed from disk. Built-in charts — the example dashboards under [`force-cockpit/monitoring/`](force-cockpit/monitoring), which you get by cloning this repo rather than from the extension itself — cannot be deleted from disk, so they are hidden in your workspace instead. A "Restore hidden built-ins (N)" link appears in the top toolbar so you can bring them back.
 
 ### YAML schema
 
@@ -537,7 +540,7 @@ chartType: table
 
 ### Editing and saving charts in the UI
 
-Each card has an **Edit** button that opens an inline form. Changes to the SOQL field trigger an auto-preview after 800 ms. Check **Private** to save to the private folder; leave unchecked to save to the shared workspace path. Clicking **Save** writes the YAML — it never overwrites bundled extension charts.
+Each card has an **Edit** button that opens an inline form. Changes to the SOQL field trigger an auto-preview after 800 ms. Check **Private** to save to the private folder; leave unchecked to save to the shared workspace path. Clicking **Save** writes the YAML — it never overwrites a built-in chart's own file.
 
 ---
 
