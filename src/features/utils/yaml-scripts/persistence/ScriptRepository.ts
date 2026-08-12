@@ -2,7 +2,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { toSlug } from '../../../../utils/slug';
 import { checkDuplicateId, deleteYamlItem, dumpYaml } from '../../../../utils/yamlRepository';
-import type { GatherSpec, SaveScriptInput, ScriptInput, YamlScript } from '../types';
+import type {
+  GatherSpec,
+  SaveScriptInput,
+  ScriptInput,
+  ScriptThenStep,
+  YamlScript,
+} from '../types';
 
 interface RepositoryPaths {
   userPath: string;
@@ -152,6 +158,8 @@ export class ScriptRepository {
     if (input.type === 'ai' && input.model) data.model = input.model;
     const serializedInputs = this.serializeInputs(input.inputs);
     if (serializedInputs) data.inputs = serializedInputs;
+    const serializedThen = this.serializeThen(input.then);
+    if (serializedThen) data.then = serializedThen;
 
     const fileField = {
       apex: 'apex-file',
@@ -178,6 +186,15 @@ export class ScriptRepository {
     if (gather.kind === 'apex-file') return { 'apex-file': gather.file ?? gather.value };
     if (gather.kind === 'soql') return { soql: gather.value };
     return { apex: gather.value };
+  }
+
+  private serializeThen(steps?: ScriptThenStep[]): Record<string, unknown>[] | undefined {
+    if (!steps?.length) return undefined;
+    return steps.map((step) => ({
+      script: step.script,
+      ...(step.when ? { when: step.when } : {}),
+      ...(step.with && Object.keys(step.with).length ? { with: step.with } : {}),
+    }));
   }
 
   private serializeInputs(inputs?: ScriptInput[]): Record<string, unknown>[] | undefined {
@@ -215,6 +232,7 @@ export class ScriptRepository {
       ...(input.scriptFile ? { scriptFile: input.scriptFile } : {}),
       source: isPrivate ? 'private' : 'user',
       ...(input.inputs?.length ? { inputs: input.inputs } : {}),
+      ...(input.then?.length ? { then: input.then } : {}),
       ...(input.filterUserDebug ? { filterUserDebug: true } : {}),
       ...(input.formatJson ? { formatJson: true } : {}),
       ...(input.type === 'ai' && input.model ? { model: input.model } : {}),

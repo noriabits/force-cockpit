@@ -71,6 +71,13 @@ export function createScriptForm(ctx) {
   let editingScriptId = null;
   /** @type {string | null} */
   let editingScriptSource = null;
+  /**
+   * `then:` steps of the script being edited. The form has no editor for them
+   * (they are authored in the YAML directly, via "Open YAML"), so they are held
+   * here and written back on save — otherwise saving would silently drop them.
+   * @type {Array<{ script: string; with?: Record<string, string>; when?: string }> | undefined}
+   */
+  let editingThen = undefined;
 
   // ── Form inputs management ───────────────────────────────────────────────
 
@@ -200,6 +207,7 @@ export function createScriptForm(ctx) {
   function showNewForm() {
     editingScriptId = null;
     editingScriptSource = null;
+    editingThen = undefined;
     resetCodeHeight();
     formDeleteBtn.style.display = 'none';
     formCloneBtn.style.display = 'none';
@@ -217,11 +225,12 @@ export function createScriptForm(ctx) {
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; allowReadWorkspaceFiles?: boolean; skills?: string[]; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; allowReadWorkspaceFiles?: boolean; skills?: string[]; then?: Array<{ script: string; with?: Record<string, string>; when?: string }>; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
     editingScriptSource = script.source ?? 'user';
+    editingThen = script.then;
     resetCodeHeight();
     formPrivate.checked = script.source === 'private';
     formName.value = script.name;
@@ -267,6 +276,7 @@ export function createScriptForm(ctx) {
     newForm.style.display = 'none';
     newBtn.disabled = false;
     editingScriptId = null;
+    editingThen = undefined;
   }
 
   // ── Wiring ─────────────────────────────────────────────────────────────────
@@ -367,6 +377,7 @@ export function createScriptForm(ctx) {
       filePath: filePathVal,
       content: contentVal,
       inputs: cleanedInputs,
+      then: editingThen,
       filterUserDebug: !!formFilterUserDebug?.checked,
       formatJson: !!formFormatJson?.checked,
       ...(formType.value === 'ai' ? { aiFields: aiFields.buildAiFields() } : {}),

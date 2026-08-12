@@ -1,0 +1,20 @@
+name: 🔗 Create Contact For Account
+description: >-
+  Creates a Contact under an existing Account. Useful on its own, and used as
+  the chained step of "Create Account (chained)" — the same script serves both,
+  which is the point of `then:`.
+inputs:
+  - name: accountId
+    label: Account Id
+    required: true
+  - name: lastName
+    label: Last Name
+    required: true
+apex: |
+  Contact c = new Contact(AccountId = '${accountId}', LastName = '${lastName}');
+  insert c;
+  System.debug('Created contact ' + c.Id + ' under account ${accountId}');
+
+  // Read by "Bulk Create Contacts", which calls this script via runScript().
+  System.debug('::fc-output contactId=' + c.Id);
+filter-user-debug: true

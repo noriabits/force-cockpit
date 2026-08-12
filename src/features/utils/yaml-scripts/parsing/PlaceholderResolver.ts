@@ -17,6 +17,19 @@ export function escapeForType(value: string, type: ScriptType): string {
   }
 }
 
+/** Any `${...}` that no value was supplied for. */
+const UNRESOLVED_VAR = /\$\{[^}]*\}/g;
+
+/**
+ * Drops placeholders that nothing resolved, so a missing value reads as empty
+ * rather than leaking the literal text `${name}` into a record, query or
+ * condition. Used when chaining scripts, where the available names depend on
+ * what the previous script actually published.
+ */
+export function clearUnresolvedVars(value: string): string {
+  return value.replace(UNRESOLVED_VAR, '');
+}
+
 export function substituteVars(
   code: string,
   vars: Record<string, string>,

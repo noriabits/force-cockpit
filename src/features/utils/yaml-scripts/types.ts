@@ -22,6 +22,24 @@ export interface GatherSpec {
   file?: string;
 }
 
+/**
+ * One follow-up script run after this script's own body succeeds. `with` values
+ * may reference `${...}` placeholders resolved against the running script's
+ * inputs, its `outputs` (see `execution/scriptOutputs.ts`), and `${orgUsername}`
+ * — so an apex script can hand a record it just created to the next script.
+ */
+export interface ScriptThenStep {
+  /** Id of the script to run, e.g. `testData/create-enterprise-cart`. */
+  script: string;
+  /** Input values for the callee, before placeholder resolution. */
+  with?: Record<string, string>;
+  /**
+   * Optional guard — the step is skipped unless it holds. Supports `==`, `!=`
+   * and a bare truthiness test; see `execution/thenCondition.ts`.
+   */
+  when?: string;
+}
+
 export interface YamlScript {
   id: string;
   folder: string;
@@ -33,6 +51,8 @@ export interface YamlScript {
   scriptFile?: string;
   source: 'builtin' | 'user' | 'private';
   inputs?: ScriptInput[];
+  /** Scripts run in order after this one's body succeeds. */
+  then?: ScriptThenStep[];
   filterUserDebug?: boolean;
   formatJson?: boolean;
   // ── ai-only ──
@@ -66,11 +86,43 @@ export interface ExecuteScriptResult {
   filteredDebugLog?: string;
   cancelled?: boolean;
   /**
+   * Values the script handed back to its caller, for script composition. Filled
+   * from `::fc-output name=value` marker lines in the log (apex/command/ai) or
+   * from `setOutput()` calls (js). See `execution/scriptOutputs.ts`.
+   */
+  outputs?: Record<string, string>;
+  /**
    * Set for `ai` scripts when the saved model was unavailable and the gateway
    * fell back to another model. Lets the caller surface a warning to the user.
    */
   modelFallback?: { requestedId: string; usedModelName: string };
 }
+
+export interface RunScriptOptions {
+  /**
+   * When false, a failed child resolves with its result instead of rejecting.
+   * Defaults to true — a silently ignored failure inside an `await` chain is a
+   * footgun.
+   */
+  throwOnError?: boolean;
+}
+
+/**
+ * The `runScript` global exposed to `js` scripts: runs another script by id and
+ * resolves with its result (including any `outputs` it produced).
+ */
+export type RunScriptFn = (
+  id: string,
+  inputs?: Record<string, string>,
+  options?: RunScriptOptions,
+) => Promise<ExecuteScriptResult>;
+
+/**
+ * Builds a `runScript` bound to one running script. `emit` writes into that
+ * script's own output, so a child's log ends up in the parent's `debugLog` and
+ * not only in the live stream.
+ */
+export type MakeRunScript = (emit: (text: string) => void) => RunScriptFn;
 
 export interface SaveScriptInput {
   name: string;
@@ -80,6 +132,8 @@ export interface SaveScriptInput {
   script: string;
   scriptFile?: string;
   inputs?: ScriptInput[];
+  /** Scripts run in order after this one's body succeeds. */
+  then?: ScriptThenStep[];
   filterUserDebug?: boolean;
   formatJson?: boolean;
   // ── ai-only ──

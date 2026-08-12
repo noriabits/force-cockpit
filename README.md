@@ -193,9 +193,86 @@ apex: |
 | JavaScript | Green  | No           | `log()` / `console.log()` output        |
 | AI         | Orange | Yes          | Streamed model analysis                 |
 
-**JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`.
+**JS script context**: `connection` (jsforce Connection or null), `org` (OrgDetails or null), `query(soql)`, `log()`, `error()`, `console`, `fs`, `path`, `yaml`, plus `runScript()` / `setOutput()` for [composing scripts](#composing-scripts).
 
 Apex scripts run at a quiet, fixed log level (`Apex Code: DEBUG`, `System: ERROR`, everything else `NONE`) — the log holds just your own `System.debug()` output plus any unhandled exception, nothing else. This level is independent of anything configured in the Debug Logs tab: Salesforce always honors the log level a script execution explicitly requests over an org-wide trace flag, so a Debug Logs preset has no effect on a yaml-script's own log.
+
+### Composing scripts
+
+Shared logic can live in one script and be reused by others instead of being copy-pasted. There are two ways to chain, and they interoperate:
+
+**`then:` — a declarative list, available on every script type.** The steps run in order once the script's own body succeeds, so an Apex script keeps all its Apex *and* hands off when it's done:
+
+```yaml
+name: 🛖 Create Account Hierarchy
+inputs:
+  - name: accountName
+    label: Account Name
+    required: true
+  - name: cartType
+    label: Enterprise cart
+    type: picklist
+    options: [None, Quote, Order]
+apex-file: force-cockpit/scripts/testData/accHierarchy.apex
+then:
+  - script: testData/create-enterprise-cart
+    when: ${cartType} !== "None" # skip the step entirely for None
+    with:
+      accountId: ${contractantAccId} # published by the Apex above
+      cartType: ${cartType} # this script's own input
+      namePrefix: ${accountName}
+```
+
+A step may carry a `when:` guard. Both outcomes are logged with the substituted expression beside the original (`when: ${cartType} !== "None" → "Quote" !== "None"`), so a guard that fires the wrong way shows its own reason — `→ "" !== "None"` means the value never reached the condition. A `when:` is a **JavaScript expression** — `&&`, `||`, `!`, parentheses, ternaries and string methods all work, so `when: ${cartType} !== "None" && ${status} === "Active"` does what it looks like. Placeholders are substituted as literals (a checkbox becomes a real boolean, so a bare `${flag}` reads as "if ticked"), which means values can never inject code, and **comparands must be quoted**: `!== "None"`, not `!== None`. A syntax error or an unquoted comparand marks the script invalid when it loads, before anything runs. The expression is evaluated in a sandbox with no `require`, no `process` and a 100 ms timeout.
+
+**`runScript(id, inputs?, options?)` — imperative calls inside a `js` script**, for when the chain needs conditionals, loops or error handling. It resolves with the callee's result and rejects if the callee fails (pass `{ throwOnError: false }` to handle that yourself).
+
+```yaml
+name: 🔁 Bulk Create Contacts
+inputs:
+  - name: accountId
+    required: true
+  - name: lastNames
+    type: textarea
+    required: true
+js: |
+  const accountId = "${accountId}";
+  const names = input.parseLines("${lastNames}", ['lastName']).map((r) => r.lastName);
+
+  for (const lastName of names) {
+    const result = await runScript(
+      'examples/create-contact-for-account',
+      { accountId, lastName },
+      { throwOnError: false }, // one bad row must not lose the rest
+    );
+    log(result.success ? 'created ' + result.outputs.contactId : 'failed: ' + result.message);
+  }
+```
+
+A loop, a value read back and per-item error handling — none of which `then:` can express. Both this and the `then:` example above ship under `force-cockpit/scripts/examples/`.
+
+Because every call is a separate transaction, a script hands values on by publishing them — and any kind can hand a value to any other kind:
+
+| Kind | How it publishes a value |
+| ---- | ------------------------ |
+| Apex | `System.debug('::fc-output accountId=' + acc.Id);` |
+| Command | `echo "::fc-output buildId=$BUILD_ID"` on stdout |
+| JavaScript | `setOutput('target', 'staging')` — **not** a printed line |
+
+A caller reads them as `result.outputs` in JS, or interpolates them as `${name}` in a `then:` step's `with`. Nothing is inherited — a called script sees only what `with:` hands it, so a value needed several scripts down must be forwarded at each hop. Values are always strings, and escaping is handled for the *receiving* script's type — pass raw values, never pre-escape. A name nothing published resolves to empty rather than to the literal text `${name}`, so a `required:` input on the callee reports it cleanly.
+
+> [!WARNING]
+> In a JavaScript script, `log('::fc-output foo=bar')` does nothing — a JS script's log also contains the logs of everything it called, so it is never scraped for markers. Use `setOutput()`. Note also that command scripts receive values unescaped, since a shell has no safe universal quoting.
+
+Values flow **forwards only**: `with:` feeds the caller's outputs into the step it starts, and a caller can never read what its `then:` step produced — publishing outputs from the last script in a chain is dead code. Use `runScript()` when you need a result back.
+
+Chains nest (a script reached by `then:` runs its own `then:` too) and run depth-first, so for a root with steps `x` and `y` where `x` chains to `x1`, the order is `root → x → x1 → y`. The callee's output streams into the caller's log under a `── ▶ {id} ──` header, so the whole run is visible in one card. Cancelling cancels the chain. Circular calls are rejected and nesting is capped at 10 levels. A `js` script only reports the outputs it sets itself — re-export a callee's value with `setOutput` to pass it further up.
+
+> [!NOTE]
+> The script form has no editor for `then:`; author it in the YAML via **📄 Open YAML**. Saving from the form preserves it.
+
+> [!NOTE]
+> The confirmation prompt shown on production and protected sandboxes appears **once**, for the script you clicked — called scripts do not prompt again.
 
 ### AI scripts
 

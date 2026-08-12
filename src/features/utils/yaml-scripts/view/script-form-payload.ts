@@ -22,6 +22,17 @@ export type CleanedInput = {
   default?: boolean;
 };
 
+/**
+ * A `then:` step. The form has no editor for these (they are authored in the
+ * YAML directly) — it carries them through unchanged so saving from the form
+ * never drops a chain the user wrote by hand.
+ */
+export type ThenStepPayload = {
+  script: string;
+  with?: Record<string, string>;
+  when?: string;
+};
+
 export type AiFieldsPayload = {
   model: string;
   gather?: { kind: 'soql' | 'apex' | 'apex-file'; value: string; file?: string };
@@ -76,6 +87,7 @@ export function buildScriptPayload(opts: {
   filePath: string;
   content: string;
   inputs: CleanedInput[];
+  then?: ThenStepPayload[];
   filterUserDebug: boolean;
   formatJson: boolean;
   aiFields?: AiFieldsPayload;
@@ -88,6 +100,7 @@ export function buildScriptPayload(opts: {
     script: opts.isFile ? '' : opts.content,
     ...(opts.isFile ? { scriptFile: opts.filePath } : {}),
     inputs: opts.inputs,
+    ...(opts.then?.length ? { then: opts.then } : {}),
     ...(opts.type === 'apex' && opts.filterUserDebug ? { filterUserDebug: true } : {}),
     ...(opts.type === 'apex' && opts.formatJson ? { formatJson: true } : {}),
     ...(opts.type === 'ai' && opts.aiFields ? opts.aiFields : {}),

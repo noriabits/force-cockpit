@@ -138,4 +138,14 @@ describe('buildScriptPayload', () => {
     const payload = buildScriptPayload({ ...base, type: 'ai' });
     expect(payload).not.toHaveProperty('model');
   });
+
+  it('carries then: steps through untouched, so a form save never drops them', () => {
+    const then = [{ script: 'cat/second', with: { accountId: '${accId}' } }];
+    expect(buildScriptPayload({ ...base, then })).toMatchObject({ then });
+  });
+
+  it('omits then: when absent or empty', () => {
+    expect(buildScriptPayload(base)).not.toHaveProperty('then');
+    expect(buildScriptPayload({ ...base, then: [] })).not.toHaveProperty('then');
+  });
 });

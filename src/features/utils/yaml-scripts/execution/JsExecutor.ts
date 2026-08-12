@@ -9,7 +9,7 @@ import type { ConnectionManager, DebuggingOptions } from '../../../../salesforce
 import { runTerminalCommand } from '../../../../utils/terminalCommand';
 import { xml } from './XmlHelper';
 import { input } from './InputHelper';
-import type { ExecuteScriptResult, YamlScript } from '../types';
+import type { ExecuteScriptResult, MakeRunScript, YamlScript } from '../types';
 
 function xmlEscape(s: string): string {
   return s
@@ -36,6 +36,7 @@ export class JsExecutor {
     script: YamlScript,
     signal?: AbortSignal,
     onLogChunk?: (chunk: string) => void,
+    makeRunScript?: MakeRunScript,
   ): Promise<ExecuteScriptResult> {
     const output: string[] = [];
     const logFn = (...args: unknown[]) => {
@@ -48,6 +49,15 @@ export class JsExecutor {
       output.push(line);
       onLogChunk?.(line + '\n');
     };
+    // Verbatim variant for text that already carries its own newlines (a called
+    // script's streamed output). `logFn` would append a newline per chunk; the
+    // trailing one is trimmed here because `output` is joined with '\n' below.
+    const emitRaw = (text: string) => {
+      output.push(text.replace(/\n$/, ''));
+      onLogChunk?.(text);
+    };
+
+    const outputs: Record<string, string> = {};
 
     try {
       const contextObj = {
@@ -60,6 +70,10 @@ export class JsExecutor {
         error: errorFn,
         workspaceRoot: this.workspaceRoot,
         run: this.makeRunFn(signal, logFn),
+        runScript: makeRunScript?.(emitRaw),
+        setOutput: (name: string, value: unknown) => {
+          outputs[String(name)] = String(value);
+        },
         console: { log: logFn, error: errorFn, warn: logFn },
         fs,
         os,
@@ -97,6 +111,7 @@ export class JsExecutor {
         success: true,
         message: `Script "${script.name}" executed successfully.`,
         debugLog: output.join('\n'),
+        outputs,
       };
     } catch (err) {
       const errorMsg = (err as Error).message;
@@ -109,6 +124,7 @@ export class JsExecutor {
         success: false,
         message: errorMsg,
         debugLog: output.join('\n'),
+        outputs,
       };
     }
   }

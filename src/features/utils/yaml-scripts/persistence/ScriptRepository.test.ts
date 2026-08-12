@@ -312,5 +312,42 @@ describe('ScriptRepository', () => {
       const doc = yaml.load(content) as Record<string, unknown>;
       expect(doc.inputs).toEqual([{ name: 'items', type: 'textarea', required: true }]);
     });
+
+    it('round-trips then: steps so a form save never drops them', () => {
+      const userDir = path.join(tmpDir, 'user');
+      const repo = new ScriptRepository({ userPath: userDir, privatePath: '', workspaceRoot: '' });
+      repo.save({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script: 'System.debug();',
+        folder: 'cat',
+        then: [
+          { script: 'cat/second', with: { accountId: '${accId}', cartType: 'Quote' } },
+          { script: 'cat/third' },
+        ],
+      });
+      const content = fs.readFileSync(path.join(userDir, 'cat', 's.yaml'), 'utf8');
+      const doc = yaml.load(content) as Record<string, unknown>;
+      expect(doc.then).toEqual([
+        { script: 'cat/second', with: { accountId: '${accId}', cartType: 'Quote' } },
+        { script: 'cat/third' },
+      ]);
+    });
+
+    it('omits then: when there are no steps', () => {
+      const userDir = path.join(tmpDir, 'user');
+      const repo = new ScriptRepository({ userPath: userDir, privatePath: '', workspaceRoot: '' });
+      repo.save({
+        name: 'S',
+        description: '',
+        type: 'apex',
+        script: 'System.debug();',
+        folder: 'cat',
+        then: [],
+      });
+      const content = fs.readFileSync(path.join(userDir, 'cat', 's.yaml'), 'utf8');
+      expect(yaml.load(content)).not.toHaveProperty('then');
+    });
   });
 });

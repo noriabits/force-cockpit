@@ -1,0 +1,51 @@
+name: 🔁 Bulk Create Contacts (runScript)
+description: >-
+  Adds several contacts to one account by calling "Create Contact For Account"
+  once per line. Shows runScript() doing the three things `then:` cannot —
+  looping, reading a value back, and deciding what to do when one fails.
+inputs:
+  - name: accountId
+    label: Account Id
+    required: true
+  - name: lastNames
+    label: Last names (one per line)
+    type: textarea
+    required: true
+js: |
+  // Double quotes: ${...} is JSON-escaped in a js script, which escapes " and
+  // newlines but not ', so single quotes would break on a name like O'Brien.
+  const accountId = "${accountId}";
+  const names = input
+    .parseLines("${lastNames}", ['lastName'])
+    .map((row) => row.lastName)
+    .filter(Boolean);
+
+  if (names.length === 0) {
+    throw new Error('No names supplied.');
+  }
+
+  const created = [];
+  const failed = [];
+
+  for (const lastName of names) {
+    // throwOnError: false hands the failure back instead of aborting the loop,
+    // so one bad row does not lose the rest.
+    const result = await runScript(
+      'examples/create-contact-for-account',
+      { accountId, lastName },
+      { throwOnError: false },
+    );
+
+    if (result.success) {
+      created.push(result.outputs.contactId);
+    } else {
+      failed.push(lastName + ': ' + result.message);
+    }
+  }
+
+  log('Created ' + created.length + ' of ' + names.length + ': ' + created.join(', '));
+
+  if (failed.length > 0) {
+    error('Failed:\n' + failed.join('\n'));
+    throw new Error(failed.length + ' contact(s) could not be created.');
+  }

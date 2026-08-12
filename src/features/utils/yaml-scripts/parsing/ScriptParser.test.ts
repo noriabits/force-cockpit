@@ -292,4 +292,163 @@ describe('ScriptParser', () => {
       expect(result?.error).toContain('Ambiguous');
     });
   });
+
+  describe('parse (then: follow-up steps)', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-then-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function parseYaml(yaml: string) {
+      const filePath = path.join(tmpDir, 'x.yaml');
+      fs.writeFileSync(filePath, yaml, 'utf8');
+      return new ScriptParser(tmpDir).parse(filePath, 'cat/x', 'cat', 'user');
+    }
+
+    it('parses steps with a with-map', () => {
+      const result = parseYaml(
+        `name: A\napex: System.debug(1);\nthen:\n  - script: cat/second\n    with:\n      accountId: \${accId}\n      cartType: Quote`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.then).toEqual([
+        { script: 'cat/second', with: { accountId: '${accId}', cartType: 'Quote' } },
+      ]);
+    });
+
+    it('parses a step with no with-map', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);\nthen:\n  - script: cat/second`);
+      expect(result?.then).toEqual([{ script: 'cat/second' }]);
+    });
+
+    it('preserves step order', () => {
+      const result = parseYaml(
+        `name: A\napex: System.debug(1);\nthen:\n  - script: cat/b\n  - script: cat/a`,
+      );
+      expect(result?.then?.map((s) => s.script)).toEqual(['cat/b', 'cat/a']);
+    });
+
+    it('coerces non-string with-values to strings', () => {
+      const result = parseYaml(
+        `name: A\napex: System.debug(1);\nthen:\n  - script: cat/second\n    with:\n      createMembers: true\n      count: 4\n      blank: null`,
+      );
+      expect(result?.then?.[0].with).toEqual({
+        createMembers: 'true',
+        count: '4',
+        blank: '',
+      });
+    });
+
+    it('omits then entirely when absent', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);`);
+      expect(result?.then).toBeUndefined();
+    });
+
+    it('is allowed on every script kind', () => {
+      const js = parseYaml(`name: A\njs: log(1);\nthen:\n  - script: cat/second`);
+      const cmd = parseYaml(`name: A\ncommand: echo hi\nthen:\n  - script: cat/second`);
+      expect(js?.then).toHaveLength(1);
+      expect(cmd?.then).toHaveLength(1);
+    });
+
+    it('marks the script invalid when then is not a list', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);\nthen: cat/second`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'then' must be a list");
+    });
+
+    it('marks the script invalid when a step has no script id', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);\nthen:\n  - with:\n      a: b`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'script' id");
+    });
+
+    it('marks the script invalid when a step is not an object', () => {
+      const result = parseYaml(`name: A\napex: System.debug(1);\nthen:\n  - cat/second`);
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('must be an object');
+    });
+
+    it('keeps a quoted comparand intact through YAML', () => {
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${cartType} !== "None"`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.then?.[0].when).toBe('${cartType} !== "None"');
+    });
+
+    it('accepts single quotes on a comparand too', () => {
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${x} !== 'None'`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.then?.[0].when).toBe("${x} !== 'None'");
+    });
+
+    it('rejects a quote at the START of the expression — YAML reads a quoted scalar', () => {
+      // A leading quote makes YAML parse the value as a quoted scalar and then
+      // choke on the rest. Quote the whole expression instead of just the left side.
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: '\${x}' !== None`,
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toMatch(/Invalid YAML/i);
+    });
+
+    it('marks the script invalid when a comparand is left unquoted', () => {
+      // `None` is an undefined identifier once placeholders become literals.
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${x} !== None`,
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('Unknown name');
+    });
+
+    it('marks the script invalid for a syntax error', () => {
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${a} === "x" &&`,
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("Invalid 'when' expression");
+    });
+
+    it('accepts a full JS expression', () => {
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${a} === "x" || \${b}.startsWith("y")`,
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.then?.[0].when).toBe('${a} === "x" || ${b}.startsWith("y")');
+    });
+
+    it('needs the whole expression quoted when it starts with ! — YAML tag syntax', () => {
+      const bare = parseYaml(`name: A\napex: body\nthen:\n  - script: cat/b\n    when: !\${skip}`);
+      expect(bare?.invalid).toBe(true);
+      expect(bare?.error).toMatch(/Invalid YAML/i);
+
+      const quoted = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: "!\${skip} && \${a} === 'x'"`,
+      );
+      expect(quoted?.invalid).toBeUndefined();
+      expect(quoted?.then?.[0].when).toBe("!${skip} && ${a} === 'x'");
+    });
+
+    it('lets YAML strip a trailing # comment from the expression', () => {
+      const result = parseYaml(
+        `name: A\napex: body\nthen:\n  - script: cat/b\n    when: \${x} === "a" # why`,
+      );
+      expect(result?.then?.[0].when).toBe('${x} === "a"');
+    });
+
+    it('marks the script invalid when with is not a mapping', () => {
+      const result = parseYaml(
+        `name: A\napex: System.debug(1);\nthen:\n  - script: cat/second\n    with:\n      - a`,
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('map input names to values');
+    });
+  });
 });

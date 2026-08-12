@@ -1,0 +1,30 @@
+name: 🔗 Create Account (chained)
+description: >-
+  Creates an Account and, when asked, chains to "Create Contact For Account" to
+  add a contact under it. Shows `then:` / `when:` and how a script hands a
+  record Id to the next one with a ::fc-output line.
+inputs:
+  - name: accountName
+    label: Account Name
+    required: true
+  - name: createContact
+    label: Also create a contact?
+    type: checkbox
+apex: |
+  Account acc = new Account(Name = '${accountName}');
+  insert acc;
+  System.debug('Created account ' + acc.Id);
+
+  // Publishes the new Id for the `then:` step below, which reads it as
+  // ${accountId}. Harmless when this script is run on its own.
+  System.debug('::fc-output accountId=' + acc.Id);
+filter-user-debug: true
+# Runs after the Apex above succeeds — but only when the checkbox is ticked.
+# `when:` is a JS expression; a checkbox arrives as a real boolean, so the bare
+# placeholder reads as "if ticked". Compare strings with quotes: == "Quote".
+then:
+  - script: examples/create-contact-for-account
+    when: ${createContact}
+    with:
+      accountId: ${accountId}
+      lastName: ${accountName}
