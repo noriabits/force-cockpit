@@ -175,3 +175,38 @@ describe('cross-kind argument passing', () => {
     expect(exec.mock.calls[0][0]).toBe("System.debug('short abc');");
   });
 });
+
+describe('cancellation propagation through chained scripts', () => {
+  beforeEach(() => runTerminalCommand.mockReset());
+
+  it('a then: step that is cancelled reports cancelled, not a wrapped failure', async () => {
+    runTerminalCommand.mockResolvedValue({ cancelled: true });
+    const { svc } = makeSvc();
+    const scripts = [
+      script({ id: 'cat/parent', type: 'apex', script: 'body', then: [{ script: 'cat/child' }] }),
+      script({ id: 'cat/child', type: 'command', script: 'sleep 100' }),
+    ];
+
+    const result = await svc.executeScript('cat/parent', scripts, {});
+
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(result.debugLog).not.toContain('--- error ---');
+    expect(result.debugLog).not.toContain('failed:');
+  });
+
+  it('a cancelled child reached via runScript() propagates cancelled, not a wrapped failure', async () => {
+    runTerminalCommand.mockResolvedValue({ cancelled: true });
+    const { svc } = makeSvc();
+    const scripts = [
+      script({ id: 'cat/parent', type: 'js', script: `await runScript('cat/child');` }),
+      script({ id: 'cat/child', type: 'command', script: 'sleep 100' }),
+    ];
+
+    const result = await svc.executeScript('cat/parent', scripts, {});
+
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(result.debugLog).not.toContain('failed:');
+  });
+});

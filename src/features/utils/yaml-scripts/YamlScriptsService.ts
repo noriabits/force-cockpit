@@ -229,8 +229,7 @@ export class YamlScriptsService {
           ]),
         );
 
-        const stepResult = await runStep(step.script, values);
-        if (stepResult.cancelled) return withChainLog({ cancelled: true, success: false });
+        await runStep(step.script, values);
       } catch (err) {
         const message = (err as Error).message;
         if (message === 'Operation cancelled') {
@@ -286,6 +285,10 @@ export class YamlScriptsService {
         }
 
         if (!result.success && options?.throwOnError !== false) {
+          // Preserve the cancellation sentinel rather than wrapping it — callers
+          // (runThenSteps, JsExecutor's abort race) match on this exact message
+          // to tell a deliberate cancel from a genuine failure.
+          if (result.cancelled) throw new Error('Operation cancelled');
           throw new Error(`Script "${childId}" failed: ${result.message}`);
         }
         return result;
