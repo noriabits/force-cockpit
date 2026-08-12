@@ -1,18 +1,27 @@
-// Renders JS values as Apex literals for `js` scripts that build Apex by hand.
+// Renders JS values as Apex literals for `js` scripts that build Apex by hand,
+// and is also the one escaping function `PlaceholderResolver`'s `${...}`
+// substitution uses for `apex:`/`gather:` code — see `escapeApexString`.
 //
 // The placeholder layer escapes a script's inputs for JS, not for the Apex that
 // script goes on to generate, so a value carrying an apostrophe would otherwise
 // break out of its Apex string literal and land as code in executeAnonymous.
 
-/** Escapes a string and wraps it in Apex single quotes. */
-function quote(s: string): string {
-  // Backslash escaping, matching Salesforce's own String.escapeSingleQuotes.
-  // Apex reads '' as two adjacent literals, so doubling would not compile.
-  const escaped = s
+/**
+ * Escapes a string for safe use inside an Apex single-quoted string literal.
+ * Backslash escaping, matching Salesforce's own `String.escapeSingleQuotes`.
+ * Apex reads `''` as two adjacent literals with no `+` between them (a compile
+ * error), so doubling — the SQL/Pascal convention — would not compile.
+ */
+export function escapeApexString(s: string): string {
+  return s
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/\r\n|\r|\n/g, '\\n');
-  return `'${escaped}'`;
+}
+
+/** Escapes a string and wraps it in Apex single quotes. */
+function quote(s: string): string {
+  return `'${escapeApexString(s)}'`;
 }
 
 /**

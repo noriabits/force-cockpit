@@ -21,8 +21,8 @@ function script(partial: Partial<YamlScript>): YamlScript {
 }
 
 describe('escapeForType', () => {
-  it('apex: doubles single quotes', () => {
-    expect(escapeForType("it's a test", 'apex')).toBe("it''s a test");
+  it('apex: backslash-escapes single quotes (Apex has no doubling escape)', () => {
+    expect(escapeForType("it's a test", 'apex')).toBe("it\\'s a test");
   });
 
   it('apex: escapes backslashes', () => {
@@ -109,7 +109,7 @@ describe('substituteSystemPlaceholders', () => {
     const result = substituteSystemPlaceholders("'${orgUsername}'", 'apex', {
       orgUsername: "it's@org.com",
     });
-    expect(result).toBe("'it''s@org.com'");
+    expect(result).toBe("'it\\'s@org.com'");
   });
 
   it('applies JS escaping to the value', () => {

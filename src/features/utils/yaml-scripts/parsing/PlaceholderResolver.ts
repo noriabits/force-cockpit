@@ -1,14 +1,10 @@
 import type { ScriptType, YamlScript } from '../types';
+import { escapeApexString } from '../execution/ApexHelper';
 
 export function escapeForType(value: string, type: ScriptType): string {
   switch (type) {
     case 'apex':
-      return value
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "''")
-        .replace(/\r\n/g, '\\n')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\n');
+      return escapeApexString(value);
     case 'js':
       // JSON.stringify escapes \ and " for double-quoted destinations; scripts
       // also embed placeholders in single-quoted literals (e.g. `'${name}'`),

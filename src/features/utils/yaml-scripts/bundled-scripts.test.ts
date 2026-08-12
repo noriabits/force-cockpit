@@ -83,7 +83,7 @@ describe('bundled scripts', () => {
       expect(result.success).toBe(true);
       // Three names — the blank line is dropped.
       expect(exec).toHaveBeenCalledTimes(3);
-      expect(exec.mock.calls[1][0]).toContain("LastName = 'O''Brien'");
+      expect(exec.mock.calls[1][0]).toContain("LastName = 'O\\'Brien'");
       expect(result.debugLog).toContain('Created 3 of 3: 003AAA1, 003AAA2, 003AAA3');
     });
 
