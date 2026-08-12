@@ -3,7 +3,6 @@ import type { DescribeService } from '../../../services/describe/DescribeService
 import { loadYamlItems } from '../../../utils/yaml-loader';
 import { ScriptParser } from './parsing/ScriptParser';
 import {
-  clearUnresolvedVars,
   substituteInputs,
   substituteSystemPlaceholders,
   substituteVars,
@@ -17,7 +16,7 @@ import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
 import type { SkillsRepository } from '../../../services/skills/SkillsRepository';
 import { extractOutputMarkers } from './execution/scriptOutputs';
-import { evaluateWhen, resolveWhenExpression } from './execution/thenCondition';
+import { buildThenVars, runThenChain } from './execution/thenSteps';
 import type {
   ExecuteScriptResult,
   MakeRunScript,
@@ -158,7 +157,10 @@ export class YamlScriptsService {
   /**
    * Runs the script's `then:` steps, in order, once its own body has succeeded.
    * Reuses the `runScript` machinery so cycle/depth guards, the child header and
-   * fail-fast behaviour are identical to a `js` script calling out.
+   * fail-fast behaviour are identical to a `js` script calling out. The guard
+   * evaluation, `with:` resolution and step loop itself live in
+   * `execution/thenSteps.ts`; this method only wires up this run's `vars`/`emit`
+   * and folds the chain's own log into the parent's result.
    */
   private async runThenSteps(
     script: YamlScript,
@@ -174,14 +176,11 @@ export class YamlScriptsService {
   ): Promise<ExecuteScriptResult> {
     if (!script.then?.length || !result.success || result.cancelled) return result;
 
-    // `then` values are data handed to the callee, which escapes them for its
-    // own type — so they are substituted raw here. Outputs override inputs: the
-    // point of `then` is to forward what this run just produced.
-    const vars: Record<string, string> = {
-      orgUsername: this.connectionManager.getCurrentOrg()?.username ?? '',
-      ...(inputValues ?? {}),
-      ...(result.outputs ?? {}),
-    };
+    const vars = buildThenVars(
+      this.connectionManager.getCurrentOrg()?.username ?? '',
+      inputValues,
+      result.outputs,
+    );
 
     let chainLog = '';
     const emit = (text: string) => {
@@ -190,56 +189,16 @@ export class YamlScriptsService {
     };
     const runStep = this.makeRunScriptFactory(scripts, signal, onModelFallback, callStack)(emit);
 
-    const withChainLog = (over: Partial<ExecuteScriptResult>): ExecuteScriptResult => ({
+    const outcome = await runThenChain(script.then, vars, runStep, emit);
+
+    return {
       ...result,
       debugLog: result.debugLog + chainLog,
       ...(result.filteredDebugLog !== undefined
         ? { filteredDebugLog: result.filteredDebugLog + chainLog }
         : {}),
-      ...over,
-    });
-
-    for (const step of script.then) {
-      try {
-        const passed = evaluateWhen(step.when, vars);
-
-        // Both outcomes are announced, with the substituted expression next to
-        // the original: a guard that fires the wrong way then shows its own
-        // reason, instead of the step silently appearing or vanishing.
-        if (step.when) {
-          const detail = `when: ${step.when} → ${resolveWhenExpression(step.when, vars)}`;
-          // No trailing newline on the passing line — the step header that
-          // follows opens with one.
-          emit(
-            passed
-              ? `\n── ✔ ${step.script} (${detail}) ──`
-              : `\n── ⏭ ${step.script} skipped (${detail}) ──\n`,
-          );
-        }
-        if (!passed) continue;
-
-        const values = Object.fromEntries(
-          Object.entries(step.with ?? {}).map(([key, value]) => [
-            key,
-            // Raw ('command' applies no escaping) — these are data, and the
-            // callee escapes them for its own type. A name the previous script
-            // never published resolves to empty, so the callee's `required:`
-            // check reports it instead of the literal `${name}` reaching an org.
-            clearUnresolvedVars(substituteVars(value, vars, 'command')),
-          ]),
-        );
-
-        await runStep(step.script, values);
-      } catch (err) {
-        const message = (err as Error).message;
-        if (message === 'Operation cancelled') {
-          return withChainLog({ cancelled: true, success: false, message: '' });
-        }
-        emit(`\n--- error ---\n${message}\n`);
-        return withChainLog({ success: false, message });
-      }
-    }
-    return withChainLog({});
+      ...outcome,
+    };
   }
 
   /**
