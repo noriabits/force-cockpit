@@ -1,5 +1,5 @@
-import type { ConnectionManager } from '../../salesforce/connection';
-import { raceAbort, throwIfAborted } from '../../utils/abort';
+import type { ConnectionManager } from '../../../salesforce/connection';
+import { raceAbort, throwIfAborted } from '../../../utils/abort';
 
 export interface QueryResult {
   records: Record<string, unknown>[];

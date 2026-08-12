@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -36,27 +35,21 @@ vi.mock('fs', () => ({ promises: { writeFile } }));
 
 import { MessageRouter } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
-import type { QueryService } from '../services/soql/QueryService';
-import type { QueryStateStore } from '../services/soql/QueryStateStore';
 import type { RestCallService } from '../services/rest/RestCallService';
 import type { RestCallStateStore } from '../services/rest/RestCallStateStore';
 import type { DescribeService } from '../services/describe/DescribeService';
-import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule } from '../features/FeatureModule';
 import type { OperationRegistry } from './OperationRegistry';
 
 function makeRouter(
   opts: {
     features?: FeatureModule[];
-    runQuery?: ReturnType<typeof vi.fn>;
     getCurrentOrg?: ReturnType<typeof vi.fn>;
     onReady?: ReturnType<typeof vi.fn>;
     operations?: Partial<OperationRegistry>;
-    queryStateStore?: Partial<QueryStateStore>;
     restCallService?: Partial<RestCallService>;
     restCallStateStore?: Partial<RestCallStateStore>;
     describeService?: Partial<DescribeService>;
-    diagnose?: ReturnType<typeof vi.fn>;
   } = {},
 ) {
   const postMessage = vi.fn();
@@ -64,16 +57,6 @@ function makeRouter(
   const connectionManager = {
     getCurrentOrg: opts.getCurrentOrg ?? vi.fn(() => null),
   } as unknown as ConnectionManager;
-  const queryService = {
-    runQuery: opts.runQuery ?? vi.fn().mockResolvedValue({ records: [] }),
-  } as unknown as QueryService;
-  const queryStateStore = {
-    getState: vi.fn(() => ({ tabs: [], activeTab: 0, history: [], savedQueries: [] })),
-    saveTabs: vi.fn().mockResolvedValue(undefined),
-    addHistory: vi.fn().mockResolvedValue([]),
-    saveSavedQueries: vi.fn().mockResolvedValue([]),
-    ...opts.queryStateStore,
-  } as unknown as QueryStateStore;
   const restCallService = {
     send: vi
       .fn()
@@ -99,9 +82,6 @@ function makeRouter(
     describeSObject: vi.fn().mockResolvedValue({ name: 'Account', fields: [] }),
     ...opts.describeService,
   } as unknown as DescribeService;
-  const soqlDiagnostics = {
-    diagnose: opts.diagnose ?? vi.fn().mockResolvedValue([]),
-  } as unknown as SoqlDiagnosticsService;
   const operations = {
     startWebviewOp: vi.fn(),
     endWebviewOp: vi.fn(),
@@ -115,12 +95,9 @@ function makeRouter(
   const router = new MessageRouter({
     webview,
     connectionManager,
-    queryService,
-    queryStateStore,
     restCallService,
     restCallStateStore,
     describeService,
-    soqlDiagnostics,
     features: opts.features ?? [],
     operations,
     onReady,
@@ -130,12 +107,9 @@ function makeRouter(
     postMessage,
     operations,
     onReady,
-    queryService,
-    queryStateStore,
     restCallService,
     restCallStateStore,
     describeService,
-    soqlDiagnostics,
   };
 }
 
@@ -154,142 +128,6 @@ describe('MessageRouter built-in routes', () => {
     const { router, onReady } = makeRouter();
     await router.handle({ type: 'ready' });
     expect(onReady).toHaveBeenCalledOnce();
-  });
-
-  it('query → posts queryResult with the service data', async () => {
-    const { router, postMessage } = makeRouter({
-      runQuery: vi.fn().mockResolvedValue({ records: [{ Id: '1' }] }),
-    });
-    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account' });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryResult',
-      data: { records: [{ Id: '1' }] },
-    });
-  });
-
-  it('query failure → posts queryError with the message', async () => {
-    const { router, postMessage } = makeRouter({
-      runQuery: vi.fn().mockRejectedValue(new Error('bad soql')),
-    });
-    await router.handle({ type: 'query', soql: 'x' });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryError',
-      data: { message: 'bad soql', diagnostics: [] },
-    });
-  });
-
-  it('query failure → attaches the diagnostics for the failed SOQL', async () => {
-    const diagnostic = {
-      severity: 'warning',
-      title: "'AssetReferenceId__c' exists but field-level security is hiding it",
-      detail: 'Ask an admin for Read access.',
-    };
-    const diagnose = vi.fn().mockResolvedValue([diagnostic]);
-    const { router, postMessage } = makeRouter({
-      runQuery: vi.fn().mockRejectedValue(new Error("No such column 'AssetReferenceId__c'")),
-      diagnose,
-    });
-
-    await router.handle({ type: 'query', soql: 'SELECT AssetReferenceId__c FROM QuoteLineItem' });
-
-    expect(diagnose).toHaveBeenCalledWith(
-      'SELECT AssetReferenceId__c FROM QuoteLineItem',
-      "No such column 'AssetReferenceId__c'",
-    );
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryError',
-      data: { message: "No such column 'AssetReferenceId__c'", diagnostics: [diagnostic] },
-    });
-  });
-
-  it('query success → never runs diagnosis', async () => {
-    const diagnose = vi.fn().mockResolvedValue([]);
-    const { router } = makeRouter({ diagnose });
-    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account' });
-    expect(diagnose).not.toHaveBeenCalled();
-  });
-
-  it('query forwards the useToolingApi flag to the service', async () => {
-    const runQuery = vi.fn().mockResolvedValue({ records: [] });
-    const { router } = makeRouter({ runQuery });
-    await router.handle({ type: 'query', soql: 'SELECT Id FROM ApexClass', useToolingApi: true });
-    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM ApexClass', true, undefined);
-  });
-
-  it('query with an opId registers an abort and echoes the opId back', async () => {
-    const ac = new AbortController();
-    const runQuery = vi.fn().mockResolvedValue({ records: [], totalSize: 0, done: true });
-    const { router, postMessage, operations } = makeRouter({
-      runQuery,
-      operations: { createTerminalAbort: vi.fn(() => ac) },
-    });
-
-    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account', opId: 'soql-1' });
-
-    expect(operations.createTerminalAbort).toHaveBeenCalledWith('soql-1');
-    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM Account', undefined, ac.signal);
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryResult',
-      data: { records: [], totalSize: 0, done: true, opId: 'soql-1' },
-    });
-    expect(operations.endTerminalOp).toHaveBeenCalledWith('soql-1');
-  });
-
-  it('query error echoes the opId so the webview can route it to the right tab', async () => {
-    const { router, postMessage } = makeRouter({
-      runQuery: vi.fn().mockRejectedValue(new Error('Malformed query')),
-      diagnose: vi.fn().mockResolvedValue([]),
-    });
-
-    await router.handle({ type: 'query', soql: 'SELECT Nope FROM Account', opId: 'soql-7' });
-
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryError',
-      data: { message: 'Malformed query', diagnostics: [], opId: 'soql-7' },
-    });
-  });
-
-  it('a cancelled query stays silent and skips the extra diagnostics round-trips', async () => {
-    const ac = new AbortController();
-    const diagnose = vi.fn().mockResolvedValue([]);
-    const { router, postMessage, operations } = makeRouter({
-      runQuery: vi.fn(async () => {
-        ac.abort();
-        throw new Error('Operation cancelled');
-      }),
-      diagnose,
-      operations: { createTerminalAbort: vi.fn(() => ac) },
-    });
-
-    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account', opId: 'soql-2' });
-
-    expect(diagnose).not.toHaveBeenCalled();
-    expect(postMessage).not.toHaveBeenCalled();
-    // Still released, so the panel does not stay busy forever.
-    expect(operations.endTerminalOp).toHaveBeenCalledWith('soql-2');
-  });
-
-  it('loadQueryState → posts queryStateLoaded with the stored state', async () => {
-    const state = {
-      tabs: [{ name: 'Query 1', query: 'SELECT Id FROM Account', useToolingApi: false }],
-      activeTab: 0,
-      history: [],
-      savedQueries: [],
-    };
-    const { router, postMessage } = makeRouter({
-      queryStateStore: { getState: vi.fn(() => state) },
-    });
-    await router.handle({ type: 'loadQueryState' });
-    expect(postMessage).toHaveBeenCalledWith({ type: 'queryStateLoaded', data: state });
-  });
-
-  it('saveQueryTabs → persists the tabs (fire-and-forget, no post)', async () => {
-    const saveTabs = vi.fn().mockResolvedValue(undefined);
-    const { router, postMessage } = makeRouter({ queryStateStore: { saveTabs } });
-    const tabs = [{ name: 'A', query: 'q', useToolingApi: false }];
-    await router.handle({ type: 'saveQueryTabs', tabs, activeTab: 0 });
-    expect(saveTabs).toHaveBeenCalledWith(tabs, 0);
-    expect(postMessage).not.toHaveBeenCalled();
   });
 
   it('restCall → posts restCallResult with the service response', async () => {
@@ -383,30 +221,6 @@ describe('MessageRouter built-in routes', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'restCallSavedRequestsUpdated',
       data: { savedRequests },
-    });
-  });
-
-  it('addQueryHistory → posts the updated history list', async () => {
-    const history = [{ query: 'q', useToolingApi: false }];
-    const addHistory = vi.fn().mockResolvedValue(history);
-    const { router, postMessage } = makeRouter({ queryStateStore: { addHistory } });
-    await router.handle({ type: 'addQueryHistory', query: 'q', useToolingApi: false });
-    expect(addHistory).toHaveBeenCalledWith({ query: 'q', useToolingApi: false });
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'queryHistoryUpdated',
-      data: { history },
-    });
-  });
-
-  it('saveSavedQueries → posts the stored saved-query list', async () => {
-    const savedQueries = [{ name: 'S', query: 'q', useToolingApi: false }];
-    const saveSavedQueries = vi.fn().mockResolvedValue(savedQueries);
-    const { router, postMessage } = makeRouter({ queryStateStore: { saveSavedQueries } });
-    await router.handle({ type: 'saveSavedQueries', savedQueries });
-    expect(saveSavedQueries).toHaveBeenCalledWith(savedQueries);
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'savedQueriesUpdated',
-      data: { savedQueries },
     });
   });
 
@@ -517,47 +331,6 @@ describe('MessageRouter built-in routes', () => {
       type: 'confirmActionResult',
       data: { confirmed: false, requestId: 'r2' },
     });
-  });
-
-  it('exportQueryResult writes a timestamped file to the workspace root and opens it', async () => {
-    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
-    writeFile.mockResolvedValue(undefined);
-    const { router } = makeRouter();
-    await router.handle({ type: 'exportQueryResult', content: 'a,b\r\n1,2', format: 'csv' });
-
-    expect(writeFile).toHaveBeenCalledOnce();
-    const [filePath, content] = writeFile.mock.calls[0];
-    // Assert directory + filename separately so the test passes regardless of
-    // the platform's path separator (path.join yields '\' on Windows, '/' on POSIX).
-    expect(path.dirname(filePath)).toBe(path.join('/ws'));
-    expect(path.basename(filePath)).toMatch(/^query-result-\d{8}-\d{6}\.csv$/);
-    expect(content).toBe('a,b\r\n1,2');
-    expect(showTextDocument).toHaveBeenCalledOnce();
-    expect(showTextDocument.mock.calls[0][0].fsPath).toBe(filePath);
-  });
-
-  it('exportQueryResult uses a .json extension for json format', async () => {
-    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
-    writeFile.mockResolvedValue(undefined);
-    const { router } = makeRouter();
-    await router.handle({ type: 'exportQueryResult', content: '[]', format: 'json' });
-    expect(writeFile.mock.calls[0][0]).toMatch(/\.json$/);
-  });
-
-  it('exportQueryResult shows an error when no workspace folder is open', async () => {
-    workspaceFolders.value = undefined;
-    const { router } = makeRouter();
-    await router.handle({ type: 'exportQueryResult', content: 'x', format: 'csv' });
-    expect(writeFile).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledOnce();
-  });
-
-  it('exportQueryResult surfaces a write failure via showErrorMessage', async () => {
-    workspaceFolders.value = [{ uri: { fsPath: '/ws' } }];
-    writeFile.mockRejectedValue(new Error('disk full'));
-    const { router } = makeRouter();
-    await router.handle({ type: 'exportQueryResult', content: 'x', format: 'csv' });
-    expect(showErrorMessage).toHaveBeenCalledWith('Export failed: disk full');
   });
 });
 

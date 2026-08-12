@@ -11,6 +11,7 @@ import { createExecutionLogsFeature } from './features/utils/execution-logs/inde
 import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
 import { createDebugLogsFeature } from './features/debug-logs/explorer/index';
 import { createAskAiFeature } from './features/overview/ask-ai/index';
+import { createSoqlFeature } from './features/soql/query-editor/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
@@ -102,6 +103,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const allFeatures = [
     ...featureRegistry,
+    createSoqlFeature({
+      workspaceState: context.workspaceState,
+      describeService,
+    }),
     createYamlScriptsFeature({
       builtInPath: path.join(builtInPath, 'scripts'),
       userPath: path.join(userBasePath, 'scripts'),

@@ -3,7 +3,7 @@
 //   - the shared textarea + Run/Clear + Cmd/Ctrl+Enter shortcut + Tooling toggle
 //   - the results table (filter, sortable columns, clickable record Ids, export)
 //   - multiple query tabs (tabs.js) with per-tab in-memory results
-// Bundled by esbuild into dist/webview/query-editor.js. Registers via
+// Bundled by esbuild into dist/features/soql/query-editor/view.js. Registers via
 // win.__onMessage and exposes win.__clearQueryResults for org-lifecycle.js.
 import { createResultsTable } from './results-table';
 import { toCsv, toJson } from './export-format';

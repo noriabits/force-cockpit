@@ -3,7 +3,7 @@
 // panel with two sections — Saved (named, removable) and Recent (auto-recorded).
 // Persistence lives host-side (RestCallStateStore); this module posts
 // addRestCallHistory / saveRestCallSavedRequests and re-renders on the host's
-// replies. Near-direct port of src/webview/query-editor/history.js, adapted to
+// replies. Near-direct port of src/features/soql/query-editor/view/history.js, adapted to
 // REST fields (method/endpoint/body/headers instead of query/useToolingApi).
 
 /**

@@ -1,7 +1,6 @@
 // Routes incoming webview messages to their handlers:
-//   - Built-in host routes (ready, query, openRecord, openInBrowser, refreshOrg,
-//     confirmAction, openExternalUrl, exportQueryResult, loadQueryState,
-//     saveQueryTabs, addQueryHistory, saveSavedQueries, restCall, loadRestCallState,
+//   - Built-in host routes (ready, openRecord, openInBrowser, refreshOrg,
+//     confirmAction, openExternalUrl, restCall, loadRestCallState,
 //     saveRestCallState, addRestCallHistory, saveRestCallSavedRequests, describeGlobal,
 //     describeSObject, operationStarted/Ended, cancelOperation)
 //   - Feature routes registered via defineFeature()
@@ -11,11 +10,7 @@
 // the webview can correlate.
 
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
 import type { ConnectionManager } from '../salesforce/connection';
-import type { QueryService } from '../services/soql/QueryService';
-import type { QueryStateStore, SavedQuery, QueryTab } from '../services/soql/QueryStateStore';
 import type { RestCallService } from '../services/rest/RestCallService';
 import type {
   RestCallStateStore,
@@ -23,8 +18,8 @@ import type {
   SavedRestCall,
 } from '../services/rest/RestCallStateStore';
 import type { DescribeService } from '../services/describe/DescribeService';
-import type { SoqlDiagnosticsService } from '../services/soql/SoqlDiagnosticsService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
+import { NO_REPLY, RouteError } from '../features/FeatureModule';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { OperationRegistry } from './OperationRegistry';
 
@@ -33,12 +28,9 @@ type IncomingMessage = { type: string; [key: string]: unknown };
 interface MessageRouterDeps {
   webview: vscode.Webview;
   connectionManager: ConnectionManager;
-  queryService: QueryService;
-  queryStateStore: QueryStateStore;
   restCallService: RestCallService;
   restCallStateStore: RestCallStateStore;
   describeService: DescribeService;
-  soqlDiagnostics: SoqlDiagnosticsService;
   features: FeatureModule[];
   operations: OperationRegistry;
   onReady: () => Promise<void>;
@@ -47,12 +39,9 @@ interface MessageRouterDeps {
 export class MessageRouter {
   private readonly webview: vscode.Webview;
   private readonly connectionManager: ConnectionManager;
-  private readonly queryService: QueryService;
-  private readonly queryStateStore: QueryStateStore;
   private readonly restCallService: RestCallService;
   private readonly restCallStateStore: RestCallStateStore;
   private readonly describeService: DescribeService;
-  private readonly soqlDiagnostics: SoqlDiagnosticsService;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
   private readonly _routeMap = new Map<string, RouteDescriptor>();
@@ -60,12 +49,9 @@ export class MessageRouter {
   constructor(deps: MessageRouterDeps) {
     this.webview = deps.webview;
     this.connectionManager = deps.connectionManager;
-    this.queryService = deps.queryService;
-    this.queryStateStore = deps.queryStateStore;
     this.restCallService = deps.restCallService;
     this.restCallStateStore = deps.restCallStateStore;
     this.describeService = deps.describeService;
-    this.soqlDiagnostics = deps.soqlDiagnostics;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
     for (const feature of deps.features) {
@@ -79,49 +65,6 @@ export class MessageRouter {
     switch (message.type) {
       case 'ready':
         await this.onReady();
-        return;
-      case 'query':
-        await this._handleQuery(
-          message.soql as string,
-          message.useToolingApi as boolean | undefined,
-          message.opId as string | undefined,
-        );
-        return;
-      case 'loadQueryState':
-        await this._route(
-          async () => this.queryStateStore.getState(),
-          'queryStateLoaded',
-          'queryStateError',
-        );
-        return;
-      case 'saveQueryTabs':
-        await this.queryStateStore.saveTabs(
-          message.tabs as QueryTab[],
-          message.activeTab as number,
-        );
-        return;
-      case 'addQueryHistory':
-        await this._route(
-          async () => ({
-            history: await this.queryStateStore.addHistory({
-              query: message.query as string,
-              useToolingApi: message.useToolingApi as boolean,
-            }),
-          }),
-          'queryHistoryUpdated',
-          'queryHistoryError',
-        );
-        return;
-      case 'saveSavedQueries':
-        await this._route(
-          async () => ({
-            savedQueries: await this.queryStateStore.saveSavedQueries(
-              message.savedQueries as SavedQuery[],
-            ),
-          }),
-          'savedQueriesUpdated',
-          'savedQueriesError',
-        );
         return;
       case 'restCall':
         await this._route(
@@ -211,9 +154,6 @@ export class MessageRouter {
         }
         return;
       }
-      case 'exportQueryResult':
-        await this._exportQueryResult(message);
-        return;
       case 'openExternalUrl': {
         const url = message.url as string;
         if (url && /^https?:\/\//i.test(url)) {
@@ -252,31 +192,6 @@ export class MessageRouter {
     }
   }
 
-  /**
-   * Writes a SOQL query export to a timestamped file in the workspace root and
-   * opens it in the editor. Errors (no workspace folder, write failure) surface
-   * via a native error message; otherwise fire-and-forget like openRecord.
-   */
-  private async _exportQueryResult(message: IncomingMessage): Promise<void> {
-    const content = message.content as string;
-    const format = message.format === 'json' ? 'json' : 'csv';
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!root) {
-      await vscode.window.showErrorMessage('Open a workspace folder to export query results.');
-      return;
-    }
-    try {
-      // 2026-06-11T14:30:45.123Z → 20260611-143045
-      const iso = new Date().toISOString().replace(/[-:]/g, '');
-      const stamp = `${iso.slice(0, 8)}-${iso.slice(9, 15)}`;
-      const filePath = path.join(root, `query-result-${stamp}.${format}`);
-      await fs.promises.writeFile(filePath, content, 'utf8');
-      await vscode.window.showTextDocument(vscode.Uri.file(filePath));
-    } catch (err) {
-      await vscode.window.showErrorMessage(`Export failed: ${(err as Error).message}`);
-    }
-  }
-
   private async _dispatchFeatureRoute(message: IncomingMessage): Promise<void> {
     const route = this._routeMap.get(message.type);
     if (!route) return;
@@ -300,31 +215,10 @@ export class MessageRouter {
   }
 
   /**
-   * The query route does not use `_route` because its failure path is richer: the
-   * verbatim Salesforce message is kept, and diagnostics explaining *why* it failed
-   * (a field hidden by FLS, a mistyped name…) ride alongside it.
-   *
-   * `opId` correlates the reply with the query tab that started the run, and registers
-   * an AbortController so the webview's Stop button can cancel it via `cancelOperation`.
+   * Run an action; post success/error with context merged in both branches.
+   * A handler that resolves with NO_REPLY posts nothing; a RouteError carries
+   * extra fields onto the error payload.
    */
-  private async _handleQuery(soql: string, useToolingApi?: boolean, opId?: string): Promise<void> {
-    const ac = opId ? this.operations.createTerminalAbort(opId) : undefined;
-    try {
-      const data = await this.queryService.runQuery(soql, useToolingApi, ac?.signal);
-      this.webview.postMessage({ type: 'queryResult', data: { ...data, opId } });
-    } catch (err) {
-      // The webview has already dropped this run, so stay silent — and skip
-      // diagnose(), which would otherwise fire two more queries at the org.
-      if (ac?.signal.aborted) return;
-      const message = (err as Error).message;
-      const diagnostics = await this.soqlDiagnostics.diagnose(soql, message);
-      this.webview.postMessage({ type: 'queryError', data: { message, diagnostics, opId } });
-    } finally {
-      if (opId) this.operations.endTerminalOp(opId);
-    }
-  }
-
-  /** Run an action; post success/error with context merged in both branches. */
   private async _route<T>(
     action: () => Promise<T>,
     successType: string,
@@ -333,15 +227,17 @@ export class MessageRouter {
   ): Promise<void> {
     try {
       const data = await action();
+      if (data === NO_REPLY) return;
       const dataObj =
         typeof data === 'object' && data !== null
           ? { ...(data as Record<string, unknown>), ...context }
           : { result: data, ...context };
       this.webview.postMessage({ type: successType, data: dataObj });
     } catch (err) {
+      const extra = err instanceof RouteError ? err.data : {};
       this.webview.postMessage({
         type: errorType,
-        data: { ...context, message: (err as Error).message },
+        data: { ...context, ...extra, message: (err as Error).message },
       });
     }
   }

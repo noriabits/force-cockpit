@@ -1,5 +1,5 @@
-import type { ConnectionManager } from '../../salesforce/connection';
-import type { DescribeService } from '../describe/DescribeService';
+import type { ConnectionManager } from '../../../salesforce/connection';
+import type { DescribeService } from '../../../services/describe/DescribeService';
 import { parseSoqlError, fromObjectOfQuery } from './soqlErrorParser';
 import { suggestNames } from './nameSuggest';
 

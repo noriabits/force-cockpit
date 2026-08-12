@@ -3,8 +3,8 @@
 // filter text, sort col/dir) and rebuilds the table on filter/sort. Reuses the
 // pure filterRows/sortRows helpers and the record-id detector so a query result
 // gets the same sort + filter + clickable-Id behaviour as the monitoring tables.
-import { filterRows, sortRows } from '../../features/shared/view/table-sort';
-import { isSalesforceRecordId } from '../../utils/salesforce';
+import { filterRows, sortRows } from '../../../shared/view/table-sort';
+import { isSalesforceRecordId } from '../../../../utils/salesforce';
 import { toQuotedInList } from './export-format';
 
 /**

@@ -35,7 +35,7 @@ const KEY_SAVED = 'quickQuery.savedQueries';
 const HISTORY_CAP = 50;
 const SAVED_CAP = 50;
 
-// Keep in sync with DEFAULT_QUERY in src/webview/query-editor/tabs.js (separate bundle).
+// Keep in sync with DEFAULT_QUERY in src/features/soql/query-editor/view/tabs.js (separate bundle).
 const DEFAULT_QUERY = 'SELECT Id FROM ';
 
 /**

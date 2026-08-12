@@ -27,7 +27,6 @@ export class WebviewAssets {
     'media/modules/confirmation.js',
     'media/modules/org-lifecycle.js',
     'media/modules/storage-bars.js',
-    'dist/webview/query-editor.js',
     'dist/webview/rest-call.js',
     'media/modules/tabs.js',
     'media/modules/utils-subtab.js',

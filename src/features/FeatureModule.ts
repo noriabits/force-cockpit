@@ -1,5 +1,26 @@
 import type { ConnectionManager } from '../salesforce/connection';
 
+/**
+ * Resolve a handler with this to post nothing back. For routes that are
+ * deliberately silent: fire-and-forget persistence, work that reports through a
+ * native VS Code dialog, or a run the webview has already abandoned.
+ */
+export const NO_REPLY = Symbol('no-reply');
+
+/**
+ * Throw this instead of a plain Error to put extra fields on the error payload
+ * (e.g. the SOQL tab's diagnostics riding alongside the raw Salesforce message).
+ */
+export class RouteError extends Error {
+  constructor(
+    message: string,
+    public readonly data: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = 'RouteError';
+  }
+}
+
 export interface RouteDescriptor {
   handler: (
     message: Record<string, unknown>,

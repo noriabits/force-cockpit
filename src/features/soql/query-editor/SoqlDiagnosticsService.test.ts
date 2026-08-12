@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SoqlDiagnosticsService } from './SoqlDiagnosticsService';
-import { DescribeService } from '../describe/DescribeService';
-import type { ConnectionManager } from '../../salesforce/connection';
+import { DescribeService } from '../../../services/describe/DescribeService';
+import type { ConnectionManager } from '../../../salesforce/connection';
 
 const FLS_ERROR =
   "ERROR at Row:1:Column:38\nNo such column 'AssetReferenceId__c' on entity 'QuoteLineItem'. " +
