@@ -5,6 +5,10 @@ export interface QueryTab {
   name: string;
   query: string;
   useToolingApi: boolean;
+  /** Whether `name` tracks the query's FROM object automatically. Absent on tabs
+   *  persisted before this field existed — the webview treats that as "auto"
+   *  unless the name looks hand-chosen. */
+  autoName?: boolean;
 }
 
 /** A recent-history entry. Deduped by query + API type. */
@@ -50,7 +54,9 @@ export class QueryStateStore {
     const activeTab = this.memento.get<number>(KEY_ACTIVE, 0);
     return {
       tabs:
-        tabs.length > 0 ? tabs : [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false }],
+        tabs.length > 0
+          ? tabs
+          : [{ name: 'Query', query: DEFAULT_QUERY, useToolingApi: false, autoName: true }],
       activeTab: tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length ? activeTab : 0,
       history: this.memento.get<QueryHistoryEntry[]>(KEY_HISTORY, []),
       savedQueries: this.memento.get<SavedQuery[]>(KEY_SAVED, []),

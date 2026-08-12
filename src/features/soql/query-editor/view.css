@@ -200,6 +200,14 @@
 
 .query-tab-label {
   cursor: pointer;
+  /* Tab names are now the queried object, which can run long (custom objects,
+     "Order (2)"...) — truncate and rely on the tooltip for the full name. */
+  display: inline-block;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .query-tab-rename {
@@ -209,7 +217,7 @@
   background-color: var(--vscode-input-background);
   border: 1px solid var(--vscode-focusBorder);
   border-radius: 2px;
-  width: 90px;
+  width: 140px;
 }
 
 .query-tab-close {

@@ -18,7 +18,7 @@ describe('QueryStateStore', () => {
     it('returns a single default tab when nothing is stored', () => {
       const state = new QueryStateStore(makeMemento()).getState();
       expect(state.tabs).toEqual([
-        { name: 'Query 1', query: 'SELECT Id FROM ', useToolingApi: false },
+        { name: 'Query', query: 'SELECT Id FROM ', useToolingApi: false, autoName: true },
       ]);
       expect(state.activeTab).toBe(0);
       expect(state.history).toEqual([]);
