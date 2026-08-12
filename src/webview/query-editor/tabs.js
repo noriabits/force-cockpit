@@ -10,6 +10,8 @@
  * @property {string} query
  * @property {boolean} useToolingApi
  * @property {{ records: any[], totalSize: number } | null} results
+ * @property {{ message: string, diagnostics?: any } | null} error  Last failure, rendered on activate.
+ * @property {string | null} opId  Id of this tab's in-flight run; null when idle. Never persisted.
  */
 
 /**
@@ -19,6 +21,7 @@
  * @property {HTMLInputElement} toolingCheckbox
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {(tab: QueryTab) => void} onActivate  Render the activated tab's results (or clear).
+ * @property {(tab: QueryTab) => void} onTabClosed Cancel the closed tab's run, if it had one.
  */
 
 // Pre-fill new tabs so the user doesn't retype the boilerplate; the trailing
@@ -26,12 +29,20 @@
 // with DEFAULT_QUERY in src/services/QueryStateStore.ts (separate bundle).
 const DEFAULT_QUERY = 'SELECT Id FROM ';
 
+/**
+ * @param {string} name @param {string} [query] @param {boolean} [useToolingApi]
+ * @returns {QueryTab}
+ */
+function newTab(name, query = DEFAULT_QUERY, useToolingApi = false) {
+  return { name, query, useToolingApi, results: null, error: null, opId: null };
+}
+
 /** @param {QueryTabsCtx} ctx */
 export function createQueryTabs(ctx) {
-  const { tabBarEl, textarea, toolingCheckbox, vscode, onActivate } = ctx;
+  const { tabBarEl, textarea, toolingCheckbox, vscode, onActivate, onTabClosed } = ctx;
 
   /** @type {QueryTab[]} */
-  let tabs = [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false, results: null }];
+  let tabs = [newTab('Query 1')];
   let activeIndex = 0;
   /** @type {number | undefined} */
   let persistTimer;
@@ -90,11 +101,15 @@ export function createQueryTabs(ctx) {
     tabBarEl.innerHTML = '';
     tabs.forEach((tab, i) => {
       const pill = document.createElement('div');
-      pill.className = 'query-tab' + (i === activeIndex ? ' query-tab--active' : '');
+      pill.className =
+        'query-tab' +
+        (i === activeIndex ? ' query-tab--active' : '') +
+        (tab.opId ? ' query-tab--running' : '');
 
       const label = document.createElement('span');
       label.className = 'query-tab-label';
-      label.textContent = tab.name;
+      // Mark a background run so it is visible without switching to the tab.
+      label.textContent = tab.opId ? `${tab.name} ⋯` : tab.name;
       label.addEventListener('click', () => switchTo(i));
       label.addEventListener('dblclick', () => beginRename(i, label));
       pill.appendChild(label);
@@ -164,7 +179,7 @@ export function createQueryTabs(ctx) {
 
   function addTab() {
     syncActiveFromUI();
-    tabs.push({ name: nextName(), query: DEFAULT_QUERY, useToolingApi: false, results: null });
+    tabs.push(newTab(nextName()));
     activeIndex = tabs.length - 1;
     loadActiveIntoUI();
     renderBar();
@@ -176,6 +191,10 @@ export function createQueryTabs(ctx) {
   function closeTab(i) {
     if (tabs.length <= 1) return;
     syncActiveFromUI();
+    // Stop the closed tab's query before it disappears — otherwise its reply
+    // would land with no owner and the toolbar would stay stuck on "Running…".
+    const closed = tabs[i];
+    if (closed.opId) onTabClosed(closed);
     tabs.splice(i, 1);
     if (activeIndex >= tabs.length) activeIndex = tabs.length - 1;
     else if (i < activeIndex) activeIndex--;
@@ -189,13 +208,10 @@ export function createQueryTabs(ctx) {
   /** @param {{ tabs?: QueryTab[], activeTab?: number }} state */
   function load(state) {
     const loaded = Array.isArray(state.tabs) && state.tabs.length > 0 ? state.tabs : null;
-    tabs = (loaded || [{ name: 'Query 1', query: DEFAULT_QUERY, useToolingApi: false }]).map(
-      (t) => ({
-        name: t.name,
-        query: t.query || '',
-        useToolingApi: !!t.useToolingApi,
-        results: null,
-      }),
+    // Only name/query/useToolingApi are persisted, so a reload always restores
+    // idle tabs — no run can survive it.
+    tabs = (loaded || [newTab('Query 1')]).map((t) =>
+      newTab(t.name, t.query || '', !!t.useToolingApi),
     );
     activeIndex =
       typeof state.activeTab === 'number' && state.activeTab >= 0 && state.activeTab < tabs.length
@@ -209,7 +225,59 @@ export function createQueryTabs(ctx) {
   /** Store the just-run query's results on the active tab. */
   function setActiveResults(/** @type {{ records: any[], totalSize: number } | null} */ results) {
     const tab = active();
-    if (tab) tab.results = results;
+    if (tab) {
+      tab.results = results;
+      tab.error = null;
+    }
+  }
+
+  // ── Per-tab run state ───────────────────────────────────────────────────────
+  /** Mark the active tab as running (or idle, with null). @param {string | null} opId */
+  function setActiveOpId(opId) {
+    const tab = active();
+    if (tab) tab.opId = opId;
+    renderBar();
+  }
+
+  function getActiveOpId() {
+    return active()?.opId ?? null;
+  }
+
+  /**
+   * The tab that started `opId`, or undefined if it was closed, stopped or
+   * superseded — in which case the caller must drop the reply.
+   * @param {string | undefined} opId
+   */
+  function findByOpId(opId) {
+    return opId ? tabs.find((t) => t.opId === opId) : undefined;
+  }
+
+  /** @returns {string[]} opIds of every tab currently running. */
+  function getRunningOpIds() {
+    /** @type {string[]} */
+    const ids = [];
+    for (const t of tabs) if (t.opId) ids.push(t.opId);
+    return ids;
+  }
+
+  /** Clear every tab's run state (org disconnect, bulk cancel). */
+  function clearAllOpIds() {
+    for (const t of tabs) t.opId = null;
+    renderBar();
+  }
+
+  /**
+   * Settle one tab's run: clear its opId and store the outcome. Targets a specific
+   * tab rather than `active()` so a reply always lands on the tab that started it.
+   * @param {QueryTab} tab
+   * @param {{ records: any[], totalSize: number } | null} results
+   * @param {{ message: string, diagnostics?: any } | null} [error]
+   */
+  function settleRun(tab, results, error = null) {
+    tab.opId = null;
+    tab.results = results;
+    tab.error = error;
+    renderBar();
   }
 
   /** Called when the user edits the active query text — keep the tab + storage in sync. */
@@ -221,5 +289,18 @@ export function createQueryTabs(ctx) {
   renderBar();
   loadActiveIntoUI();
 
-  return { load, switchTo, getActive: active, setActiveResults, onActiveEdited, persist };
+  return {
+    load,
+    switchTo,
+    getActive: active,
+    setActiveResults,
+    onActiveEdited,
+    persist,
+    setActiveOpId,
+    getActiveOpId,
+    findByOpId,
+    getRunningOpIds,
+    clearAllOpIds,
+    settleRun,
+  };
 }

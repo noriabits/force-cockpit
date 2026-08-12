@@ -786,6 +786,12 @@ body {
   border-color: var(--vscode-focusBorder);
 }
 
+/* A tab whose query is still in flight — legible from any other tab. */
+.query-tab--running .query-tab-label {
+  font-style: italic;
+  color: var(--vscode-charts-blue, var(--vscode-textLink-foreground));
+}
+
 .query-tab-label {
   cursor: pointer;
 }

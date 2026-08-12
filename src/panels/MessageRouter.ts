@@ -84,6 +84,7 @@ export class MessageRouter {
         await this._handleQuery(
           message.soql as string,
           message.useToolingApi as boolean | undefined,
+          message.opId as string | undefined,
         );
         return;
       case 'loadQueryState':
@@ -302,15 +303,24 @@ export class MessageRouter {
    * The query route does not use `_route` because its failure path is richer: the
    * verbatim Salesforce message is kept, and diagnostics explaining *why* it failed
    * (a field hidden by FLS, a mistyped name…) ride alongside it.
+   *
+   * `opId` correlates the reply with the query tab that started the run, and registers
+   * an AbortController so the webview's Stop button can cancel it via `cancelOperation`.
    */
-  private async _handleQuery(soql: string, useToolingApi?: boolean): Promise<void> {
+  private async _handleQuery(soql: string, useToolingApi?: boolean, opId?: string): Promise<void> {
+    const ac = opId ? this.operations.createTerminalAbort(opId) : undefined;
     try {
-      const data = await this.queryService.runQuery(soql, useToolingApi);
-      this.webview.postMessage({ type: 'queryResult', data });
+      const data = await this.queryService.runQuery(soql, useToolingApi, ac?.signal);
+      this.webview.postMessage({ type: 'queryResult', data: { ...data, opId } });
     } catch (err) {
+      // The webview has already dropped this run, so stay silent — and skip
+      // diagnose(), which would otherwise fire two more queries at the org.
+      if (ac?.signal.aborted) return;
       const message = (err as Error).message;
       const diagnostics = await this.soqlDiagnostics.diagnose(soql, message);
-      this.webview.postMessage({ type: 'queryError', data: { message, diagnostics } });
+      this.webview.postMessage({ type: 'queryError', data: { message, diagnostics, opId } });
+    } finally {
+      if (opId) this.operations.endTerminalOp(opId);
     }
   }
 

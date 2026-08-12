@@ -213,7 +213,60 @@ describe('MessageRouter built-in routes', () => {
     const runQuery = vi.fn().mockResolvedValue({ records: [] });
     const { router } = makeRouter({ runQuery });
     await router.handle({ type: 'query', soql: 'SELECT Id FROM ApexClass', useToolingApi: true });
-    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM ApexClass', true);
+    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM ApexClass', true, undefined);
+  });
+
+  it('query with an opId registers an abort and echoes the opId back', async () => {
+    const ac = new AbortController();
+    const runQuery = vi.fn().mockResolvedValue({ records: [], totalSize: 0, done: true });
+    const { router, postMessage, operations } = makeRouter({
+      runQuery,
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+
+    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account', opId: 'soql-1' });
+
+    expect(operations.createTerminalAbort).toHaveBeenCalledWith('soql-1');
+    expect(runQuery).toHaveBeenCalledWith('SELECT Id FROM Account', undefined, ac.signal);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryResult',
+      data: { records: [], totalSize: 0, done: true, opId: 'soql-1' },
+    });
+    expect(operations.endTerminalOp).toHaveBeenCalledWith('soql-1');
+  });
+
+  it('query error echoes the opId so the webview can route it to the right tab', async () => {
+    const { router, postMessage } = makeRouter({
+      runQuery: vi.fn().mockRejectedValue(new Error('Malformed query')),
+      diagnose: vi.fn().mockResolvedValue([]),
+    });
+
+    await router.handle({ type: 'query', soql: 'SELECT Nope FROM Account', opId: 'soql-7' });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryError',
+      data: { message: 'Malformed query', diagnostics: [], opId: 'soql-7' },
+    });
+  });
+
+  it('a cancelled query stays silent and skips the extra diagnostics round-trips', async () => {
+    const ac = new AbortController();
+    const diagnose = vi.fn().mockResolvedValue([]);
+    const { router, postMessage, operations } = makeRouter({
+      runQuery: vi.fn(async () => {
+        ac.abort();
+        throw new Error('Operation cancelled');
+      }),
+      diagnose,
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+
+    await router.handle({ type: 'query', soql: 'SELECT Id FROM Account', opId: 'soql-2' });
+
+    expect(diagnose).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
+    // Still released, so the panel does not stay busy forever.
+    expect(operations.endTerminalOp).toHaveBeenCalledWith('soql-2');
   });
 
   it('loadQueryState → posts queryStateLoaded with the stored state', async () => {

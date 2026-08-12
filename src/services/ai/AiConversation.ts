@@ -5,6 +5,10 @@
 // analyzer.
 import type { ChatMessage, LmGateway, ToolCall } from './types';
 import type { ToolHandler } from './tools/ToolHandler';
+import { raceAbort, throwIfAborted } from '../../utils/abort';
+
+// Re-exported for the AI call sites that have always imported them from here.
+export { raceAbort, throwIfAborted };
 
 export const DEFAULT_MAX_TOOL_ROUNDS = 150;
 
@@ -106,34 +110,4 @@ export class AiConversation {
     append('\n\n[Reached the maximum number of follow-up query rounds.]');
     return { fallback };
   }
-}
-
-export function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) throw new Error('Operation cancelled');
-}
-
-/**
- * Resolve/reject with `promise`, but reject immediately with 'Operation
- * cancelled' if `signal` aborts first. The in-flight work (a network request
- * or the LM stream, neither of which can be force-killed) is left to settle in
- * the background — racing it lets the run stop the instant the user cancels.
- */
-export function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(new Error('Operation cancelled'));
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(new Error('Operation cancelled'));
-    signal.addEventListener('abort', onAbort, { once: true });
-    const cleanup = () => signal.removeEventListener('abort', onAbort);
-    promise.then(
-      (v) => {
-        cleanup();
-        resolve(v);
-      },
-      (e) => {
-        cleanup();
-        reject(e);
-      },
-    );
-  });
 }

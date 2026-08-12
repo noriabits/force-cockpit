@@ -101,6 +101,62 @@ function showResults(data) {
   queryResults.style.display = '';
 }
 
+/** @param {{ message: string, diagnostics?: any }} error */
+function showError(error) {
+  queryResults.style.display = 'none';
+  table.clear();
+  errorView.show(error.message, error.diagnostics);
+}
+
+/**
+ * Paint the tab's stored outcome. A query that finishes while the user is on a
+ * different tab settles silently onto its own tab; this is where it surfaces.
+ * @param {any} tab
+ */
+function renderTabOutput(tab) {
+  if (tab && tab.results) showResults(tab.results);
+  else if (tab && tab.error) showError(tab.error);
+  else hideResults();
+}
+
+// The ✕ Cancel button injected next to Run while a query is in flight — same
+// look as media/modules/action-tracker.js (.btn.running spinner + .action-cancel-btn),
+// reimplemented locally because that helper binds one opId to one button for its
+// whole lifetime; our Run button is shared and reassigned across tabs, so the
+// cancel control has to be re-created/torn down on every switch instead.
+/** @type {HTMLButtonElement | null} */
+let queryCancelBtn = null;
+
+/**
+ * The single place that drives the shared Run button + hint. They serve every
+ * tab, so they must always reflect the *active* tab's run — never whichever
+ * run finished last.
+ * @param {any} tab
+ */
+function paintRunState(tab) {
+  const running = !!(tab && tab.opId);
+  btnRunQuery.disabled = running;
+  btnRunQuery.classList.toggle('running', running);
+  queryHint.textContent = running ? 'Running…' : '';
+
+  if (running && !queryCancelBtn) {
+    queryCancelBtn = document.createElement('button');
+    queryCancelBtn.type = 'button';
+    queryCancelBtn.className = 'btn btn-ghost action-cancel-btn';
+    queryCancelBtn.textContent = '✕ Cancel';
+    queryCancelBtn.addEventListener('click', () => {
+      const activeTab = tabs.getActive();
+      stopRun(tabs.getActiveOpId());
+      tabs.setActiveOpId(null);
+      paintRunState(activeTab);
+    });
+    btnRunQuery.parentElement?.insertBefore(queryCancelBtn, btnRunQuery.nextSibling);
+  } else if (!running && queryCancelBtn) {
+    queryCancelBtn.remove();
+    queryCancelBtn = null;
+  }
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const tabs = createQueryTabs({
   tabBarEl,
@@ -111,10 +167,10 @@ const tabs = createQueryTabs({
     // Every tab switch/add/close/load pushes the tab's text into the textarea
     // without an `input` event, so re-highlight here.
     highlighter.refresh();
-    // Render the activated tab's stored results, or clear if it has none.
-    if (tab && tab.results) showResults(tab.results);
-    else hideResults();
+    renderTabOutput(tab);
+    paintRunState(tab);
   },
+  onTabClosed: (tab) => stopRun(tab.opId),
 });
 
 // The tabs factory hydrates the textarea once at construction time, before any
@@ -155,32 +211,89 @@ createAutocomplete({
   },
 });
 
+// ── Run tracking ──────────────────────────────────────────────────────────────
+// Each run gets an id, held by the tab that started it (tabs.js owns that field).
+// The reply is routed back by that id, so a run always settles on its own tab —
+// and a reply whose tab has been closed or stopped finds no owner and is dropped.
+// The prefix keeps this id space disjoint from action-tracker.js's 'op-N'.
+let opSeq = 0;
+/** @type {Map<string, { soql: string, useToolingApi: boolean }>} what each in-flight run asked for */
+const pendingRuns = new Map();
+
+/**
+ * Stop one run: tell the host to abort it and release the webview-side bookkeeping.
+ * Clearing the tab's opId (done by the caller, or here for the active tab) is what
+ * makes any late reply undeliverable.
+ * @param {string | null | undefined} opId
+ */
+function stopRun(opId) {
+  if (!opId) return;
+  pendingRuns.delete(opId);
+  vscode.postMessage({ type: 'cancelOperation', opId });
+  vscode.postMessage({ type: 'operationEnded', opId });
+}
+
+/** Abort every in-flight run and reset the toolbar (org disconnect, bulk cancel). */
+function stopAllRuns() {
+  for (const opId of tabs.getRunningOpIds()) stopRun(opId);
+  tabs.clearAllOpIds();
+  paintRunState(tabs.getActive());
+}
+
 // Clear the visible results on disconnect (the active tab's in-memory results
-// stay until the next run overwrites them). Also drop the describe cache so a
-// new org re-describes its own schema.
+// stay until the next run overwrites them). Any in-flight query is abandoned —
+// its answer would come from an org we are no longer connected to. Also drop the
+// describe cache so a new org re-describes its own schema.
 win.__clearQueryResults = () => {
+  stopAllRuns();
   hideResults();
   describeCache.clear();
 };
 
-/** @type {{ soql: string, useToolingApi: boolean } | null} */
-let lastRun = null;
+// Runs alongside action-tracker.js's own handler — __onMessage keeps a Set of
+// handlers per type, so both fire.
+win.__onMessage('cancelAllOperations', () => stopAllRuns());
 
 // ── Message handlers ────────────────────────────────────────────────────────
+/**
+ * Resolve a reply to the tab that started it. Returns null when that tab is gone
+ * (closed, stopped, or superseded), meaning the reply must be discarded.
+ * @param {any} msg
+ */
+function ownerOf(msg) {
+  const opId = msg.data?.opId;
+  const tab = tabs.findByOpId(opId);
+  if (opId) vscode.postMessage({ type: 'operationEnded', opId });
+  if (!tab) return null;
+  return { tab, opId };
+}
+
 win.__onMessage('queryResult', (/** @type {any} */ msg) => {
-  btnRunQuery.disabled = false;
-  queryHint.textContent = '';
-  tabs.setActiveResults(msg.data);
+  const owner = ownerOf(msg);
+  if (!owner) return;
+  const { tab, opId } = owner;
+  tabs.settleRun(tab, msg.data, null);
+
+  const run = pendingRuns.get(opId);
+  pendingRuns.delete(opId);
+  if (run) history.recordRun(run.soql, run.useToolingApi);
+
+  // A background tab's results are stored only; onActivate paints them later.
+  if (tab !== tabs.getActive()) return;
   showResults(msg.data);
-  if (lastRun) history.recordRun(lastRun.soql, lastRun.useToolingApi);
+  paintRunState(tab);
 });
 
 win.__onMessage('queryError', (/** @type {any} */ msg) => {
-  btnRunQuery.disabled = false;
-  queryHint.textContent = '';
-  queryResults.style.display = 'none';
-  tabs.setActiveResults(null);
-  errorView.show(msg.data.message, msg.data.diagnostics);
+  const owner = ownerOf(msg);
+  if (!owner) return;
+  const { tab, opId } = owner;
+  tabs.settleRun(tab, null, { message: msg.data.message, diagnostics: msg.data.diagnostics });
+  pendingRuns.delete(opId);
+
+  if (tab !== tabs.getActive()) return;
+  showError(msg.data);
+  paintRunState(tab);
 });
 
 win.__onMessage('queryStateLoaded', (/** @type {any} */ msg) => {
@@ -217,11 +330,20 @@ btnRunQuery.addEventListener('click', () => {
     return;
   }
 
+  const useToolingApi = toolingCheckbox.checked;
+  const opId = 'soql-' + ++opSeq;
+
   hideResults();
-  btnRunQuery.disabled = true;
-  queryHint.textContent = 'Running…';
-  lastRun = { soql, useToolingApi: toolingCheckbox.checked };
-  vscode.postMessage({ type: 'query', soql, useToolingApi: toolingCheckbox.checked });
+  // Drop the previous outcome now, so switching away mid-run doesn't come back
+  // to a stale result or error sitting under a "Running…" toolbar.
+  tabs.setActiveResults(null);
+  pendingRuns.set(opId, { soql, useToolingApi });
+  tabs.setActiveOpId(opId);
+  paintRunState(tabs.getActive());
+  vscode.postMessage({ type: 'query', soql, useToolingApi, opId });
+  // Announce the run so the host counts it as busy — that is what makes an org
+  // switch warn instead of silently pulling the connection out from under it.
+  vscode.postMessage({ type: 'operationStarted', opId });
 });
 
 btnClearQuery.addEventListener('click', () => {

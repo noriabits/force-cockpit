@@ -254,6 +254,9 @@
             </div>
             <div class="query-autocomplete" id="query-autocomplete" style="display: none"></div>
             <div class="query-toolbar">
+              <!-- The ✕ Cancel button next to Run is injected/removed in JS while a
+                   query is in flight (query-editor/index.js), the same visual
+                   pattern action-tracker.js uses elsewhere in the app. -->
               <button class="btn btn-primary" id="btn-run-query">Run Query</button>
               <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
               <label
