@@ -21,6 +21,23 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Strips a trailing ` (n)` suffix, if present, back to the base it was numbered from. */
+const TRAILING_SUFFIX = /^(.*) \(\d+\)$/;
+function nameBase(name: string): string {
+  const match = TRAILING_SUFFIX.exec(name);
+  return match ? match[1] : name;
+}
+
+/** `base` itself if free, else the first free ` (n)` suffix — case-insensitive. */
+function firstFreeName(base: string, otherNames: string[]): string {
+  const used = new Set(otherNames.map((n) => n.toLowerCase()));
+  if (!used.has(base.toLowerCase())) return base;
+  for (let n = 1; ; n++) {
+    const name = `${base} (${n})`;
+    if (!used.has(name.toLowerCase())) return name;
+  }
+}
+
 /**
  * The object named in the query's top-level FROM clause, or null when there isn't
  * one yet. Matches inside parentheses are skipped, so a subquery's FROM never
@@ -67,13 +84,18 @@ export function baseNameFor(soql: string): string {
 export function deriveTabName(soql: string, otherNames: string[], currentName?: string): string {
   const base = baseNameFor(soql);
   if (currentName && belongsToBase(currentName, base)) return currentName;
+  return firstFreeName(base, otherNames);
+}
 
-  const used = new Set(otherNames.map((n) => n.toLowerCase()));
-  if (!used.has(base.toLowerCase())) return base;
-  for (let n = 1; ; n++) {
-    const name = `${base} (${n})`;
-    if (!used.has(name.toLowerCase())) return name;
-  }
+/**
+ * The name a clone of a tab named `name` should get: the same base the source
+ * name already belongs to (stripping any ` (n)` it carries), numbered to the
+ * first free slot — `asset` clones to `asset (1)`, `asset (1)` clones to
+ * `asset (2)` once `(1)` is taken, etc. Independent of the query text, so a
+ * manually-renamed tab clones under its own name rather than the FROM object.
+ */
+export function cloneTabName(name: string, otherNames: string[]): string {
+  return firstFreeName(nameBase(name), otherNames);
 }
 
 /** Whether `name` is this base's bare or suffixed form (case-insensitive). */

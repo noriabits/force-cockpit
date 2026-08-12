@@ -1,5 +1,5 @@
 // @ts-check
-import { deriveTabName, isLegacyAutoName } from './tab-name';
+import { cloneTabName, deriveTabName, isLegacyAutoName } from './tab-name';
 
 // Query tab bar for the SOQL tab. Owns the tab list, the active
 // index, and each tab's in-memory results (results are NOT persisted — only
@@ -202,6 +202,31 @@ export function createQueryTabs(ctx) {
     persist();
   }
 
+  /** Duplicate the active tab (name, query, Tooling toggle) into a new tab right after it. */
+  function cloneActive() {
+    syncActiveFromUI();
+    const source = active();
+    if (!source) return;
+    tabs.splice(
+      activeIndex + 1,
+      0,
+      newTab(
+        cloneTabName(
+          source.name,
+          tabs.map((t) => t.name),
+        ),
+        source.query,
+        source.useToolingApi,
+        source.autoName,
+      ),
+    );
+    activeIndex++;
+    loadActiveIntoUI();
+    renderBar();
+    onActivate(active());
+    persist();
+  }
+
   /** @param {number} i */
   function closeTab(i) {
     if (tabs.length <= 1) return;
@@ -340,6 +365,7 @@ export function createQueryTabs(ctx) {
   return {
     load,
     switchTo,
+    cloneActive,
     getActive: active,
     setActiveResults,
     onActiveEdited,

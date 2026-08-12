@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { baseNameFor, deriveTabName, isLegacyAutoName, queryObjectName } from './tab-name';
+import {
+  baseNameFor,
+  cloneTabName,
+  deriveTabName,
+  isLegacyAutoName,
+  queryObjectName,
+} from './tab-name';
 
 describe('queryObjectName', () => {
   it('extracts the object after FROM', () => {
@@ -87,6 +93,28 @@ describe('deriveTabName', () => {
   it('keeps a current name whose case differs from the freshly-typed base', () => {
     expect(deriveTabName('SELECT Id FROM asset', ['Account'], 'Asset')).toBe('Asset');
     expect(deriveTabName('SELECT Id FROM ASSET', ['Asset'], 'Asset (1)')).toBe('Asset (1)');
+  });
+});
+
+describe('cloneTabName', () => {
+  it('numbers a bare name to (1)', () => {
+    expect(cloneTabName('asset', ['asset'])).toBe('asset (1)');
+  });
+
+  it('takes the next free slot when earlier ones are taken', () => {
+    expect(cloneTabName('asset', ['asset', 'asset (1)'])).toBe('asset (2)');
+  });
+
+  it('fills a gap left by a closed tab rather than always incrementing', () => {
+    expect(cloneTabName('asset', ['asset', 'asset (2)'])).toBe('asset (1)');
+  });
+
+  it('clones from the same base when the source is already suffixed', () => {
+    expect(cloneTabName('asset (1)', ['asset', 'asset (1)'])).toBe('asset (2)');
+  });
+
+  it('works for a manually-renamed tab, independent of its query', () => {
+    expect(cloneTabName('My saved query', ['My saved query'])).toBe('My saved query (1)');
   });
 });
 

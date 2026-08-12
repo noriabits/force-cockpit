@@ -40,6 +40,7 @@ const historyDropdown = /** @type {HTMLElement} */ (
   document.getElementById('query-history-dropdown')
 );
 const btnSaveQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-save-query'));
+const btnCloneQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-clone-query'));
 const autocompleteEl = /** @type {HTMLElement} */ (document.getElementById('query-autocomplete'));
 const highlightEl = /** @type {HTMLElement} */ (document.getElementById('soql-highlight'));
 
@@ -353,6 +354,8 @@ btnClearQuery.addEventListener('click', () => {
   hideResults();
   tabs.setActiveResults(null);
 });
+
+btnCloneQuery.addEventListener('click', () => tabs.cloneActive());
 
 soqlInput.addEventListener('input', () => tabs.onActiveEdited());
 toolingCheckbox.addEventListener('change', () => tabs.onActiveEdited());
