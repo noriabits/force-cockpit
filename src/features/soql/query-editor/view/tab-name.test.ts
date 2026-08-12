@@ -78,6 +78,16 @@ describe('deriveTabName', () => {
   it('falls back to Query (n) for tabs with no FROM object yet', () => {
     expect(deriveTabName('SELECT Id FROM ', ['Query'])).toBe('Query (1)');
   });
+
+  it('treats differently-cased object names as the same base for dedup', () => {
+    expect(deriveTabName('SELECT Id FROM asset', ['Asset'])).toBe('asset (1)');
+    expect(deriveTabName('SELECT Id FROM ASSET', ['Asset', 'asset (1)'])).toBe('ASSET (2)');
+  });
+
+  it('keeps a current name whose case differs from the freshly-typed base', () => {
+    expect(deriveTabName('SELECT Id FROM asset', ['Account'], 'Asset')).toBe('Asset');
+    expect(deriveTabName('SELECT Id FROM ASSET', ['Asset'], 'Asset (1)')).toBe('Asset (1)');
+  });
 });
 
 describe('isLegacyAutoName', () => {

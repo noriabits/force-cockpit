@@ -59,22 +59,26 @@ export function baseNameFor(soql: string): string {
  * (`Order`, `Order (2)`), so editing a WHERE clause never renumbers a tab. New
  * names take the first free slot — bare base first, then ` (1)`, ` (2)`… — which
  * means closing `Order` frees the bare name for the next Order tab.
+ *
+ * Object names are matched case-insensitively (`Asset` and `asset` are the same
+ * sObject to Salesforce), but the winning name always keeps the exact casing the
+ * user typed for *this* tab's query.
  */
 export function deriveTabName(soql: string, otherNames: string[], currentName?: string): string {
   const base = baseNameFor(soql);
   if (currentName && belongsToBase(currentName, base)) return currentName;
 
-  const used = new Set(otherNames);
-  if (!used.has(base)) return base;
+  const used = new Set(otherNames.map((n) => n.toLowerCase()));
+  if (!used.has(base.toLowerCase())) return base;
   for (let n = 1; ; n++) {
     const name = `${base} (${n})`;
-    if (!used.has(name)) return name;
+    if (!used.has(name.toLowerCase())) return name;
   }
 }
 
-/** Whether `name` is this base's bare or suffixed form. */
+/** Whether `name` is this base's bare or suffixed form (case-insensitive). */
 function belongsToBase(name: string, base: string): boolean {
-  return new RegExp(`^${escapeRegExp(base)}(?: \\(\\d+\\))?$`).test(name);
+  return new RegExp(`^${escapeRegExp(base)}(?: \\(\\d+\\))?$`, 'i').test(name);
 }
 
 /**
