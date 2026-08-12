@@ -178,6 +178,9 @@ js: |-
 | `org` | Current org details, or `null` |
 | `query(soql)` | Runs a SOQL query against the connected org |
 | `executeApex(apexBody, options?)` | Runs anonymous Apex, returns the debug-log result |
+| `assertApexSuccess(result)` | Throws with the compile problem, or the exception message and stack trace, if an `executeApex` result failed. Otherwise does nothing |
+| `filterUserDebugLines(log)` | Reduces a debug log to just your `System.debug` output — strips the `\|USER_DEBUG\|` prefixes and keeps multiline continuations. Same filter the apex-script `filter-user-debug` flag uses |
+| `apexValue(value)` | Renders a JS value as an Apex literal — quoted and escaped strings, bare numbers/booleans, objects and arrays as quoted JSON, empty/missing as `null`. Use it for every value you interpolate into Apex you build yourself; it supplies the quotes, so write `Id x = ${apexValue(id)};`, not `'${apexValue(id)}'` |
 | `log(...)` / `error(...)` | Write to the script's output |
 | `console.log` / `console.error` / `console.warn` | Aliases of the above |
 | `run(cmd)` | Runs a shell command, streaming its output into the log |
@@ -370,6 +373,7 @@ Rules that apply to every combination:
 
 - **Values are always strings.** A marker's value is the rest of the line, so it may itself contain `=`.
 - **Escaping is the callee's job**, and it happens automatically for the callee's kind — an Apex callee gets `''`-doubled quotes, a JS callee gets JSON escaping. Pass raw values; never pre-escape.
+- **This covers placeholders only, not Apex you generate yourself.** A `js` script's inputs are escaped for JS; if that script then builds an Apex string and runs it via `executeApex`, those values are plain JS strings again and nothing has escaped them for Apex. Wrap each one in `apexValue(...)`.
 - **A name nothing published resolves to empty**, not to the literal text `${name}`. If the callee declares it `required: true`, you get a clear "Required input … is missing" instead of `${name}` reaching your org.
 - A `js` script's outputs come **only** from its own `setOutput` calls — it never inherits the outputs of scripts it called. To pass a callee's value further up, re-export it: `setOutput('accountId', r.outputs.accountId)`.
 

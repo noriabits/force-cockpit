@@ -103,3 +103,42 @@ describe('JsExecutor — runScript wiring', () => {
     expect(result.debugLog).toBe('undefined');
   });
 });
+
+describe('JsExecutor — Apex helpers in the sandbox', () => {
+  it('exposes apexValue for building Apex literals', async () => {
+    const result = await run(`log(\`Id x = \${apexValue("O'Brien")};\`);`);
+    expect(result.success).toBe(true);
+    expect(result.debugLog).toBe("Id x = 'O\\'Brien';");
+  });
+
+  it('exposes filterUserDebugLines, stripping prefixes and keeping continuations', async () => {
+    const result = await run(`
+      const raw = [
+        '12:00:00.0 (1)|CODE_UNIT_STARTED|[EXTERNAL]|execute_anonymous_apex',
+        '12:00:00.0 (2)|USER_DEBUG|[1]|DEBUG|{',
+        '  "ok": true',
+        '}',
+        '12:00:00.0 (3)|CODE_UNIT_FINISHED|execute_anonymous_apex',
+      ].join('\\n');
+      log(filterUserDebugLines(raw));
+    `);
+    expect(result.success).toBe(true);
+    expect(result.debugLog).toBe('{\n  "ok": true\n}');
+  });
+
+  it('exposes assertApexSuccess, which throws on a compile problem', async () => {
+    const result = await run(
+      `assertApexSuccess({ compiled: false, success: false, compileProblem: 'Unexpected token' });`,
+    );
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('Unexpected token');
+  });
+
+  it('assertApexSuccess is a no-op on success', async () => {
+    const result = await run(
+      `assertApexSuccess({ compiled: true, success: true }); log('reached');`,
+    );
+    expect(result.success).toBe(true);
+    expect(result.debugLog).toBe('reached');
+  });
+});

@@ -9,6 +9,8 @@ import type { ConnectionManager, DebuggingOptions } from '../../../../salesforce
 import { runTerminalCommand } from '../../../../utils/terminalCommand';
 import { xml } from './XmlHelper';
 import { input } from './InputHelper';
+import { apexValue } from './ApexHelper';
+import { assertApexSuccess, filterUserDebugLines } from '../../../apexUtils';
 import type { ExecuteScriptResult, MakeRunScript, YamlScript } from '../types';
 
 function xmlEscape(s: string): string {
@@ -85,6 +87,9 @@ export class JsExecutor {
         xml,
         input,
         xmlEscape,
+        apexValue,
+        assertApexSuccess,
+        filterUserDebugLines,
         setTimeout,
         clearTimeout,
         Promise,

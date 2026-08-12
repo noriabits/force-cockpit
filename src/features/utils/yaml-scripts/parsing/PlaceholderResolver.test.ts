@@ -33,6 +33,10 @@ describe('escapeForType', () => {
     expect(escapeForType('"quoted"', 'js')).toBe('\\"quoted\\"');
   });
 
+  it('js: also escapes single quotes, so single-quoted destinations stay safe', () => {
+    expect(escapeForType("O'Brien", 'js')).toBe("O\\'Brien");
+  });
+
   it('command: returns the raw value unchanged', () => {
     expect(escapeForType("raw'value", 'command')).toBe("raw'value");
   });

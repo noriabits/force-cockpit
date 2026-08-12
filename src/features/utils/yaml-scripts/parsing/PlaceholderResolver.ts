@@ -10,7 +10,10 @@ export function escapeForType(value: string, type: ScriptType): string {
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\n');
     case 'js':
-      return JSON.stringify(value).slice(1, -1);
+      // JSON.stringify escapes \ and " for double-quoted destinations; scripts
+      // also embed placeholders in single-quoted literals (e.g. `'${name}'`),
+      // so ' must be escaped too or the value breaks out of the string.
+      return JSON.stringify(value).slice(1, -1).replace(/'/g, "\\'");
     case 'command':
     case 'ai':
       return value;
