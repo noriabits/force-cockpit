@@ -214,6 +214,7 @@ export function createQueryTabs(ctx) {
         cloneTabName(
           source.name,
           tabs.map((t) => t.name),
+          source.autoName,
         ),
         source.query,
         source.useToolingApi,

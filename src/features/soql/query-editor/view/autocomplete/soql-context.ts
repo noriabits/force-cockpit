@@ -41,7 +41,7 @@ const CLAUSE_PATTERNS: { clause: string; re: RegExp }[] = SOQL_CLAUSES.map(({ ke
 const FIELD_CLAUSES = new Set(['SELECT', 'WHERE', 'GROUP', 'ORDER', 'HAVING']);
 
 /** Character ranges covered by single-quoted literals, as [start, end) pairs. */
-function stringRanges(text: string): [number, number][] {
+export function stringRanges(text: string): [number, number][] {
   const ranges: [number, number][] = [];
   let open = -1;
   for (let i = 0; i < text.length; i++) {
@@ -61,7 +61,7 @@ function stringRanges(text: string): [number, number][] {
  * those — a query like `WHERE Name LIKE '%with%'` otherwise reads the literal's
  * "with" as a WITH clause and stops offering field suggestions after it.
  */
-function inRanges(ranges: [number, number][], index: number): boolean {
+export function inRanges(ranges: [number, number][], index: number): boolean {
   return ranges.some(([start, end]) => index >= start && index < end);
 }
 

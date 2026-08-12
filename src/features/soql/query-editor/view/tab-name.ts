@@ -8,6 +8,10 @@
  * object. For a label we want the outer one.
  */
 
+// Shares the exact literal-range logic `soql-context.ts`'s clause scanning
+// uses, so both modules agree on what a quoted string hides from view.
+import { stringRanges, inRanges } from './autocomplete/soql-context';
+
 /** Base name for a query with no object to name it after. */
 const FALLBACK_BASE = 'Query';
 
@@ -54,10 +58,16 @@ export function queryObjectName(soql: string): string | null {
   return null;
 }
 
-/** How many parentheses are still open at `index`. */
+/**
+ * How many parentheses are still open at `index`. Parens inside a quoted
+ * literal (e.g. `LIKE '%(VIP%'`) are skipped — an unmatched one there would
+ * otherwise desync the count and hide a real top-level FROM that follows.
+ */
 function parenDepthAt(text: string, index: number): number {
+  const ranges = stringRanges(text);
   let depth = 0;
   for (let i = 0; i < index; i++) {
+    if (inRanges(ranges, i)) continue;
     if (text[i] === '(') depth++;
     else if (text[i] === ')' && depth > 0) depth--;
   }
@@ -88,14 +98,20 @@ export function deriveTabName(soql: string, otherNames: string[], currentName?: 
 }
 
 /**
- * The name a clone of a tab named `name` should get: the same base the source
- * name already belongs to (stripping any ` (n)` it carries), numbered to the
- * first free slot — `asset` clones to `asset (1)`, `asset (1)` clones to
- * `asset (2)` once `(1)` is taken, etc. Independent of the query text, so a
+ * The name a clone of a tab named `name` should get, numbered to the first
+ * free slot — `asset` clones to `asset (1)`, `asset (1)` clones to `asset (2)`
+ * once `(1)` is taken, etc. Independent of the query text, so a
  * manually-renamed tab clones under its own name rather than the FROM object.
+ *
+ * `isAutoName` decides whether a trailing ` (n)` on `name` is stripped before
+ * renumbering: for an auto-derived name it's the dedup suffix `firstFreeName`
+ * itself added, safe to strip and recompute. For a name the user typed by hand
+ * a trailing ` (n)` is just part of the name they chose (e.g. `"Invoices
+ * (2024)"`) — stripping it would silently rename the clone.
  */
-export function cloneTabName(name: string, otherNames: string[]): string {
-  return firstFreeName(nameBase(name), otherNames);
+export function cloneTabName(name: string, otherNames: string[], isAutoName: boolean): string {
+  const base = isAutoName ? nameBase(name) : name;
+  return firstFreeName(base, otherNames);
 }
 
 /** Whether `name` is this base's bare or suffixed form (case-insensitive). */

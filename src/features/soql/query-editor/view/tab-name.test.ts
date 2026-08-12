@@ -40,6 +40,16 @@ describe('queryObjectName', () => {
   it('returns null for empty input', () => {
     expect(queryObjectName('')).toBeNull();
   });
+
+  it('ignores an unbalanced paren inside a string literal in an earlier subquery', () => {
+    // The literal's stray "(" must not desync the paren-depth count and hide
+    // the real top-level FROM that follows the subquery.
+    expect(
+      queryObjectName(
+        "SELECT Name, (SELECT Id FROM Contacts WHERE Description LIKE '%(VIP%') FROM Account",
+      ),
+    ).toBe('Account');
+  });
 });
 
 describe('baseNameFor', () => {
@@ -98,23 +108,29 @@ describe('deriveTabName', () => {
 
 describe('cloneTabName', () => {
   it('numbers a bare name to (1)', () => {
-    expect(cloneTabName('asset', ['asset'])).toBe('asset (1)');
+    expect(cloneTabName('asset', ['asset'], true)).toBe('asset (1)');
   });
 
   it('takes the next free slot when earlier ones are taken', () => {
-    expect(cloneTabName('asset', ['asset', 'asset (1)'])).toBe('asset (2)');
+    expect(cloneTabName('asset', ['asset', 'asset (1)'], true)).toBe('asset (2)');
   });
 
   it('fills a gap left by a closed tab rather than always incrementing', () => {
-    expect(cloneTabName('asset', ['asset', 'asset (2)'])).toBe('asset (1)');
+    expect(cloneTabName('asset', ['asset', 'asset (2)'], true)).toBe('asset (1)');
   });
 
-  it('clones from the same base when the source is already suffixed', () => {
-    expect(cloneTabName('asset (1)', ['asset', 'asset (1)'])).toBe('asset (2)');
+  it('clones from the same base when the source is already suffixed and auto-named', () => {
+    expect(cloneTabName('asset (1)', ['asset', 'asset (1)'], true)).toBe('asset (2)');
   });
 
   it('works for a manually-renamed tab, independent of its query', () => {
-    expect(cloneTabName('My saved query', ['My saved query'])).toBe('My saved query (1)');
+    expect(cloneTabName('My saved query', ['My saved query'], false)).toBe('My saved query (1)');
+  });
+
+  it('does not strip a manually-typed trailing "(n)" that is not a dedup suffix', () => {
+    // The user renamed the tab to "Invoices (2024)" by hand — (2024) is part of
+    // the name they chose, not an auto-numbering suffix, so isAutoName is false.
+    expect(cloneTabName('Invoices (2024)', ['Invoices (2024)'], false)).toBe('Invoices (2024) (1)');
   });
 });
 
