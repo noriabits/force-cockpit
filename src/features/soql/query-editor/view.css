@@ -360,3 +360,100 @@
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 11px;
 }
+
+/* ── AI query generator ──────────────────────────────────────────────────
+   Revealed by the ✨ button in the query toolbar. Sits between the editor
+   and the results, so it flashes on open (same cue as the Debug Logs AI
+   panel) rather than appearing silently below the fold. */
+
+.soql-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+}
+
+@keyframes soql-ai-highlight-fade {
+  0% {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.soql-ai--highlight {
+  animation: soql-ai-highlight-fade 1.5s ease-out forwards;
+}
+
+.soql-ai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.soql-ai-select {
+  min-width: 180px;
+}
+
+.soql-ai-output {
+  max-height: 320px;
+  min-height: 60px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.soql-ai-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 3px solid var(--vscode-charts-green, #89d185);
+  background: var(--vscode-editor-background);
+}
+
+.soql-ai-proposal-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.soql-ai-query {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  max-height: 200px;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+  border: 1px solid var(--vscode-panel-border);
+  white-space: pre-wrap;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+
+.soql-ai-note {
+  font-size: 11px;
+  color: var(--vscode-charts-orange, #d7a03c);
+}
+
+.soql-ai-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.soql-ai-composer textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}

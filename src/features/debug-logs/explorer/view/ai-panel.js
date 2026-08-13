@@ -5,6 +5,7 @@
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
 import {
   isScrolledToBottom,
+  scrollToBottom,
   scrollAndHighlight,
   stickToBottom,
 } from '../../../shared/view/scroll-highlight';
@@ -131,7 +132,20 @@ export function createAiPanel(ctx) {
       allowOrgQueries: orgChk.checked,
     });
     outputEl.textContent = labels.analyzing;
+    // Same re-anchor as the other AI panes: a re-run after the user scrolled
+    // through a previous analysis would otherwise stream in off-screen.
+    scrollToBottom(outputEl);
   });
+
+  /**
+   * Render the analysis, keeping the pane on the tail unless the user has
+   * deliberately scrolled up.
+   */
+  function paint() {
+    const wasAtBottom = isScrolledToBottom(outputEl);
+    outputEl.textContent = analysis;
+    stickToBottom(outputEl, wasAtBottom);
+  }
 
   /** Offer to push the model's recommended levels back into the trace form. */
   function renderApplyLevels() {
@@ -187,10 +201,8 @@ export function createAiPanel(ctx) {
     /** @param {string} chunk */
     appendChunk(chunk) {
       if (!analysis) outputEl.textContent = '';
-      const wasAtBottom = isScrolledToBottom(outputEl);
       analysis += chunk;
-      outputEl.textContent = analysis;
-      stickToBottom(outputEl, wasAtBottom);
+      paint();
     },
     /** @param {any} data */
     finish(data) {
@@ -199,7 +211,9 @@ export function createAiPanel(ctx) {
       opId = null;
       if (data?.analysis && !analysis) {
         analysis = data.analysis;
-        outputEl.textContent = analysis;
+        // A model that returned everything at once streamed no chunks, so this
+        // is the only write — it still has to follow.
+        paint();
       }
       renderApplyLevels();
     },

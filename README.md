@@ -333,6 +333,7 @@ The editor supports:
 - **History** — every query you run is recorded under **History ▾ → Recent** (newest first, deduped). Click **★ Save** to store the current query under a name (**History ▾ → Saved**); pick any entry to load it into the active tab.
 - **SOQL autocomplete** — as you type, suggestions appear for sObjects (after `FROM`), fields and relationships (in `SELECT` / `WHERE` / `ORDER BY` / `GROUP BY`, including dotted traversal like `Account.Owner.Name`), and picklist values inside `WHERE … = '…'`. Press `Ctrl`/`Cmd`+`Space` to force suggestions; `↑`/`↓` to move, `Enter`/`Tab` to insert, `Esc` to dismiss.
 - **Tooling API** — tick **Tooling API** to run the query against the Tooling API (e.g. `ApexClass`, `Flow`).
+- **Write the query for me (✨ Ask AI)** — describe the records you want in plain language, or ask about the query you already have open. See [below](#generating-a-query-with-ai).
 - **Explained errors** — when a query fails, the Salesforce error is shown exactly as returned, with an explanation added underneath.
 
   This matters most for permissions. Salesforce rejects a field you're not allowed to _see_ with the same `No such column 'X' on entity 'Y'` message it uses for a genuine typo, so you end up hunting for a spelling mistake that isn't there. Force Cockpit checks the field against the org's full metadata and tells you which it is:
@@ -355,6 +356,25 @@ The results table supports:
 - **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 
 ---
+
+### Generating a query with AI
+
+Click **✨ Ask AI** in the query toolbar and describe what you want — *"opportunities for Acme that closed this year"*.
+
+**What's on your screen goes along with your question** — both the query in the editor and the results of your last run. So you can ask about a query you're stuck on (*"why doesn't this work?"*, *"also filter by owner"*, *"make this count by stage instead"*) and about the data that came back (*"why is Amount empty on these?"*, *"which of these have no owner?"*). The assistant starts from your query and changes only what you asked for. If you're asking why it fails, it runs your query first so it's explaining the real error rather than guessing at one.
+
+Only a small sample of rows is sent (the first few, trimmed to stay within the model's limits) along with the true row count — so the assistant knows how many records you really matched, and runs a query when it needs more than the sample can tell it.
+
+Either way, it works against your connected org:
+
+1. **Finds the real schema.** It narrows to the objects your request most likely means and looks up their fields, so it uses your org's actual API names rather than guessing. If you didn't type an object name exactly, it searches for the closest match instead of giving up.
+2. **Proves the query runs before showing it to you.** Every candidate is executed against your org, capped at one row. If it fails, the assistant reads the same explained errors described above — including whether a field is genuinely missing or merely hidden from you by field-level security — and fixes the query itself, rather than handing you something broken.
+3. **Checks it means what you asked.** It compares the fields that actually came back against your request, and tells you how it read anything vague ("closed this year" → `IsClosed = true AND CloseDate = THIS_YEAR`). If the query is valid but matched no records, it says so and names the filter it suspects.
+4. **Asks when it genuinely can't tell.** If "Acme" could plausibly mean two different fields, you get a short question instead of a guess. Answer in the same box — it's a conversation, so you can also refine a query it already proposed ("only ones over £50k").
+
+The proposed query appears with **▶ Run query**, which drops it into the current tab and runs it exactly as if you had typed it — including ticking **Tooling API** for you when the query needs it. The conversation above shows each check as it happens, so you can see exactly what was run against your org and what came back.
+
+Everything the assistant can do here is read-only: it looks up schema and runs `SELECT` queries, and can never modify data. Note that the sample rows described above are sent to the language model along with your question, the same way any data it queries itself is. Requires GitHub Copilot (see [AI Scripts](#ai-scripts) for model setup); **New chat** starts a fresh conversation, and switching orgs clears it automatically.
 
 ## Monitoring Tab
 

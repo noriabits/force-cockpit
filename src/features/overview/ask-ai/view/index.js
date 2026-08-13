@@ -6,7 +6,11 @@
 // text. Bundled by esbuild (dist/features/overview/ask-ai/view.js) because it
 // imports the shared ES-module helpers below.
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
-import { isScrolledToBottom, stickToBottom } from '../../../shared/view/scroll-highlight';
+import {
+  isScrolledToBottom,
+  scrollToBottom,
+  stickToBottom,
+} from '../../../shared/view/scroll-highlight';
 import { createAskAiHistory } from './history';
 
 const win = /** @type {any} */ (window);
@@ -123,13 +127,22 @@ modelSel.addEventListener('change', () =>
   vscode.postMessage({ type: 'saveAskAiState', patch: { modelId: modelSel.value } }),
 );
 
+/**
+ * Render the transcript, keeping the pane on the tail unless the user has
+ * deliberately scrolled up — every write during a turn goes through here, so a
+ * model that returns its whole answer in one go still follows.
+ */
+function paint() {
+  const wasAtBottom = isScrolledToBottom(outputEl);
+  outputEl.textContent = transcript;
+  stickToBottom(outputEl, wasAtBottom);
+}
+
 /** @param {string} chunk */
 function appendChunk(chunk) {
   receivedChunk = true;
-  const wasAtBottom = isScrolledToBottom(outputEl);
   transcript += chunk;
-  outputEl.textContent = transcript;
-  stickToBottom(outputEl, wasAtBottom);
+  paint();
 }
 
 function setBusy(/** @type {boolean} */ busy) {
@@ -151,6 +164,10 @@ function send() {
   receivedChunk = false;
   transcript += (transcript ? '\n\n---\n\n' : '') + '## You\n' + question + '\n\n## Assistant\n';
   outputEl.textContent = transcript;
+  // Re-anchor: the turn header we just wrote grew the pane without moving the
+  // scroll position, so without this every stickToBottom check below reads
+  // false and the answer streams in off-screen.
+  scrollToBottom(outputEl);
   setBusy(true);
   opId = win.__startAction(sendBtn, () => {
     vscode.postMessage({ type: 'cancelOperation', opId });
@@ -247,7 +264,7 @@ win.__registerFeature('ask-ai', {
           // whenever it's next opened, without waiting for a reconnect.
           history.refresh();
         }
-        outputEl.textContent = transcript;
+        paint();
         break;
       case 'askAiError':
         if (data.opId !== opId) return;
@@ -255,7 +272,7 @@ win.__registerFeature('ask-ai', {
         // textContent renders this verbatim — no HTML escaping needed (that's
         // only for innerHTML sinks elsewhere in the codebase).
         transcript += `\n_${labels.askFailed}: ${data.message}_\n`;
-        outputEl.textContent = transcript;
+        paint();
         break;
 
       case 'askAiChatReset':

@@ -14,6 +14,8 @@ import { createAutocomplete } from './autocomplete/autocomplete';
 import { createSoqlHighlighter } from './highlight/highlighter';
 import { createQueryErrorView } from './error-view';
 import { capitalizeKeywordEndingAt } from './keyword-case';
+import { createSoqlAiPanel } from './ai-panel';
+import { MAX_RESULT_ROWS } from '../ai/requestMessage';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -249,6 +251,7 @@ win.__clearQueryResults = () => {
   stopAllRuns();
   hideResults();
   describeCache.clear();
+  aiPanel.onOrgChanged();
 };
 
 // Runs alongside action-tracker.js's own handler — __onMessage keeps a Set of
@@ -289,7 +292,12 @@ win.__onMessage('queryError', (/** @type {any} */ msg) => {
   const owner = ownerOf(msg);
   if (!owner) return;
   const { tab, opId } = owner;
-  tabs.settleRun(tab, null, { message: msg.data.message, diagnostics: msg.data.diagnostics });
+  tabs.settleRun(tab, null, {
+    message: msg.data.message,
+    diagnostics: msg.data.diagnostics,
+    // Kept for the AI panel: the editor may have moved on since this failed.
+    soql: msg.data.soql,
+  });
   pendingRuns.delete(opId);
 
   if (tab !== tabs.getActive()) return;
@@ -300,6 +308,7 @@ win.__onMessage('queryError', (/** @type {any} */ msg) => {
 win.__onMessage('queryStateLoaded', (/** @type {any} */ msg) => {
   tabs.load(msg.data);
   history.load(msg.data);
+  aiPanel.setModelId(msg.data.aiModelId ?? '');
 });
 
 win.__onMessage('queryHistoryUpdated', (/** @type {any} */ msg) => {
@@ -323,7 +332,12 @@ win.__onMessage('describeError', (/** @type {any} */ msg) => {
 });
 
 // ── Button + input handlers ───────────────────────────────────────────────────
-btnRunQuery.addEventListener('click', () => {
+/**
+ * Run whatever the active tab currently holds. Shared by the Run button and the
+ * AI panel's "Run in new tab" (which fills a fresh tab first), so the opId
+ * bookkeeping and busy announcement live in exactly one place.
+ */
+function runActiveQuery() {
   const soql = soqlInput.value.trim();
   if (!soql) return;
   if (!win.__orgConnected) {
@@ -345,7 +359,56 @@ btnRunQuery.addEventListener('click', () => {
   // Announce the run so the host counts it as busy — that is what makes an org
   // switch warn instead of silently pulling the connection out from under it.
   vscode.postMessage({ type: 'operationStarted', opId });
+}
+
+btnRunQuery.addEventListener('click', runActiveQuery);
+
+/**
+ * The active tab's last outcome, sampled down before it crosses postMessage — a
+ * full result set can be 2000 rows and none of it needs to travel. Returns null
+ * when the tab has neither run yet nor failed.
+ */
+function activeTabLastRun() {
+  const tab = tabs.getActive();
+  if (!tab) return null;
+  if (tab.error) {
+    return { query: tab.error.soql, error: tab.error.message };
+  }
+  if (!tab.results) return null;
+  // settleRun stores the whole queryResult payload, so the query that actually
+  // produced these rows rides along with them — the editor may have moved on.
+  return {
+    query: tab.results.soql,
+    useToolingApi: tab.results.useToolingApi,
+    records: (tab.results.records ?? []).slice(0, MAX_RESULT_ROWS),
+    totalSize: tab.results.totalSize,
+  };
+}
+
+// ── AI query generator ────────────────────────────────────────────────────────
+const aiPanel = createSoqlAiPanel({
+  vscode,
+  labels: win.SoqlAiLabels,
+  // Sent with every question: most requests here are about what the user
+  // already has open ("why doesn't this work", "why is Amount empty here").
+  getEditorContext: () => ({
+    query: soqlInput.value,
+    useToolingApi: toolingCheckbox.checked,
+    lastRun: activeTabLastRun(),
+  }),
+  onRunProposal: (query, useToolingApi) => {
+    // Into the active tab, then the ordinary run path — indistinguishable from
+    // the user having typed it and pressed Run. loadQueryIntoEditor keeps the
+    // tab name, highlighter and persistence in step.
+    loadQueryIntoEditor({ query, useToolingApi });
+    runActiveQuery();
+  },
 });
+
+// An org-to-org switch never fires a disconnect, so both edges must reach the
+// panel: a run left in flight would otherwise query the NEW org under the old
+// question's framing.
+win.__onMessage('orgConnected', () => aiPanel.onOrgChanged());
 
 btnClearQuery.addEventListener('click', () => {
   soqlInput.value = '';

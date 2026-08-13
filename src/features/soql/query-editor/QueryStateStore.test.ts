@@ -79,6 +79,22 @@ describe('QueryStateStore', () => {
     });
   });
 
+  describe('saveAiModelId', () => {
+    it('defaults to Auto (empty) and round-trips a pick', async () => {
+      const store = new QueryStateStore(makeMemento());
+      expect(store.getState().aiModelId).toBe('');
+
+      await store.saveAiModelId('gpt-x');
+      expect(store.getState().aiModelId).toBe('gpt-x');
+    });
+
+    it('coerces a non-string back to Auto rather than persisting junk', async () => {
+      const store = new QueryStateStore(makeMemento());
+      await store.saveAiModelId(undefined as unknown as string);
+      expect(store.getState().aiModelId).toBe('');
+    });
+  });
+
   describe('saveSavedQueries', () => {
     it('stores and caps the list at 50', async () => {
       const store = new QueryStateStore(makeMemento());

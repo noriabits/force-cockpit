@@ -29,12 +29,15 @@ export interface QueryState {
   activeTab: number;
   history: QueryHistoryEntry[];
   savedQueries: SavedQuery[];
+  /** Model chosen in the AI panel; '' means "Auto". */
+  aiModelId: string;
 }
 
 const KEY_TABS = 'quickQuery.tabs';
 const KEY_ACTIVE = 'quickQuery.activeTab';
 const KEY_HISTORY = 'quickQuery.history';
 const KEY_SAVED = 'quickQuery.savedQueries';
+const KEY_AI_MODEL = 'quickQuery.aiModelId';
 
 const HISTORY_CAP = 50;
 const SAVED_CAP = 50;
@@ -60,7 +63,14 @@ export class QueryStateStore {
       activeTab: tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length ? activeTab : 0,
       history: this.memento.get<QueryHistoryEntry[]>(KEY_HISTORY, []),
       savedQueries: this.memento.get<SavedQuery[]>(KEY_SAVED, []),
+      aiModelId: this.memento.get<string>(KEY_AI_MODEL, ''),
     };
+  }
+
+  /** Remember the AI panel's model pick. Its own key rather than a new store —
+   *  it is one string that belongs to the same tab as everything else here. */
+  async saveAiModelId(modelId: string): Promise<void> {
+    await this.memento.update(KEY_AI_MODEL, typeof modelId === 'string' ? modelId : '');
   }
 
   async saveTabs(tabs: QueryTab[], activeTab: number): Promise<void> {

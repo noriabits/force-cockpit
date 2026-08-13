@@ -1,13 +1,13 @@
-// Drives an ad-hoc, multi-turn conversation with the language model for the
-// Overview tab's "Ask the AI" card. Unlike yaml-scripts' AiExecutor (one fixed
-// gather + one analysis pass) or the Debug Logs LogAnalyzer (one question per
-// log), this keeps the same ChatMessage[] alive across calls to ask() so
-// follow-up questions reuse prior context and tool results — that continuity
-// is the whole point of a chat box. vscode-free: gateway, ConnectionManager,
+// Drives the Overview tab's ad-hoc "Ask the AI" card. The multi-turn thread
+// itself lives in the shared ChatSession (src/services/ai/ChatSession.ts);
+// what stays here is the part that is genuinely Ask-the-AI-specific: mapping
+// the two user-facing access toggles onto a tool set, and locking that set for
+// the life of the conversation. vscode-free: gateway, ConnectionManager,
 // DescribeService, SkillsRepository and WorkspaceSearch are all injected.
 import type { ConnectionManager } from '../../../salesforce/connection';
 import type { DescribeService } from '../../../services/describe/DescribeService';
-import { AiConversation, type ModelFallback } from '../../../services/ai/AiConversation';
+import type { ModelFallback } from '../../../services/ai/AiConversation';
+import { ChatSession } from '../../../services/ai/ChatSession';
 import {
   createCurrentUserTool,
   createDescribeObjectTool,
@@ -44,10 +44,7 @@ export interface AskAiResult {
 }
 
 export class AskAiService {
-  private readonly conversation: AiConversation;
-  private messages: ChatMessage[] = [];
-  private turns = 0;
-  private running = false;
+  private readonly session: ChatSession;
   /**
    * The tool set is fixed the moment the first turn lands. History keeps
    * `toolResult` turns for every tool call the model made; if the declared
@@ -58,9 +55,6 @@ export class AskAiService {
    * the life of the conversation. `reset()` clears it for a fresh thread.
    */
   private locked: LockedAccess | null = null;
-  /** The modelId actually used on the most recent successful turn — needed to
-   *  resume a restored conversation with the same model it was started with. */
-  private lastModelId = '';
 
   constructor(
     gateway: LmGateway,
@@ -69,23 +63,17 @@ export class AskAiService {
     private readonly skills: SkillsRepository,
     private readonly workspaceSearch?: WorkspaceSearch,
   ) {
-    this.conversation = new AiConversation(gateway);
-  }
-
-  get isRunning(): boolean {
-    return this.running;
+    this.session = new ChatSession(gateway);
   }
 
   get turnCount(): number {
-    return this.turns;
+    return this.session.turnCount;
   }
 
   /** Start a brand-new conversation: clears history and unlocks the tool set. */
   reset(): void {
-    this.messages = [];
-    this.turns = 0;
+    this.session.reset();
     this.locked = null;
-    this.lastModelId = '';
   }
 
   /**
@@ -100,13 +88,9 @@ export class AskAiService {
     turns: number;
     modelId: string;
   } | null {
-    if (this.turns === 0) return null;
-    return {
-      messages: this.messages,
-      locked: this.locked,
-      turns: this.turns,
-      modelId: this.lastModelId,
-    };
+    const snapshot = this.session.getSnapshot();
+    if (!snapshot) return null;
+    return { ...snapshot, locked: this.locked };
   }
 
   /** Resume a previously archived conversation with its tool-access lock intact. */
@@ -116,13 +100,12 @@ export class AskAiService {
     turns: number;
     modelId: string;
   }): void {
-    if (this.running) {
-      throw new Error('Cannot restore a conversation while one is running.');
-    }
-    this.messages = snapshot.messages;
+    this.session.restoreSnapshot({
+      messages: snapshot.messages,
+      turns: snapshot.turns,
+      modelId: snapshot.modelId,
+    });
     this.locked = snapshot.locked;
-    this.turns = snapshot.turns;
-    this.lastModelId = snapshot.modelId;
   }
 
   async ask(
@@ -131,10 +114,6 @@ export class AskAiService {
     onChunk?: (chunk: string) => void,
     onModelFallback?: (fallback: ModelFallback) => void,
   ): Promise<AskAiResult> {
-    if (this.running) {
-      throw new Error('Another question is still running.');
-    }
-
     const locked: LockedAccess = this.locked ?? {
       allowWorkspaceFiles: req.access.allowWorkspaceFiles && !!this.workspaceSearch,
       allowOrgQueries: req.access.allowOrgQueries,
@@ -143,74 +122,34 @@ export class AskAiService {
       hasSkills: this.skills.listSkills().length > 0,
     };
 
-    // Snapshot BEFORE mutating so a cancel/error can roll the whole turn back
-    // (see the catch block below) — AiConversation mutates `this.messages` in
-    // place as it runs, so a truncated run must not leave a dangling
-    // assistant turn with unanswered tool calls behind for the next ask().
-    const committed = this.messages.length;
-    const isFirst = committed === 0;
-
-    this.messages.push({
-      role: 'user',
-      text: isFirst
-        ? `${buildAskAiPreamble({
+    const result = await this.session.ask(
+      {
+        question: req.question,
+        modelId: req.modelId,
+        tools: this.buildTools(locked),
+        firstMessagePrefix:
+          `${buildAskAiPreamble({
             hasWorkspaceTools: locked.allowWorkspaceFiles,
             hasOrgTools: locked.allowOrgQueries,
           })}${locked.hasSkills ? buildSkillsCatalogue(this.skills.listSkills()) : ''}` +
-          `\n\n## Question\n${req.question}`
-        : req.question,
-    });
+          `\n\n## Question\n`,
+      },
+      signal,
+      onChunk,
+      onModelFallback,
+    );
 
-    let answer = '';
-    const append = (s: string) => {
-      answer += s;
-      onChunk?.(s);
+    // Only lock in once a turn has actually landed successfully — a cancelled
+    // turn was rolled back, so the next one is free to declare a different set.
+    if (!result.cancelled) this.locked = locked;
+
+    return {
+      ...result,
+      access: {
+        allowWorkspaceFiles: locked.allowWorkspaceFiles,
+        allowOrgQueries: locked.allowOrgQueries,
+      },
     };
-
-    this.running = true;
-    try {
-      const { fallback } = await this.conversation.run({
-        modelId: req.modelId || undefined,
-        messages: this.messages,
-        tools: this.buildTools(locked),
-        append,
-        signal,
-        onModelFallback,
-      });
-      // Only lock in once a turn has actually landed successfully.
-      this.locked = locked;
-      this.lastModelId = req.modelId || this.lastModelId;
-      const turnIndex = this.turns++;
-      return {
-        answer,
-        turnIndex,
-        access: {
-          allowWorkspaceFiles: locked.allowWorkspaceFiles,
-          allowOrgQueries: locked.allowOrgQueries,
-        },
-        ...(fallback ? { modelFallback: fallback } : {}),
-      };
-    } catch (err) {
-      // Roll the whole turn back — including the user message just pushed —
-      // so a retry re-asks cleanly and a cancelled first turn still sends the
-      // preamble again next time (isFirst is derived from length, never cached).
-      this.messages.length = committed;
-      const message = (err as Error).message;
-      if (message === 'Operation cancelled') {
-        return {
-          answer,
-          turnIndex: this.turns,
-          access: {
-            allowWorkspaceFiles: locked.allowWorkspaceFiles,
-            allowOrgQueries: locked.allowOrgQueries,
-          },
-          cancelled: true,
-        };
-      }
-      throw err;
-    } finally {
-      this.running = false;
-    }
   }
 
   private buildTools(locked: LockedAccess): ToolHandler[] {

@@ -48,7 +48,48 @@
       >
         ⧉ Clone
       </button>
+      <button
+        class="btn btn-ghost"
+        id="btn-soql-ai"
+        data-tooltip="Describe the records you want and let AI write the query"
+        aria-label="Describe the records you want and let AI write the query"
+      >
+        ✨ Ask AI
+      </button>
       <span class="query-hint" id="query-hint"></span>
+    </div>
+  </div>
+
+  <!-- AI query generator. Hidden until the ✨ button reveals it, so the tab
+       looks exactly as it did for anyone not using it. -->
+  <div class="soql-ai" id="soql-ai" style="display: none">
+    <div class="soql-ai-toolbar">
+      <select class="text-input soql-ai-select" id="soql-ai-model"></select>
+      <span class="query-toolbar-spacer"></span>
+      <button type="button" class="btn btn-ghost" id="soql-ai-new">New chat</button>
+    </div>
+
+    <pre class="soql-ai-output" id="soql-ai-output"></pre>
+
+    <div class="soql-ai-proposal" id="soql-ai-proposal" style="display: none">
+      <span class="soql-ai-proposal-title" id="soql-ai-proposal-title">Proposed query</span>
+      <pre class="soql-ai-query" id="soql-ai-query"></pre>
+      <div class="soql-ai-note" id="soql-ai-tooling-note" style="display: none"></div>
+      <div class="feature-actions">
+        <button type="button" class="btn btn-primary" id="soql-ai-run">▶ Run in new tab</button>
+        <button type="button" class="btn btn-ghost" id="soql-ai-copy">Copy</button>
+      </div>
+    </div>
+
+    <div class="soql-ai-composer">
+      <textarea
+        class="text-input"
+        id="soql-ai-question"
+        rows="2"
+        spellcheck="false"
+        placeholder="Describe the records you want…"
+      ></textarea>
+      <button type="button" class="btn btn-primary" id="soql-ai-send">Ask</button>
     </div>
   </div>
 

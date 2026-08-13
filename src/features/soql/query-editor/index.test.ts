@@ -25,6 +25,7 @@ const { runQuery, diagnose, stateStore } = vi.hoisted(() => ({
     saveTabs: vi.fn(),
     addHistory: vi.fn(),
     saveSavedQueries: vi.fn(),
+    saveAiModelId: vi.fn(),
   },
 }));
 vi.mock('./QueryService', () => ({
@@ -58,10 +59,15 @@ import type { OperationRegistry } from '../../../panels/OperationRegistry';
  */
 function makeRouter(opts: { operations?: Partial<OperationRegistry> } = {}) {
   const postMessage = vi.fn();
-  const connectionManager = {} as ConnectionManager;
+  const connectionManager = {
+    on: vi.fn(),
+    off: vi.fn(),
+    getCurrentOrg: () => null,
+  } as unknown as ConnectionManager;
   const feature = createSoqlFeature({
     workspaceState: {} as never,
     describeService: {} as DescribeService,
+    gateway: { listModels: async () => [], send: async function* () {} },
   })(connectionManager);
   const operations = {
     startWebviewOp: vi.fn(),
@@ -94,6 +100,7 @@ beforeEach(() => {
   stateStore.saveTabs.mockResolvedValue(undefined);
   stateStore.addHistory.mockResolvedValue([]);
   stateStore.saveSavedQueries.mockResolvedValue([]);
+  stateStore.saveAiModelId.mockResolvedValue(undefined);
 });
 
 describe('soql feature module', () => {
@@ -106,8 +113,10 @@ describe('soql feature module', () => {
     expect(Object.keys(feature.routes).sort()).toEqual([
       'addQueryHistory',
       'exportQueryResult',
+      'generateSoqlQuery',
       'loadQueryState',
       'query',
+      'resetSoqlAiChat',
       'saveQueryTabs',
       'saveSavedQueries',
     ]);

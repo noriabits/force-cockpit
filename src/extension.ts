@@ -106,6 +106,7 @@ export function activate(context: vscode.ExtensionContext): void {
     createSoqlFeature({
       workspaceState: context.workspaceState,
       describeService,
+      gateway: lmGateway,
     }),
     createYamlScriptsFeature({
       builtInPath: path.join(builtInPath, 'scripts'),

@@ -32,12 +32,25 @@ export function isScrolledToBottom(el, threshold = 24) {
 }
 
 /**
+ * Pins `el` to its bottom unconditionally. Use when starting a new run in a
+ * streaming pane: writing the next turn's header grows the content without
+ * moving the scroll position, which leaves the pane no longer at the bottom —
+ * so every subsequent `stickToBottom` check reads false and the output silently
+ * stops following while the model is still writing.
+ * @param {HTMLElement} el
+ */
+export function scrollToBottom(el) {
+  el.scrollTop = el.scrollHeight;
+}
+
+/**
  * Pins `el` to its bottom only if it was already at the bottom before its
  * content changed. Capture `wasAtBottom` BEFORE mutating content, then call
- * this AFTER.
+ * this AFTER. Scrolling up mid-stream is what stops the pane following, so
+ * re-anchor with `scrollToBottom` when a new run starts.
  * @param {HTMLElement} el
  * @param {boolean} wasAtBottom
  */
 export function stickToBottom(el, wasAtBottom) {
-  if (wasAtBottom) el.scrollTop = el.scrollHeight;
+  if (wasAtBottom) scrollToBottom(el);
 }

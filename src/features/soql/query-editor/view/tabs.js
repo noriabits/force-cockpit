@@ -13,8 +13,11 @@ import { cloneTabName, deriveTabName, isLegacyAutoName } from './tab-name';
  * @property {boolean} useToolingApi
  * @property {boolean} autoName  Whether `name` tracks the FROM object automatically.
  *   False once the user renames the tab by hand; a blank rename turns it back on.
- * @property {{ records: any[], totalSize: number } | null} results
- * @property {{ message: string, diagnostics?: any } | null} error  Last failure, rendered on activate.
+ * @property {{ records: any[], totalSize: number, soql?: string, useToolingApi?: boolean } | null} results
+ *   The whole `queryResult` payload, so it also carries the request MessageRouter echoed back —
+ *   the query that produced these rows, which the editor may have moved on from since.
+ * @property {{ message: string, diagnostics?: any, soql?: string } | null} error  Last failure,
+ *   rendered on activate; `soql` is the query that failed, for the same reason.
  * @property {string | null} opId  Id of this tab's in-flight run; null when idle. Never persisted.
  */
 
@@ -329,8 +332,8 @@ export function createQueryTabs(ctx) {
    * Settle one tab's run: clear its opId and store the outcome. Targets a specific
    * tab rather than `active()` so a reply always lands on the tab that started it.
    * @param {QueryTab} tab
-   * @param {{ records: any[], totalSize: number } | null} results
-   * @param {{ message: string, diagnostics?: any } | null} [error]
+   * @param {QueryTab['results']} results
+   * @param {QueryTab['error']} [error]
    */
   function settleRun(tab, results, error = null) {
     tab.opId = null;
