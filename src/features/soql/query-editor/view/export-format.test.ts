@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toCsv, toJson, toQuotedInList } from './export-format';
+import { COLUMN_COPY_FORMATS, formatColumn, toCsv, toJson } from './export-format';
 
 describe('toCsv', () => {
   it('builds a header row and data rows with CRLF endings', () => {
@@ -50,25 +50,54 @@ describe('toJson', () => {
   });
 });
 
-describe('toQuotedInList', () => {
-  it('single-quotes and comma-joins values', () => {
-    expect(toQuotedInList(['001', '002', '003'])).toBe("'001', '002', '003'");
+describe('formatColumn', () => {
+  const ids = COLUMN_COPY_FORMATS.map((f) => f.id);
+
+  it('serializes each format', () => {
+    const values = ['001', '002', '003'];
+    expect(formatColumn(values, 'lines')).toBe('001\n002\n003');
+    expect(formatColumn(values, 'csv')).toBe('001,002,003');
+    expect(formatColumn(values, 'quoted')).toBe("'001', '002', '003'");
+    expect(formatColumn(values, 'parens')).toBe("('001', '002', '003')");
   });
 
-  it('dedupes preserving first-seen order', () => {
-    expect(toQuotedInList(['a', 'b', 'a', 'c', 'b'])).toBe("'a', 'b', 'c'");
+  it('dedupes preserving first-seen order in every format', () => {
+    const values = ['a', 'b', 'a', 'c', 'b'];
+    expect(formatColumn(values, 'lines')).toBe('a\nb\nc');
+    expect(formatColumn(values, 'csv')).toBe('a,b,c');
+    expect(formatColumn(values, 'quoted')).toBe("'a', 'b', 'c'");
+    expect(formatColumn(values, 'parens')).toBe("('a', 'b', 'c')");
   });
 
-  it('skips null and empty values', () => {
-    expect(toQuotedInList(['a', null, '', 'b'])).toBe("'a', 'b'");
+  it('skips null and empty values in every format', () => {
+    const values = ['a', null, '', 'b'];
+    expect(formatColumn(values, 'lines')).toBe('a\nb');
+    expect(formatColumn(values, 'csv')).toBe('a,b');
+    expect(formatColumn(values, 'quoted')).toBe("'a', 'b'");
+    expect(formatColumn(values, 'parens')).toBe("('a', 'b')");
   });
 
-  it('escapes backslash then single-quote', () => {
-    expect(toQuotedInList(["O'Brien"])).toBe("'O\\'Brien'");
-    expect(toQuotedInList(['a\\b'])).toBe("'a\\\\b'");
+  it('escapes backslash then single-quote in the quoted formats', () => {
+    expect(formatColumn(["O'Brien"], 'quoted')).toBe("'O\\'Brien'");
+    expect(formatColumn(['a\\b'], 'quoted')).toBe("'a\\\\b'");
+    expect(formatColumn(["O'Brien"], 'parens')).toBe("('O\\'Brien')");
   });
 
-  it('returns an empty string for no usable values', () => {
-    expect(toQuotedInList([null, ''])).toBe('');
+  it('leaves values verbatim in the unquoted formats', () => {
+    expect(formatColumn(["O'Brien"], 'lines')).toBe("O'Brien");
+    expect(formatColumn(['a\\b'], 'csv')).toBe('a\\b');
+  });
+
+  it('returns an empty string for no usable values — never a bare ()', () => {
+    for (const id of ids) {
+      expect(formatColumn([null, ''], id)).toBe('');
+    }
+  });
+
+  it('implements every id the menu offers', () => {
+    for (const id of ids) {
+      expect(formatColumn(['a', 'b'], id)).not.toBe('');
+    }
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

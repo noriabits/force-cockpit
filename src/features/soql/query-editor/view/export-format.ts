@@ -27,22 +27,65 @@ export function toCsv(cols: string[], rows: Cell[][]): string {
   return lines.join('\r\n');
 }
 
-/**
- * Build a single-quoted, comma-separated list of a column's values for pasting
- * into a SOQL `IN (...)` clause, e.g. `'a', 'b'`. Skips null/empty, dedupes
- * (first-seen order), and escapes backslash then single-quote (`\\`, `\'`).
- */
-export function toQuotedInList(values: Cell[]): string {
+// ── Column copy formats ──────────────────────────────────────────────────────
+// The `⧉` button on a results column header opens a menu built from
+// COLUMN_COPY_FORMATS and copies via formatColumn(). Every format shares the
+// same value rule (skip null/empty, dedupe) — only the serialization differs.
+
+export type ColumnCopyFormatId = 'lines' | 'csv' | 'quoted' | 'parens';
+
+/** Menu descriptors, in display order. `sample` is the dimmed example shown next to the label. */
+export const COLUMN_COPY_FORMATS: {
+  id: ColumnCopyFormatId;
+  label: string;
+  sample: string;
+}[] = [
+  { id: 'lines', label: 'One per line', sample: 'a↵b' },
+  { id: 'csv', label: 'Comma-separated', sample: 'a,b' },
+  { id: 'quoted', label: 'Quoted list', sample: "'a', 'b'" },
+  { id: 'parens', label: 'IN-clause', sample: "('a', 'b')" },
+];
+
+/** Skip null/empty and dedupe, preserving first-seen order. */
+function usableValues(values: Cell[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const v of values) {
     if (v == null || v === '') continue;
     if (seen.has(v)) continue;
     seen.add(v);
-    const escaped = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    out.push(`'${escaped}'`);
+    out.push(v);
   }
-  return out.join(', ');
+  return out;
+}
+
+/** Single-quote a value for a SOQL literal: escape backslash first, then the quote. */
+function quote(value: string): string {
+  return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * Serialize a column's values in the requested shape. Returns '' when no usable
+ * values remain — including for `parens`, since an empty `()` is a broken SOQL
+ * fragment rather than a useful paste.
+ */
+export function formatColumn(values: Cell[], format: ColumnCopyFormatId): string {
+  const usable = usableValues(values);
+  if (usable.length === 0) return '';
+  switch (format) {
+    case 'lines':
+      return usable.join('\n');
+    // No space after the comma: this one is consumed by machines (URL query
+    // params, CLI flags, a spreadsheet Text-to-Columns split), and plenty of
+    // those splitters don't trim. The quoted formats below go into SOQL, where
+    // whitespace is free and readability wins.
+    case 'csv':
+      return usable.join(',');
+    case 'quoted':
+      return usable.map(quote).join(', ');
+    case 'parens':
+      return `(${usable.map(quote).join(', ')})`;
+  }
 }
 
 /** Build a pretty-printed JSON array of `{ col: value }` objects. */

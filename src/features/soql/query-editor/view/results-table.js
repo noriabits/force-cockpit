@@ -5,7 +5,8 @@
 // gets the same sort + filter + clickable-Id behaviour as the monitoring tables.
 import { filterRows, sortRows } from '../../../shared/view/table-sort';
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
-import { toQuotedInList } from './export-format';
+import { formatColumn } from './export-format';
+import { createColumnCopyMenu } from './column-copy-menu';
 
 /**
  * @typedef {Object} ResultsTableCtx
@@ -88,15 +89,20 @@ export function createResultsTable(ctx) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   /**
-   * Copy a column's current (filtered + sorted) values as a quoted IN-list.
+   * Copy a column's current (filtered + sorted) values in the picked format.
    * @param {number} colIndex
+   * @param {import('./export-format').ColumnCopyFormatId} formatId
    * @param {HTMLButtonElement} btn
    */
-  function copyColumn(colIndex, btn) {
+  function copyColumn(colIndex, formatId, btn) {
     const view = getView();
-    const list = toQuotedInList(view.rows.map((r) => r[colIndex]));
+    const text = formatColumn(
+      view.rows.map((r) => r[colIndex]),
+      formatId,
+    );
+    if (!text) return;
     navigator.clipboard
-      .writeText(list)
+      .writeText(text)
       .then(() => {
         const prev = btn.textContent;
         btn.textContent = '✓';
@@ -107,7 +113,12 @@ export function createResultsTable(ctx) {
       .catch(() => {});
   }
 
+  const copyMenu = createColumnCopyMenu({ onPick: copyColumn });
+
   function renderHeader() {
+    // The open menu is anchored to a button in the header we are about to
+    // replace, so a sort/filter/new-run re-render must dismiss it.
+    copyMenu.close();
     const tr = document.createElement('tr');
     cols.forEach((col, i) => {
       const th = document.createElement('th');
@@ -132,13 +143,10 @@ export function createResultsTable(ctx) {
       copyBtn.type = 'button';
       copyBtn.className = 'query-col-copy';
       copyBtn.textContent = '⧉';
-      /** @type {any} */ (window).__setTooltip(
-        copyBtn,
-        "Copy column as 'a', 'b', … for an IN (…) clause",
-      );
+      /** @type {any} */ (window).__setTooltip(copyBtn, 'Copy this column…');
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        copyColumn(i, copyBtn);
+        copyMenu.openFor(copyBtn, i);
       });
 
       th.appendChild(label);
@@ -178,6 +186,7 @@ export function createResultsTable(ctx) {
    * @param {number} size
    */
   function setData(records, size) {
+    copyMenu.close();
     totalSize = size;
     sortCol = -1;
     sortAsc = true;
@@ -227,6 +236,7 @@ export function createResultsTable(ctx) {
   }
 
   function clear() {
+    copyMenu.close();
     cols = [];
     rows = [];
     totalSize = 0;
