@@ -363,6 +363,23 @@ export function createQueryTabs(ctx) {
     persistDebounced();
   }
 
+  /**
+   * Set the active tab's name explicitly and mark it manual, so it stops
+   * tracking the FROM object — used when loading a saved query, so the tab
+   * takes the query's own label instead of being renamed after its object.
+   * Mirrors `beginRename`'s manual-name path: no dedup against other open
+   * tabs, since the name was chosen on purpose, same as typing it by hand.
+   * @param {string} name
+   */
+  function setActiveName(name) {
+    const tab = active();
+    if (!tab || !name) return;
+    tab.name = name;
+    tab.autoName = false;
+    renderBar();
+    persist();
+  }
+
   renderBar();
   loadActiveIntoUI();
 
@@ -373,6 +390,7 @@ export function createQueryTabs(ctx) {
     getActive: active,
     setActiveResults,
     onActiveEdited,
+    setActiveName,
     persist,
     setActiveOpId,
     getActiveOpId,

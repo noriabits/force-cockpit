@@ -16,7 +16,8 @@
  * @property {HTMLButtonElement} saveBtn      "★ Save" current query.
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {() => { query: string, useToolingApi: boolean }} getCurrent
- * @property {(entry: { query: string, useToolingApi: boolean }) => void} onPick
+ * @property {(entry: { query: string, useToolingApi: boolean, name?: string }) => void} onPick
+ *   `name` is set only for a Saved pick — Recent entries carry no name.
  */
 
 /** @param {QueryHistoryCtx} ctx */
@@ -132,7 +133,11 @@ export function createQueryHistory(ctx) {
       label.textContent = isSaved ? safeItem.name : truncate(item.query);
       /** @type {any} */ (window).__setTooltip(label, item.query);
       label.addEventListener('click', () => {
-        onPick({ query: item.query, useToolingApi: item.useToolingApi });
+        onPick({
+          query: item.query,
+          useToolingApi: item.useToolingApi,
+          name: isSaved ? safeItem.name : undefined,
+        });
         close();
       });
       row.appendChild(label);

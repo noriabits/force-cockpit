@@ -180,11 +180,18 @@ const tabs = createQueryTabs({
 // onActivate fires.
 highlighter.refresh();
 
-/** Load a query (from history/saved) into the active tab's editor. */
-function loadQueryIntoEditor(/** @type {{ query: string, useToolingApi: boolean }} */ entry) {
+/**
+ * Load a query (from history/saved) into the active tab's editor. `name`
+ * (present only for a Saved pick) becomes the tab's manual name, taking
+ * priority over the FROM-object re-derivation `onActiveEdited` just did.
+ */
+function loadQueryIntoEditor(
+  /** @type {{ query: string, useToolingApi: boolean, name?: string }} */ entry,
+) {
   soqlInput.value = entry.query;
   toolingCheckbox.checked = !!entry.useToolingApi;
   tabs.onActiveEdited();
+  if (entry.name) tabs.setActiveName(entry.name);
   highlighter.refresh();
 }
 
