@@ -53,6 +53,8 @@ export function createQueryTabs(ctx) {
   let activeIndex = 0;
   /** @type {number | undefined} */
   let persistTimer;
+  /** Pill DOM node currently being dragged (drag-to-reorder), or null. */
+  let dragEl = /** @type {HTMLElement | null} */ (null);
 
   function active() {
     return tabs[activeIndex];
@@ -127,12 +129,33 @@ export function createQueryTabs(ctx) {
         close.type = 'button';
         close.textContent = '×';
         /** @type {any} */ (window).__setTooltip(close, 'Close tab');
+        // Never let a mousedown here be read as the start of a pill drag.
+        close.setAttribute('draggable', 'false');
         close.addEventListener('click', (e) => {
           e.stopPropagation();
           closeTab(i);
         });
         pill.appendChild(close);
       }
+
+      // Drag-to-reorder: the whole pill is the drag source (small pill, no
+      // handle needed — unlike the monitoring card grid's interactive cards).
+      // Identity for commitTabOrder() is the tab object reference itself.
+      /** @type {any} */ (pill).__tab = tab;
+      pill.draggable = true;
+      pill.addEventListener('dragstart', (e) => {
+        dragEl = pill;
+        pill.classList.add('query-tab--dragging');
+        const dt = /** @type {DataTransfer | null} */ (e.dataTransfer);
+        if (dt) dt.effectAllowed = 'move';
+      });
+      pill.addEventListener('dragend', () => {
+        pill.classList.remove('query-tab--dragging');
+        const wasDragging = dragEl === pill;
+        dragEl = null;
+        if (wasDragging) commitTabOrder();
+      });
+
       tabBarEl.appendChild(pill);
     });
 
@@ -145,12 +168,60 @@ export function createQueryTabs(ctx) {
     tabBarEl.appendChild(addBtn);
   }
 
+  /**
+   * The pill closest to (x, y), excluding `excluded`. Euclidean distance
+   * rather than a plain left/right check — the bar wraps to multiple rows
+   * once enough tabs are open (`.query-tab-bar { flex-wrap: wrap }`).
+   * @param {HTMLElement} excluded @param {number} x @param {number} y
+   */
+  function findClosestTabPill(excluded, x, y) {
+    const pills = /** @type {HTMLElement[]} */ (
+      Array.from(tabBarEl.querySelectorAll('.query-tab'))
+    ).filter((p) => p !== excluded);
+    let best = /** @type {HTMLElement | null} */ (null);
+    let bestDist = Infinity;
+    for (const pill of pills) {
+      const rect = pill.getBoundingClientRect();
+      const dx = x - (rect.left + rect.width / 2);
+      const dy = y - (rect.top + rect.height / 2);
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = pill;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * After a drag-drop, rebuild `tabs` to match the pills' final DOM order.
+   * Identity comes from the `__tab` reference stashed on each pill at render
+   * time, so no index/id bookkeeping is needed — `activeIndex` is remapped
+   * to wherever the tab that was active before the drag ended up.
+   */
+  function commitTabOrder() {
+    const activeTab = active();
+    const newOrder = /** @type {QueryTab[]} */ (
+      Array.from(tabBarEl.querySelectorAll('.query-tab'))
+        .map((p) => /** @type {any} */ (p).__tab)
+        .filter(Boolean)
+    );
+    if (newOrder.length !== tabs.length) return; // safety guard, shouldn't happen
+    tabs = newOrder;
+    activeIndex = tabs.indexOf(activeTab);
+    renderBar();
+    persist();
+  }
+
   /** @param {number} i @param {HTMLElement} label */
   function beginRename(i, label) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'query-tab-rename';
     input.value = tabs[i].name;
+    // Selecting/typing in the rename input must never be read as a drag start.
+    const pill = label.parentElement;
+    if (pill) /** @type {HTMLElement} */ (pill).draggable = false;
     label.replaceWith(input);
     input.focus();
     input.select();
@@ -379,6 +450,26 @@ export function createQueryTabs(ctx) {
     renderBar();
     persist();
   }
+
+  // Bar-level dragover: live-shuffles the dragged pill via findClosestTabPill
+  // + insertBefore, mirroring the monitoring card grid's drag-reorder. Wired
+  // once here (not per renderBar call) since tabBarEl itself is never
+  // recreated, only its children.
+  tabBarEl.addEventListener('dragover', (e) => {
+    if (!dragEl) return;
+    e.preventDefault();
+    const dt = /** @type {DataTransfer | null} */ (/** @type {DragEvent} */ (e).dataTransfer);
+    if (dt) dt.dropEffect = 'move';
+    const target = findClosestTabPill(dragEl, e.clientX, e.clientY);
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const isAfter = e.clientX > rect.left + rect.width / 2;
+    if (isAfter) {
+      if (target.nextSibling !== dragEl) tabBarEl.insertBefore(dragEl, target.nextSibling);
+    } else if (dragEl.nextSibling !== target) {
+      tabBarEl.insertBefore(dragEl, target);
+    }
+  });
 
   renderBar();
   loadActiveIntoUI();

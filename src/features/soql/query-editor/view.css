@@ -192,6 +192,12 @@
   border-color: var(--vscode-focusBorder);
 }
 
+/* Drag-to-reorder: the whole pill is the drag source (view/tabs.js). */
+.query-tab--dragging {
+  opacity: 0.4;
+  outline: 2px dashed var(--vscode-focusBorder);
+}
+
 /* A tab whose query is still in flight — legible from any other tab. */
 .query-tab--running .query-tab-label {
   font-style: italic;
