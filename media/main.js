@@ -17,9 +17,15 @@
       return;
     }
 
-    // Route via the module registry first; fall through to feature handlers.
-    const handled = win.__dispatchMessage(message);
-    if (handled) return;
+    // Both registries always run: a message type is a broadcast, not a claim.
+    // These two are parallel buses (module scripts use __onMessage, feature
+    // scripts use __registerFeature), and several host replies legitimately
+    // have consumers on both — listChatModelsResult feeds the SOQL AI panel
+    // (module) as well as Ask AI / Debug Logs / YAML scripts (features), and
+    // scriptLogChunk is a shared streaming channel that every AI surface
+    // filters by its own opId. Returning early when the module registry
+    // matched used to starve every feature-side consumer of those types.
+    win.__dispatchMessage(message);
 
     Object.values(win.__featureHandlers).forEach(
       (/** @type {any} */ h) => h.onMessage && h.onMessage(message),
