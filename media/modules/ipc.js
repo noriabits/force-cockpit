@@ -48,7 +48,15 @@
   win.__dispatchMessage = function (/** @type {any} */ message) {
     const handlers = _messageHandlers.get(message.type);
     if (!handlers) return false;
-    for (const h of handlers) h(message);
+    // Isolated per handler: several modules subscribe to the same type, and one
+    // of them throwing must not swallow the message for the rest.
+    for (const h of handlers) {
+      try {
+        h(message);
+      } catch (err) {
+        console.error('[force-cockpit] module message handler failed', message.type, err);
+      }
+    }
     return true;
   };
 })();

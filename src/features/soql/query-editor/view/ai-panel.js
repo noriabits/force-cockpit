@@ -10,6 +10,8 @@
 // the operationStarted/Ended busy accounting), a namespace disjoint from the
 // query runner's own `soql-N`, so tabs.findByOpId can never claim a reply meant
 // for this panel.
+import { renderModelPicker } from '../../../shared/view/model-options';
+import { resolveSelectedModelId } from '../../../shared/view/model-picker';
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
 import {
   isScrolledToBottom,
@@ -116,30 +118,19 @@ export function createSoqlAiPanel(ctx) {
   /** @param {any[]} models */
   function setModels(models) {
     modelsLoaded = true;
-    modelSel.innerHTML = '';
-    const auto = document.createElement('option');
-    auto.value = '';
-    auto.textContent = labels.modelAuto;
-    modelSel.appendChild(auto);
-    for (const model of models ?? []) {
-      const option = document.createElement('option');
-      option.value = model.id;
-      option.textContent = model.name;
-      modelSel.appendChild(option);
-    }
-    if (!models?.length) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = labels.noModels;
-      modelSel.appendChild(option);
-    }
-    applyPendingModel();
+    renderModelPicker(modelSel, models, {
+      autoLabel: labels.modelAuto,
+      emptyLabel: labels.noModels,
+      candidates: [pendingModelId],
+    });
   }
 
   function applyPendingModel() {
-    if (pendingModelId && [...modelSel.options].some((o) => o.value === pendingModelId)) {
-      modelSel.value = pendingModelId;
-    }
+    // Runs against an already-built <select> (no model list in scope), so the
+    // options themselves are the list. Keeps the current value when the pending
+    // pick is absent, same rule as setModels.
+    const options = [...modelSel.options].map((o) => ({ id: o.value }));
+    modelSel.value = resolveSelectedModelId(options, [pendingModelId], modelSel.value);
   }
 
   // ── Transcript ──────────────────────────────────────────────────────────────

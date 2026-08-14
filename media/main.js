@@ -27,9 +27,17 @@
     // matched used to starve every feature-side consumer of those types.
     win.__dispatchMessage(message);
 
-    Object.values(win.__featureHandlers).forEach(
-      (/** @type {any} */ h) => h.onMessage && h.onMessage(message),
-    );
+    // Each handler is isolated: one feature throwing must not stop the features
+    // registered after it in this loop — that is the same starvation the early
+    // return above used to cause, just from a different direction.
+    Object.values(win.__featureHandlers).forEach((/** @type {any} */ h) => {
+      if (!h.onMessage) return;
+      try {
+        h.onMessage(message);
+      } catch (err) {
+        console.error('[force-cockpit] feature message handler failed', message.type, err);
+      }
+    });
   });
 
   // Signal to the extension host that the webview is fully initialized and its

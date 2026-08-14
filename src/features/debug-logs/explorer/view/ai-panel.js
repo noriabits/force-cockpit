@@ -2,6 +2,7 @@
 // The AI analysis panel: model picker, tool toggles, streaming output, and the
 // "Apply these levels" action built from the ```debug-level block the model
 // ends its answer with.
+import { renderModelPicker } from '../../../shared/view/model-options';
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
 import {
   isScrolledToBottom,
@@ -70,7 +71,12 @@ export function createAiPanel(ctx) {
     ctx.onStateChange({ allowWorkspaceFiles: workspaceChk.checked }),
   );
   orgChk.addEventListener('change', () => ctx.onStateChange({ allowOrgQueries: orgChk.checked }));
-  modelSel.addEventListener('change', () => ctx.onStateChange({ modelId: modelSel.value }));
+  modelSel.addEventListener('change', () => {
+    // Keep the local pick in step with the DOM so a background model-list
+    // refresh cannot rebuild the <select> back to the last persisted value.
+    pendingModelId = modelSel.value;
+    ctx.onStateChange({ modelId: modelSel.value });
+  });
 
   /** Clear the streamed output and the level suggestion, keeping the toggles. */
   function clearOutput() {
@@ -177,26 +183,11 @@ export function createAiPanel(ctx) {
       pendingModelId = state.modelId ?? '';
     },
     setModels(/** @type {any[]} */ models) {
-      modelSel.innerHTML = '';
-      const auto = document.createElement('option');
-      auto.value = '';
-      auto.textContent = labels.modelAuto;
-      modelSel.appendChild(auto);
-      for (const model of models ?? []) {
-        const option = document.createElement('option');
-        option.value = model.id;
-        option.textContent = model.name;
-        modelSel.appendChild(option);
-      }
-      if (pendingModelId && models?.some((m) => m.id === pendingModelId)) {
-        modelSel.value = pendingModelId;
-      }
-      if (!models?.length) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = labels.noModels;
-        modelSel.appendChild(option);
-      }
+      renderModelPicker(modelSel, models, {
+        autoLabel: labels.modelAuto,
+        emptyLabel: labels.noModels,
+        candidates: [pendingModelId],
+      });
     },
     /** @param {string} chunk */
     appendChunk(chunk) {

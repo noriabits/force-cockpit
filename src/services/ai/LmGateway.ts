@@ -2,6 +2,7 @@
 // (types.ts) to/from the VS Code Language Model API so AiExecutor stays
 // vscode-free and unit-testable. Constructed in the feature `index.ts`.
 import * as vscode from 'vscode';
+import { dedupeModels, pickModel } from './modelSelection';
 import {
   type ChatEvent,
   type ChatMessage,
@@ -35,39 +36,35 @@ function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
 }
 
 export class VsCodeLmGateway implements LmGateway {
+  /**
+   * The model list both entry points below resolve against. selectChatModels()
+   * can return the same id from more than one vendor (Copilot registers both
+   * `copilot` and the hidden `copilotcli`), so the list is de-duplicated here —
+   * once — and never re-derived per call site. That is what stops a saved model
+   * id from resolving to a different entry at send time than the one the picker
+   * offered. See modelSelection.ts.
+   */
+  private async _selectModels(): Promise<vscode.LanguageModelChat[]> {
+    return dedupeModels(await vscode.lm.selectChatModels());
+  }
+
   async listModels(): Promise<ChatModelInfo[]> {
-    const models = await vscode.lm.selectChatModels();
-    // selectChatModels() can return the same model more than once (e.g. Copilot
-    // registers a model per capability/session), which surfaces as duplicate
-    // entries in the picker. De-duplicate by id, keeping the first occurrence.
-    const seen = new Set<string>();
-    const unique: ChatModelInfo[] = [];
-    for (const m of models) {
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      unique.push({
-        id: m.id,
-        vendor: m.vendor,
-        family: m.family,
-        name: m.name,
-        maxInputTokens: m.maxInputTokens,
-      });
-    }
-    return unique;
+    const models = await this._selectModels();
+    return models.map((m) => ({
+      id: m.id,
+      vendor: m.vendor,
+      family: m.family,
+      name: m.name,
+      maxInputTokens: m.maxInputTokens,
+    }));
   }
 
   async *send(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatEvent> {
-    const models = await vscode.lm.selectChatModels();
-    if (models.length === 0) throw new NoModelsAvailableError();
+    const models = await this._selectModels();
     const requested = req.modelId;
-    const found = requested ? models.find((m) => m.id === requested) : undefined;
-    // When the requested model is gone, prefer Copilot's "Auto" model (detected
-    // leniently by name or id, mirroring the picker in script-form.js) over an
-    // arbitrary first entry. Falls through to models[0] if Auto isn't present.
-    const isAuto = (m: { id: string; name: string }) =>
-      m.name.toLowerCase() === 'auto' || m.id.toLowerCase() === 'auto';
-    const model = found ?? models.find(isAuto) ?? models[0];
-    if (requested && !found) {
+    const { model, fellBack } = pickModel(models, requested);
+    if (!model) throw new NoModelsAvailableError();
+    if (requested && fellBack) {
       yield { kind: 'modelFallback', requestedId: requested, usedModelName: model.name };
     }
 

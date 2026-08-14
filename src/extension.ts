@@ -19,6 +19,7 @@ import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
 import { OrgConnectionController } from './services/org/OrgConnectionController';
 import { DescribeService } from './services/describe/DescribeService';
 import { DescribeDiskCache } from './services/describe/DescribeDiskCache';
+import { registerChatModelWatcher } from './services/ai/ChatModelWatcher';
 import { VsCodeLmGateway } from './services/ai/LmGateway';
 import { VsCodeWorkspaceSearch } from './services/ai/WorkspaceSearch';
 import { SkillsRepository } from './services/skills/SkillsRepository';
@@ -63,6 +64,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // (AI scripts and the debug-log analyzer).
   const lmGateway = new VsCodeLmGateway();
   const workspaceSearch = new VsCodeWorkspaceSearch();
+  // VS Code resolves language models asynchronously, so a picker built before
+  // Copilot (or a BYOK provider) finished registering would stay stale for the
+  // life of the panel. Push a fresh list whenever the model set changes.
+  context.subscriptions.push(
+    registerChatModelWatcher({
+      gateway: lmGateway,
+      post: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
+      isPanelOpen: () => Boolean(MainPanel.currentPanel),
+      log: (message) => outputChannel.appendLine(message),
+    }),
+  );
   // Agent Skills discovery, built once and shared by AI scripts and the
   // Overview tab's ad-hoc "Ask the AI" chat. Note: skillsPaths is captured
   // here at activation, so a live config.yaml reload does not pick up a

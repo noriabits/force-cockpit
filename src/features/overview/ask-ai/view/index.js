@@ -5,6 +5,7 @@
 // each new question — no client-side conversation state beyond the visible
 // text. Bundled by esbuild (dist/features/overview/ask-ai/view.js) because it
 // imports the shared ES-module helpers below.
+import { renderModelPicker } from '../../../shared/view/model-options';
 import { wireCopyToClipboardButton } from '../../../shared/view/output-actions';
 import {
   isScrolledToBottom,
@@ -81,26 +82,11 @@ function unlockToggles() {
 
 /** @param {any[]} models */
 function setModels(models) {
-  modelSel.innerHTML = '';
-  const auto = document.createElement('option');
-  auto.value = '';
-  auto.textContent = labels.modelAuto;
-  modelSel.appendChild(auto);
-  for (const model of models ?? []) {
-    const option = document.createElement('option');
-    option.value = model.id;
-    option.textContent = model.name;
-    modelSel.appendChild(option);
-  }
-  if (pendingModelId && models?.some((/** @type {any} */ m) => m.id === pendingModelId)) {
-    modelSel.value = pendingModelId;
-  }
-  if (!models?.length) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = labels.noModels;
-    modelSel.appendChild(option);
-  }
+  renderModelPicker(modelSel, models, {
+    autoLabel: labels.modelAuto,
+    emptyLabel: labels.noModels,
+    candidates: [pendingModelId],
+  });
 }
 
 /** @param {any} state */
@@ -123,9 +109,13 @@ workspaceChk.addEventListener('change', () =>
 orgChk.addEventListener('change', () =>
   vscode.postMessage({ type: 'saveAskAiState', patch: { allowOrgQueries: orgChk.checked } }),
 );
-modelSel.addEventListener('change', () =>
-  vscode.postMessage({ type: 'saveAskAiState', patch: { modelId: modelSel.value } }),
-);
+modelSel.addEventListener('change', () => {
+  // Track the pick locally too — otherwise a background model-list refresh
+  // rebuilds the <select> and falls back to the last value the host told us
+  // about, silently undoing the user's choice.
+  pendingModelId = modelSel.value;
+  vscode.postMessage({ type: 'saveAskAiState', patch: { modelId: modelSel.value } });
+});
 
 /**
  * Render the transcript, keeping the pane on the tail unless the user has

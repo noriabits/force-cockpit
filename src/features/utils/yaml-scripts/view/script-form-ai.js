@@ -3,6 +3,9 @@
 // and the optional gather step (visibility + payload assembly). Owns its own
 // state and event wiring; the orchestrator only calls the returned API.
 
+import { appendModelOptions } from '../../../shared/view/model-options';
+import { autoModelId, resolveSelectedModelId } from '../../../shared/view/model-picker';
+
 /**
  * @typedef {{
  *   formModel: HTMLSelectElement, formModelHint: HTMLElement,
@@ -84,43 +87,37 @@ export function createAiFields(ctx) {
   let pendingModelSelection = '';
 
   /**
-   * The value of Copilot's "Auto" model option, or '' if not present. Detected
-   * leniently: a model whose name or id is "auto" (case-insensitive). Kept in
-   * sync with the gateway-side detection in LmGateway.ts.
+   * The models the picker was last built from. applyPendingModel() also runs
+   * from reset() and populateFromScript(), where no fresh list is in scope.
+   * @type {Array<{ id: string; name?: string; vendor?: string }>}
    */
-  function findAutoOptionValue() {
-    const opt = Array.from(formModel.options).find(
-      (o) =>
-        o.value !== '' &&
-        (o.text.trim().toLowerCase() === 'auto' || o.value.toLowerCase() === 'auto'),
-    );
-    return opt ? opt.value : '';
-  }
+  let currentModels = [];
 
   function applyPendingModel() {
-    const has =
-      pendingModelSelection !== '' &&
-      Array.from(formModel.options).some((o) => o.value === pendingModelSelection);
     // With no valid prior choice, default to Auto when available, else leave the
-    // (disabled) placeholder selected.
-    formModel.value = has ? pendingModelSelection : findAutoOptionValue();
+    // (disabled) placeholder selected. Auto is detected by the same predicate
+    // the gateway uses to pick a fallback model — one definition, imported.
+    formModel.value = resolveSelectedModelId(
+      currentModels,
+      [formModel.value, pendingModelSelection],
+      autoModelId(currentModels),
+    );
   }
 
-  /** @param {Array<{ id: string; name?: string; family?: string }>} models */
+  /** @param {Array<{ id: string; name?: string; family?: string; vendor?: string }>} models */
   function setModels(models) {
     pendingModelSelection = formModel.value || pendingModelSelection || '';
-    while (formModel.options.length > 1) formModel.remove(1);
-    const sorted = models
+    currentModels = models ?? [];
+    // Remove every option/optgroup except the disabled placeholder at index 0.
+    // (Not `formModel.remove(1)` in a loop: that walks the flat options
+    // collection and would leave empty <optgroup> elements behind.)
+    while (formModel.children.length > 1) formModel.lastElementChild?.remove();
+    const sorted = currentModels
       .slice()
       .sort((a, b) =>
         (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }),
       );
-    for (const m of sorted) {
-      const opt = document.createElement('option');
-      opt.value = m.id;
-      opt.text = m.name || m.id;
-      formModel.appendChild(opt);
-    }
+    appendModelOptions(formModel, sorted);
     applyPendingModel();
     if (formModelHint) {
       const none = models.length === 0;
