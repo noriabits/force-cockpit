@@ -352,6 +352,7 @@ The results table supports:
 - **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
 - **Sort** — click any column header to sort; click again to reverse.
 - **Copy a column** — click the **⧉** button on a column header to pick a copy format for that column's values: **one per line** (`a`⏎`b`), **comma-separated** (`a,b`), **quoted list** (`'a', 'b'`) or **IN-clause** (`('a', 'b')`, ready to paste after a `WHERE … IN`). Every format copies the current view — so it respects the filter and the sort — with duplicates and blanks dropped.
+- **Copy a cell** — hover any cell and a **⧉** button appears at its left edge; one click copies that cell's full value, including the part cut off by the column width.
 - **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
 - **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 

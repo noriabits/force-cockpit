@@ -296,6 +296,37 @@
   color: var(--vscode-textLink-activeForeground);
 }
 
+/* Per-cell copy button. One shared element appended to <body> and positioned
+   `fixed` over the hovered cell by cell-copy-button.js (same reason as the menu
+   below). Below .query-autocomplete (25) and .query-col-menu (30). */
+.query-cell-copy {
+  position: fixed;
+  z-index: 20;
+  display: none;
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px;
+  opacity: 0.6;
+}
+
+.query-cell-copy:hover {
+  opacity: 1;
+  color: var(--vscode-textLink-activeForeground);
+}
+
+/* Reserve the gutter the cell copy button lives in, permanently — revealing it
+   on hover must not shift the value, and it must never sit on top of the first
+   characters. `th` gets the same inset so header labels stay aligned with their
+   column's values (base rule in media/main.css is `padding: 5px 10px`). */
+#results-table td,
+#results-table th {
+  padding-left: 24px;
+}
+
 /* Column copy-format menu. Appended to <body> and positioned `fixed` by
    column-copy-menu.js so it escapes .table-wrapper's overflow clipping —
    hence no `position: relative` anchor here. Above .query-autocomplete (25). */

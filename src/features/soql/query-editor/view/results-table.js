@@ -7,6 +7,8 @@ import { filterRows, sortRows } from '../../../shared/view/table-sort';
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
 import { formatColumn } from './export-format';
 import { createColumnCopyMenu } from './column-copy-menu';
+import { createCellCopyButton } from './cell-copy-button';
+import { copyTextWithFeedback } from '../../../shared/view/output-actions';
 
 /**
  * @typedef {Object} ResultsTableCtx
@@ -101,24 +103,20 @@ export function createResultsTable(ctx) {
       formatId,
     );
     if (!text) return;
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        const prev = btn.textContent;
-        btn.textContent = '✓';
-        setTimeout(() => {
-          btn.textContent = prev;
-        }, 1200);
-      })
-      .catch(() => {});
+    copyTextWithFeedback(btn, text, '✓');
   }
 
   const copyMenu = createColumnCopyMenu({ onPick: copyColumn });
+  const cellCopy = createCellCopyButton({
+    tbody,
+    wrapper: /** @type {HTMLElement | null} */ (tbody.closest('.table-wrapper')),
+  });
 
   function renderHeader() {
     // The open menu is anchored to a button in the header we are about to
     // replace, so a sort/filter/new-run re-render must dismiss it.
     copyMenu.close();
+    cellCopy.hide();
     const tr = document.createElement('tr');
     cols.forEach((col, i) => {
       const th = document.createElement('th');
@@ -158,6 +156,8 @@ export function createResultsTable(ctx) {
   }
 
   function applyFilterAndSort() {
+    // Rebuilding the tbody orphans whatever cell the copy button was tracking.
+    cellCopy.hide();
     const q = filterInput.value.trim();
     const filtered = filterRows(rows, q);
     const ordered = sortRows(filtered, sortCol, sortAsc);
@@ -187,6 +187,7 @@ export function createResultsTable(ctx) {
    */
   function setData(records, size) {
     copyMenu.close();
+    cellCopy.hide();
     totalSize = size;
     sortCol = -1;
     sortAsc = true;
@@ -237,6 +238,7 @@ export function createResultsTable(ctx) {
 
   function clear() {
     copyMenu.close();
+    cellCopy.hide();
     cols = [];
     rows = [];
     totalSize = 0;
