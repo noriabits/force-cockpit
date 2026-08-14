@@ -6,6 +6,7 @@
 // Enter/Tab insert, Esc dismiss; Ctrl+Space forces suggestions.
 import { analyzeSoql } from './soql-context';
 import { getCaretCoordinates } from './caret-position';
+import { filterAndRankByMatch, matchesToken } from './match-rank';
 
 /**
  * @typedef {Object} AutocompleteCtx
@@ -120,10 +121,8 @@ export function createAutocomplete(ctx) {
   }
 
   // ── Suggestion building ───────────────────────────────────────────────────
-  /** @param {string} token @param {string} candidate */
-  function matches(token, candidate) {
-    return candidate.toLowerCase().includes(token.toLowerCase());
-  }
+  // Filtering + ordering by match quality (exact/prefix before mid-string) lives
+  // in match-rank.js — see there for why a plain substring filter isn't enough.
 
   // SOQL's FIELDS() shorthand — the only three variants Salesforce documents.
   // These are literal syntax, not real field names, so they never come back
@@ -146,7 +145,7 @@ export function createAutocomplete(ctx) {
     // the user has typed the opening paren the identifier-token parser only
     // sees what's inside it (e.g. "AL"), and replacing that with the full
     // "FIELDS(ALL)" string would duplicate the "FIELDS(" already on screen.
-    if (!matches(token, 'FIELDS')) return [];
+    if (!matchesToken(token, 'FIELDS')) return [];
     return FIELDS_SHORTHAND.map((f) => ({
       label: f.insert,
       detail: f.detail,
@@ -190,8 +189,7 @@ export function createAutocomplete(ctx) {
     if (ctxResult.kind === 'object') {
       const g = await describeCache.getGlobal();
       if (mySeq !== seq || !g) return;
-      next = g.sobjects
-        .filter((/** @type {any} */ s) => matches(ctxResult.token, s.name))
+      next = filterAndRankByMatch(g.sobjects, ctxResult.token, (/** @type {any} */ s) => s.name)
         .slice(0, 50)
         .map((/** @type {any} */ s) => ({
           label: s.name,
@@ -203,22 +201,25 @@ export function createAutocomplete(ctx) {
       const obj = await resolveObject(ctxResult.fromObject, ctxResult.relationshipPath);
       if (mySeq !== seq || !obj) return;
       const token = ctxResult.token;
-      const rels = obj.fields
-        .filter((/** @type {any} */ f) => f.relationshipName && matches(token, f.relationshipName))
-        .map((/** @type {any} */ f) => ({
-          label: f.relationshipName + '.',
-          detail: f.referenceTo[0] || 'reference',
-          insert: f.relationshipName + '.',
-          reopen: true,
-        }));
-      const fields = obj.fields
-        .filter((/** @type {any} */ f) => matches(token, f.name))
-        .map((/** @type {any} */ f) => ({
+      const relCandidates = obj.fields.filter((/** @type {any} */ f) => f.relationshipName);
+      const rels = filterAndRankByMatch(
+        relCandidates,
+        token,
+        (/** @type {any} */ f) => f.relationshipName,
+      ).map((/** @type {any} */ f) => ({
+        label: f.relationshipName + '.',
+        detail: f.referenceTo[0] || 'reference',
+        insert: f.relationshipName + '.',
+        reopen: true,
+      }));
+      const fields = filterAndRankByMatch(obj.fields, token, (/** @type {any} */ f) => f.name).map(
+        (/** @type {any} */ f) => ({
           label: f.name,
           detail: f.type,
           insert: f.name,
           reopen: false,
-        }));
+        }),
+      );
       const fieldsShorthand = fieldsShorthandSuggestions(ctxResult, token);
       next = [...fieldsShorthand, ...rels, ...fields].slice(0, 50);
     } else if (ctxResult.kind === 'picklist') {
@@ -228,8 +229,11 @@ export function createAutocomplete(ctx) {
         (/** @type {any} */ f) => f.name.toLowerCase() === ctxResult.pickField.toLowerCase(),
       );
       if (!field) return hide();
-      next = field.picklistValues
-        .filter((/** @type {string} */ v) => matches(ctxResult.token, v))
+      next = filterAndRankByMatch(
+        field.picklistValues,
+        ctxResult.token,
+        (/** @type {string} */ v) => v,
+      )
         .slice(0, 50)
         .map((/** @type {string} */ v) => ({
           label: v,
