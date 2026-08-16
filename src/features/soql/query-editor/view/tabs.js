@@ -146,6 +146,11 @@ export function createQueryTabs(ctx) {
       pill.addEventListener('dragstart', (e) => {
         dragEl = pill;
         pill.classList.add('query-tab--dragging');
+        // A drag suppresses the pill's own click event, so switching tabs on
+        // click never fires here — activate explicitly. Can't call switchTo
+        // (renderBar would destroy this very pill mid-drag and cancel the
+        // browser's native drag operation), so update in place instead.
+        activateForDrag(i, pill);
         const dt = /** @type {DataTransfer | null} */ (e.dataTransfer);
         if (dt) dt.effectAllowed = 'move';
       });
@@ -255,6 +260,25 @@ export function createQueryTabs(ctx) {
     activeIndex = i;
     loadActiveIntoUI();
     renderBar();
+    onActivate(active());
+    persist();
+  }
+
+  /**
+   * Same effect as `switchTo`, but updates the `--active` class on the
+   * existing pills in place instead of calling `renderBar()` — used from
+   * `dragstart`, where a full rebuild would tear out `pill` (the drag
+   * source) mid-drag and end the browser's native drag operation.
+   * @param {number} i @param {HTMLElement} pill
+   */
+  function activateForDrag(i, pill) {
+    if (i === activeIndex) return;
+    syncActiveFromUI();
+    const prevActive = tabBarEl.querySelector('.query-tab--active');
+    if (prevActive) prevActive.classList.remove('query-tab--active');
+    activeIndex = i;
+    loadActiveIntoUI();
+    pill.classList.add('query-tab--active');
     onActivate(active());
     persist();
   }
