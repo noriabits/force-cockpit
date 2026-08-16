@@ -218,6 +218,11 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   // --- Sidebar view (launcher only) ---
+  // VSCode has no "activity-bar icon that just runs a command" contribution point —
+  // an activity-bar icon must be backed by a view container. So this stays an empty
+  // TreeView; the moment it becomes visible we open the real webview panel and
+  // immediately close the sidebar again, so the empty view/welcome content never
+  // lingers on screen — the icon click reads as "open the panel", not "open a sidebar".
   const emptyProvider: vscode.TreeDataProvider<never> = {
     getTreeItem: (e) => e,
     getChildren: () => [],
@@ -227,15 +232,16 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   sidebarView.title = ` v${context.extension.packageJSON.version}`;
   sidebarView.onDidChangeVisibility(({ visible }) => {
-    if (visible)
-      MainPanel.createOrShow(
-        context,
-        connectionManager,
-        allFeatures,
-        cockpitConfig,
-        describeService,
-        outputChannel,
-      );
+    if (!visible) return;
+    MainPanel.createOrShow(
+      context,
+      connectionManager,
+      allFeatures,
+      cockpitConfig,
+      describeService,
+      outputChannel,
+    );
+    void vscode.commands.executeCommand('workbench.action.closeSidebar');
   });
   context.subscriptions.push(sidebarView);
 
