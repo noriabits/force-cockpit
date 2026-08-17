@@ -201,27 +201,34 @@ export function createAutocomplete(ctx) {
       const obj = await resolveObject(ctxResult.fromObject, ctxResult.relationshipPath);
       if (mySeq !== seq || !obj) return;
       const token = ctxResult.token;
-      const relCandidates = obj.fields.filter((/** @type {any} */ f) => f.relationshipName);
-      const rels = filterAndRankByMatch(
-        relCandidates,
-        token,
-        (/** @type {any} */ f) => f.relationshipName,
-      ).map((/** @type {any} */ f) => ({
-        label: f.relationshipName + '.',
-        detail: f.referenceTo[0] || 'reference',
-        insert: f.relationshipName + '.',
-        reopen: true,
-      }));
-      const fields = filterAndRankByMatch(obj.fields, token, (/** @type {any} */ f) => f.name).map(
-        (/** @type {any} */ f) => ({
-          label: f.name,
-          detail: f.type,
-          insert: f.name,
-          reopen: false,
-        }),
+      // Relationships and plain fields are ranked together in one pass. Ranking
+      // them separately and concatenating would pin every matching `Foo__r.` above
+      // every field, so a mid-word relationship hit (typing "city" matches the
+      // "city" inside "Vlocity_cmt__MeterId__r") would outrank "City__c".
+      /** @type {{ text: string, suggestion: { label: string, detail: string, insert: string, reopen: boolean } }[]} */
+      const candidates = [];
+      for (const f of obj.fields) {
+        if (f.relationshipName) {
+          candidates.push({
+            text: f.relationshipName,
+            suggestion: {
+              label: f.relationshipName + '.',
+              detail: f.referenceTo[0] || 'reference',
+              insert: f.relationshipName + '.',
+              reopen: true,
+            },
+          });
+        }
+        candidates.push({
+          text: f.name,
+          suggestion: { label: f.name, detail: f.type, insert: f.name, reopen: false },
+        });
+      }
+      const ranked = filterAndRankByMatch(candidates, token, (c) => c.text).map(
+        (c) => c.suggestion,
       );
       const fieldsShorthand = fieldsShorthandSuggestions(ctxResult, token);
-      next = [...fieldsShorthand, ...rels, ...fields].slice(0, 50);
+      next = [...fieldsShorthand, ...ranked].slice(0, 50);
     } else if (ctxResult.kind === 'picklist') {
       const obj = await describeCache.getSObject(ctxResult.fromObject);
       if (mySeq !== seq || !obj) return;

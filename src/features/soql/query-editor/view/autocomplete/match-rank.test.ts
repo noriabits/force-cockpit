@@ -7,8 +7,25 @@ describe('matchRank', () => {
     expect(matchRank('city', 'City__c')).toBe(1);
   });
 
-  it('ranks a prefix match ahead of a mid-string match', () => {
+  it('ranks a prefix match ahead of a segment match', () => {
     expect(matchRank('city', 'City__c')).toBeLessThan(matchRank('city', 'Vlocity_cmt__City__c')!);
+  });
+
+  it('ranks a segment match ahead of a mid-word match', () => {
+    // "city" starts a segment in "__City__" but is buried inside the "Vlocity"
+    // namespace of the relationship name.
+    expect(matchRank('city', 'Vlocity_cmt__City__c')).toBeLessThan(
+      matchRank('city', 'Vlocity_cmt__MeterId__r')!,
+    );
+  });
+
+  it('scores the best occurrence, not the first', () => {
+    // The leading "Vlo|city" hit is mid-word; the later "__City__" hit wins.
+    expect(matchRank('city', 'Vlocity_cmt__City__c')).toBe(2);
+  });
+
+  it('treats a camelCase hump as a segment start', () => {
+    expect(matchRank('city', 'BillingCity')).toBe(2);
   });
 
   it('is case-insensitive', () => {
@@ -32,10 +49,28 @@ describe('matchesToken', () => {
 });
 
 describe('filterAndRankByMatch', () => {
-  it('puts prefix matches before mid-string matches, dropping non-matches', () => {
+  it('puts prefix matches before segment matches, dropping non-matches', () => {
     const fields = ['Vlocity_cmt__City__c', 'City__c', 'BillingCity', 'Name'];
     const result = filterAndRankByMatch(fields, 'city', (f) => f);
     expect(result).toEqual(['City__c', 'BillingCity', 'Vlocity_cmt__City__c']);
+  });
+
+  it('sinks namespace-only matches below real segment matches', () => {
+    // Reproduces the reported bug: relationship names whose only "city" is the
+    // one inside the "Vlocity" namespace were surfacing above the City__c field.
+    const fields = [
+      'Vlocity_cmt__MeterId__r',
+      'Vlocity_cmt__PremisesId__r',
+      'Vlocity_cmt__City__c',
+      'City__c',
+    ];
+    const result = filterAndRankByMatch(fields, 'city', (f) => f);
+    expect(result).toEqual([
+      'City__c',
+      'Vlocity_cmt__City__c',
+      'Vlocity_cmt__MeterId__r',
+      'Vlocity_cmt__PremisesId__r',
+    ]);
   });
 
   it('breaks ties alphabetically within the same rank', () => {
