@@ -1,5 +1,6 @@
 // @ts-check
 import { cloneTabName, deriveTabName, isLegacyAutoName } from './tab-name';
+import { resolveDropTarget } from './tab-drop-target';
 
 // Query tab bar for the SOQL tab. Owns the tab list, the active
 // index, and each tab's in-memory results (results are NOT persisted — only
@@ -36,6 +37,13 @@ import { cloneTabName, deriveTabName, isLegacyAutoName } from './tab-name';
 // with DEFAULT_QUERY in src/features/soql/query-editor/QueryStateStore.ts (separate bundle).
 const DEFAULT_QUERY = 'SELECT Id FROM ';
 
+// How far the cursor must travel between two reorders of the dragged pill.
+// `dragover` keeps firing while the pointer sits still, so any layout that
+// resolves differently after a reorder would otherwise bounce the pill back
+// and forth forever; requiring real pointer travel means a still cursor always
+// settles, and the wrapping bar can at worst step, never blink.
+const REORDER_DEADZONE_PX = 6;
+
 /**
  * @param {string} name @param {string} [query] @param {boolean} [useToolingApi] @param {boolean} [autoName]
  * @returns {QueryTab}
@@ -55,6 +63,11 @@ export function createQueryTabs(ctx) {
   let persistTimer;
   /** Pill DOM node currently being dragged (drag-to-reorder), or null. */
   let dragEl = /** @type {HTMLElement | null} */ (null);
+  /** Cursor position of the last reorder (drag start counts) — see REORDER_DEADZONE_PX. */
+  let lastDropX = 0;
+  let lastDropY = 0;
+  /** Set when renderBar() was skipped mid-drag and still owes a render at dragend. */
+  let renderQueued = false;
 
   function active() {
     return tabs[activeIndex];
@@ -105,6 +118,17 @@ export function createQueryTabs(ctx) {
 
   // ── Rendering ───────────────────────────────────────────────────────────────
   function renderBar() {
+    // A drag owns the pill DOM until it ends. Rebuilding the bar mid-drag would
+    // tear out the drag source (which cancels the browser's native drag) and
+    // leave `dragEl` pointing at a detached node that the dragover handler would
+    // then splice back in beside its freshly rendered twin. Renders can arrive
+    // at any moment from a query reply (setActiveOpId / settleRun /
+    // clearAllOpIds), so park them until dragend.
+    if (dragEl) {
+      renderQueued = true;
+      return;
+    }
+    renderQueued = false;
     tabBarEl.innerHTML = '';
     tabs.forEach((tab, i) => {
       const pill = document.createElement('div');
@@ -146,19 +170,29 @@ export function createQueryTabs(ctx) {
       pill.addEventListener('dragstart', (e) => {
         dragEl = pill;
         pill.classList.add('query-tab--dragging');
+        // Measure the dead zone from where the drag began, so the pill holds its
+        // slot until the pointer has actually moved somewhere.
+        lastDropX = e.clientX;
+        lastDropY = e.clientY;
         // A drag suppresses the pill's own click event, so switching tabs on
         // click never fires here — activate explicitly. Can't call switchTo
         // (renderBar would destroy this very pill mid-drag and cancel the
         // browser's native drag operation), so update in place instead.
         activateForDrag(i, pill);
         const dt = /** @type {DataTransfer | null} */ (e.dataTransfer);
-        if (dt) dt.effectAllowed = 'move';
+        if (dt) {
+          dt.effectAllowed = 'move';
+          // A drag carrying no data isn't guaranteed to start at all. The payload
+          // itself goes unused — reorder identity is the `__tab` reference above.
+          dt.setData('text/plain', tab.name);
+        }
       });
       pill.addEventListener('dragend', () => {
         pill.classList.remove('query-tab--dragging');
         const wasDragging = dragEl === pill;
         dragEl = null;
         if (wasDragging) commitTabOrder();
+        else if (renderQueued) renderBar();
       });
 
       tabBarEl.appendChild(pill);
@@ -173,29 +207,11 @@ export function createQueryTabs(ctx) {
     tabBarEl.appendChild(addBtn);
   }
 
-  /**
-   * The pill closest to (x, y), excluding `excluded`. Euclidean distance
-   * rather than a plain left/right check — the bar wraps to multiple rows
-   * once enough tabs are open (`.query-tab-bar { flex-wrap: wrap }`).
-   * @param {HTMLElement} excluded @param {number} x @param {number} y
-   */
-  function findClosestTabPill(excluded, x, y) {
-    const pills = /** @type {HTMLElement[]} */ (
+  /** Every pill in the bar except `excluded`, in DOM order. @param {HTMLElement} excluded */
+  function otherTabPills(excluded) {
+    return /** @type {HTMLElement[]} */ (
       Array.from(tabBarEl.querySelectorAll('.query-tab'))
     ).filter((p) => p !== excluded);
-    let best = /** @type {HTMLElement | null} */ (null);
-    let bestDist = Infinity;
-    for (const pill of pills) {
-      const rect = pill.getBoundingClientRect();
-      const dx = x - (rect.left + rect.width / 2);
-      const dy = y - (rect.top + rect.height / 2);
-      const dist = dx * dx + dy * dy;
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = pill;
-      }
-    }
-    return best;
   }
 
   /**
@@ -211,11 +227,21 @@ export function createQueryTabs(ctx) {
         .map((p) => /** @type {any} */ (p).__tab)
         .filter(Boolean)
     );
-    if (newOrder.length !== tabs.length) return; // safety guard, shouldn't happen
-    tabs = newOrder;
-    activeIndex = tabs.indexOf(activeTab);
+    // Take the DOM's word for the order only when the pills still describe the
+    // same set of tabs — i.e. a permutation of `tabs`. They may not: a render
+    // deferred by the drag (see renderBar) can have replaced the model under
+    // pills the user was still dragging, e.g. a load() landing mid-drag. In
+    // that case keep `tabs` as it is and let the render below put the pills
+    // back in the model's order, rather than leaving the bar showing an order
+    // nobody holds — or worse, reinstating tabs the model has moved past.
+    const isReorder = newOrder.length === tabs.length && newOrder.every((t) => tabs.includes(t));
+    if (isReorder) {
+      tabs = newOrder;
+      const movedTo = tabs.indexOf(activeTab);
+      if (movedTo >= 0) activeIndex = movedTo;
+      persist();
+    }
     renderBar();
-    persist();
   }
 
   /** @param {number} i @param {HTMLElement} label */
@@ -475,25 +501,44 @@ export function createQueryTabs(ctx) {
     persist();
   }
 
-  // Bar-level dragover: live-shuffles the dragged pill via findClosestTabPill
-  // + insertBefore, mirroring the monitoring card grid's drag-reorder. Wired
-  // once here (not per renderBar call) since tabBarEl itself is never
-  // recreated, only its children.
+  // Bar-level dragover: live-shuffles the dragged pill into the slot the cursor
+  // is over (resolveDropTarget + insertBefore). Wired once here (not per
+  // renderBar call) since tabBarEl itself is never recreated, only its children.
   tabBarEl.addEventListener('dragover', (e) => {
     if (!dragEl) return;
+    // Marks the bar as a drop target, so the pill drops here instead of the
+    // browser refusing the drop and animating it back to where it started.
     e.preventDefault();
     const dt = /** @type {DataTransfer | null} */ (/** @type {DragEvent} */ (e).dataTransfer);
     if (dt) dt.dropEffect = 'move';
-    const target = findClosestTabPill(dragEl, e.clientX, e.clientY);
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
-    const isAfter = e.clientX > rect.left + rect.width / 2;
-    if (isAfter) {
-      if (target.nextSibling !== dragEl) tabBarEl.insertBefore(dragEl, target.nextSibling);
-    } else if (dragEl.nextSibling !== target) {
-      tabBarEl.insertBefore(dragEl, target);
+    if (
+      Math.abs(e.clientX - lastDropX) < REORDER_DEADZONE_PX &&
+      Math.abs(e.clientY - lastDropY) < REORDER_DEADZONE_PX
+    ) {
+      return;
     }
+    const pills = otherTabPills(dragEl);
+    const target = resolveDropTarget(
+      pills.map((p) => p.getBoundingClientRect()),
+      e.clientX,
+      e.clientY,
+    );
+    if (!target) return;
+    const pill = pills[target.index];
+    // The node the pill should sit before — the add button when it lands last.
+    const before = target.after ? pill.nextSibling : pill;
+    // Already in that slot: skip, so an unchanged order never re-inserts the
+    // drag source (a needless DOM move under an in-flight native drag).
+    if (before === dragEl || dragEl.nextSibling === before) return;
+    tabBarEl.insertBefore(dragEl, before);
+    lastDropX = e.clientX;
+    lastDropY = e.clientY;
   });
+
+  // The drop itself carries nothing — the pill is already where the live shuffle
+  // left it and dragend commits the order — but accepting it keeps the browser
+  // from playing the "rejected drop" snap-back animation over the bar.
+  tabBarEl.addEventListener('drop', (e) => e.preventDefault());
 
   renderBar();
   loadActiveIntoUI();
