@@ -181,17 +181,14 @@ const tabs = createQueryTabs({
 highlighter.refresh();
 
 /**
- * Load a query (from history/saved) into the active tab's editor. `name`
- * (present only for a Saved pick) becomes the tab's manual name, taking
- * priority over the FROM-object re-derivation `onActiveEdited` just did.
+ * Overwrite the active tab's editor with a query. The AI panel's handoff path —
+ * a History pick goes through `tabs.openQuery` instead, which opens its own tab.
+ * @param {string} query @param {boolean} useToolingApi
  */
-function loadQueryIntoEditor(
-  /** @type {{ query: string, useToolingApi: boolean, name?: string }} */ entry,
-) {
-  soqlInput.value = entry.query;
-  toolingCheckbox.checked = !!entry.useToolingApi;
+function replaceActiveQuery(query, useToolingApi) {
+  soqlInput.value = query;
+  toolingCheckbox.checked = !!useToolingApi;
   tabs.onActiveEdited();
-  if (entry.name) tabs.setActiveName(entry.name);
   highlighter.refresh();
 }
 
@@ -202,7 +199,8 @@ const history = createQueryHistory({
   saveBtn: btnSaveQuery,
   vscode,
   getCurrent: () => ({ query: soqlInput.value, useToolingApi: toolingCheckbox.checked }),
-  onPick: loadQueryIntoEditor,
+  // Its own tab (or a pristine active one), so a pick never destroys open work.
+  onPick: (entry) => tabs.openQuery(entry),
 });
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────
@@ -341,7 +339,7 @@ win.__onMessage('describeError', (/** @type {any} */ msg) => {
 // ── Button + input handlers ───────────────────────────────────────────────────
 /**
  * Run whatever the active tab currently holds. Shared by the Run button and the
- * AI panel's "Run in new tab" (which fills a fresh tab first), so the opId
+ * AI panel's "Run query" (which fills the active tab first), so the opId
  * bookkeeping and busy announcement live in exactly one place.
  */
 function runActiveQuery() {
@@ -404,10 +402,10 @@ const aiPanel = createSoqlAiPanel({
     lastRun: activeTabLastRun(),
   }),
   onRunProposal: (query, useToolingApi) => {
-    // Into the active tab, then the ordinary run path — indistinguishable from
-    // the user having typed it and pressed Run. loadQueryIntoEditor keeps the
-    // tab name, highlighter and persistence in step.
-    loadQueryIntoEditor({ query, useToolingApi });
+    // Into the active tab — the request is usually about the query already open,
+    // so a new tab would orphan the thing being iterated on (unlike a History
+    // pick). Then the ordinary run path, indistinguishable from typing it by hand.
+    replaceActiveQuery(query, useToolingApi);
     runActiveQuery();
   },
 });

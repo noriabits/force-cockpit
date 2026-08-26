@@ -1,5 +1,11 @@
 // @ts-check
-import { cloneTabName, deriveTabName, isLegacyAutoName } from './tab-name';
+import {
+  baseNameFor,
+  cloneTabName,
+  deriveTabName,
+  isLegacyAutoName,
+  shouldRevertToAuto,
+} from './tab-name';
 import { resolveDropTarget } from './tab-drop-target';
 
 // Query tab bar for the SOQL tab. Owns the tab list, the active
@@ -14,6 +20,11 @@ import { resolveDropTarget } from './tab-drop-target';
  * @property {boolean} useToolingApi
  * @property {boolean} autoName  Whether `name` tracks the FROM object automatically.
  *   False once the user renames the tab by hand; a blank rename turns it back on.
+ * @property {string | null} nameObject  The FROM object a name adopted from a saved query
+ *   was taken under. Set only on that path: it is what lets the name hold while the query
+ *   still targets that object and lapse back to auto-naming once it doesn't (see
+ *   shouldRevertToAuto). Null for auto-named tabs and for names typed by hand, which are
+ *   permanent.
  * @property {{ records: any[], totalSize: number, soql?: string, useToolingApi?: boolean } | null} results
  *   The whole `queryResult` payload, so it also carries the request MessageRouter echoed back —
  *   the query that produced these rows, which the editor may have moved on from since.
@@ -46,10 +57,26 @@ const REORDER_DEADZONE_PX = 6;
 
 /**
  * @param {string} name @param {string} [query] @param {boolean} [useToolingApi] @param {boolean} [autoName]
+ * @param {string | null} [nameObject]
  * @returns {QueryTab}
  */
-function newTab(name, query = DEFAULT_QUERY, useToolingApi = false, autoName = true) {
-  return { name, query, useToolingApi, autoName, results: null, error: null, opId: null };
+function newTab(
+  name,
+  query = DEFAULT_QUERY,
+  useToolingApi = false,
+  autoName = true,
+  nameObject = null,
+) {
+  return {
+    name,
+    query,
+    useToolingApi,
+    autoName,
+    nameObject,
+    results: null,
+    error: null,
+    opId: null,
+  };
 }
 
 /** @param {QueryTabsCtx} ctx */
@@ -105,6 +132,7 @@ export function createQueryTabs(ctx) {
         query: t.query,
         useToolingApi: t.useToolingApi,
         autoName: t.autoName,
+        nameObject: t.nameObject,
       })),
       activeTab: activeIndex,
     });
@@ -262,6 +290,9 @@ export function createQueryTabs(ctx) {
       // A non-empty name is a manual override; clearing it hands the tab back
       // to auto-naming, re-derived below.
       tabs[i].autoName = !name;
+      // Either way the tab stops tracking a saved query's label: a typed name is
+      // the user's own and permanent, a cleared one hands back to the FROM object.
+      tabs[i].nameObject = null;
       if (name) tabs[i].name = name;
       else tabs[i].name = deriveTabName(tabs[i].query, otherNames(i), tabs[i].name);
       renderBar();
@@ -343,6 +374,7 @@ export function createQueryTabs(ctx) {
         source.query,
         source.useToolingApi,
         source.autoName,
+        source.nameObject,
       ),
     );
     activeIndex++;
@@ -383,6 +415,7 @@ export function createQueryTabs(ctx) {
         // Tabs saved before this feature carry no autoName flag — tell a leftover
         // "Query 3" (safe to re-derive) from a name the user actually chose.
         typeof t.autoName === 'boolean' ? t.autoName : isLegacyAutoName(t.name),
+        typeof t.nameObject === 'string' ? t.nameObject : null,
       ),
     );
     // Re-derive every auto-named tab in order, each seeing names already settled.
@@ -470,7 +503,15 @@ export function createQueryTabs(ctx) {
    */
   function refreshActiveName() {
     const tab = active();
-    if (!tab || !tab.autoName) return;
+    if (!tab) return;
+    // A label adopted from a saved query only holds while the query still targets
+    // the object it was loaded for; past that the tab goes back to tracking the
+    // FROM object. A name typed by hand carries no nameObject and never reverts.
+    if (!tab.autoName && shouldRevertToAuto(tab.query, tab.nameObject)) {
+      tab.autoName = true;
+      tab.nameObject = null;
+    }
+    if (!tab.autoName) return;
     const name = deriveTabName(tab.query, otherNames(activeIndex), tab.name);
     if (name === tab.name) return;
     tab.name = name;
@@ -485,19 +526,55 @@ export function createQueryTabs(ctx) {
   }
 
   /**
-   * Set the active tab's name explicitly and mark it manual, so it stops
-   * tracking the FROM object — used when loading a saved query, so the tab
-   * takes the query's own label instead of being renamed after its object.
-   * Mirrors `beginRename`'s manual-name path: no dedup against other open
-   * tabs, since the name was chosen on purpose, same as typing it by hand.
-   * @param {string} name
+   * Whether the active tab holds nothing worth keeping: a blank or still-untouched
+   * default query, no stored outcome, nothing in flight.
    */
-  function setActiveName(name) {
+  function isActivePristine() {
     const tab = active();
-    if (!tab || !name) return;
-    tab.name = name;
-    tab.autoName = false;
+    if (!tab || tab.opId || tab.results || tab.error) return false;
+    const query = tab.query.trim();
+    return query === '' || query === DEFAULT_QUERY.trim();
+  }
+
+  /**
+   * Open a query picked from the History dropdown in its own tab, right after the
+   * active one — a pick must never overwrite what the user has open. A pristine
+   * active tab is reused instead, so picking from a fresh tab leaves no blank behind.
+   *
+   * `entry.name` (Saved picks only) becomes the tab's label, held only while the
+   * query still targets that object — see `shouldRevertToAuto`. A Recent pick has
+   * no label and is named after its FROM object like any other query.
+   * @param {{ query: string, useToolingApi: boolean, name?: string }} entry
+   */
+  function openQuery(entry) {
+    // The pristine test reads the tab, so the live textarea has to land there first.
+    syncActiveFromUI();
+    const reuse = isActivePristine();
+    const tab = reuse ? active() : newTab('', entry.query);
+    if (!reuse) {
+      tabs.splice(activeIndex + 1, 0, tab);
+      activeIndex++;
+    }
+    tab.query = entry.query;
+    tab.useToolingApi = !!entry.useToolingApi;
+    tab.results = null;
+    tab.error = null;
+    if (entry.name) {
+      // No dedup against other open tabs: the label was chosen on purpose, same
+      // as a name typed by hand — two tabs may legitimately show one saved query.
+      tab.name = entry.name;
+      tab.autoName = false;
+      tab.nameObject = baseNameFor(entry.query);
+    } else {
+      tab.autoName = true;
+      tab.nameObject = null;
+      // No currentName: a reused tab must take the picked query's own name, not
+      // stick with whatever the tab was called before.
+      tab.name = deriveTabName(entry.query, otherNames(activeIndex));
+    }
+    loadActiveIntoUI();
     renderBar();
+    onActivate(active());
     persist();
   }
 
@@ -550,7 +627,7 @@ export function createQueryTabs(ctx) {
     getActive: active,
     setActiveResults,
     onActiveEdited,
-    setActiveName,
+    openQuery,
     persist,
     setActiveOpId,
     getActiveOpId,

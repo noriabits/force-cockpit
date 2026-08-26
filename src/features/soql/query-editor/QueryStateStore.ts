@@ -9,6 +9,10 @@ export interface QueryTab {
    *  persisted before this field existed — the webview treats that as "auto"
    *  unless the name looks hand-chosen. */
   autoName?: boolean;
+  /** FROM object a name adopted from a saved query was taken under; that name holds
+   *  only while the query still targets it. Null/absent for auto-named tabs and for
+   *  names typed by hand, which are permanent. */
+  nameObject?: string | null;
 }
 
 /** A recent-history entry. Deduped by query + API type. */

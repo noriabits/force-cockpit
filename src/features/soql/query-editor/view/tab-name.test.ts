@@ -5,6 +5,7 @@ import {
   deriveTabName,
   isLegacyAutoName,
   queryObjectName,
+  shouldRevertToAuto,
 } from './tab-name';
 
 describe('queryObjectName', () => {
@@ -145,5 +146,39 @@ describe('isLegacyAutoName', () => {
     expect(isLegacyAutoName('My saved query')).toBe(false);
     expect(isLegacyAutoName('Order')).toBe(false);
     expect(isLegacyAutoName('Order (1)')).toBe(false);
+  });
+});
+
+describe('shouldRevertToAuto', () => {
+  it('holds the adopted name while the query still targets the same object', () => {
+    expect(shouldRevertToAuto('SELECT Id FROM Case WHERE IsClosed = false', 'Case')).toBe(false);
+    // Editing a WHERE clause or a LIMIT is still the same saved query.
+    expect(shouldRevertToAuto('SELECT Id FROM Case LIMIT 10', 'Case')).toBe(false);
+  });
+
+  it('reverts once the FROM object changes', () => {
+    expect(shouldRevertToAuto('SELECT Id FROM Lead', 'Case')).toBe(true);
+  });
+
+  it('compares object names case-insensitively', () => {
+    expect(shouldRevertToAuto('SELECT Id FROM case', 'Case')).toBe(false);
+  });
+
+  it('never reverts a name typed by hand, which carries no nameObject', () => {
+    expect(shouldRevertToAuto('SELECT Id FROM Lead', null)).toBe(false);
+    expect(shouldRevertToAuto('SELECT Id FROM Lead', undefined)).toBe(false);
+    expect(shouldRevertToAuto('SELECT Id FROM Lead', '')).toBe(false);
+  });
+
+  it('compares against the fallback base when the query has no FROM object yet', () => {
+    // Mid-edit, with the object deleted: no longer the saved query's object.
+    expect(shouldRevertToAuto('SELECT Id FROM ', 'Case')).toBe(true);
+    expect(shouldRevertToAuto('SELECT Id FROM ', 'Query')).toBe(false);
+  });
+
+  it("follows the outer FROM, not a subquery's", () => {
+    expect(shouldRevertToAuto('SELECT Id, (SELECT Id FROM Contacts) FROM Account', 'Account')).toBe(
+      false,
+    );
   });
 });

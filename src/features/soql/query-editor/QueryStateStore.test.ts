@@ -39,6 +39,34 @@ describe('QueryStateStore', () => {
     });
   });
 
+  describe('saveTabs', () => {
+    it('round-trips every persisted tab field, including nameObject', async () => {
+      const store = new QueryStateStore(makeMemento());
+      const tabs = [
+        {
+          name: 'Open cases',
+          query: 'SELECT Id FROM Case',
+          useToolingApi: false,
+          autoName: false,
+          // The object the saved-query label was adopted under — without it the
+          // tab could not tell, after a reload, when to hand the name back.
+          nameObject: 'Case',
+        },
+        {
+          name: 'Lead',
+          query: 'SELECT Id FROM Lead',
+          useToolingApi: true,
+          autoName: true,
+          nameObject: null,
+        },
+      ];
+      await store.saveTabs(tabs, 1);
+      const state = store.getState();
+      expect(state.tabs).toEqual(tabs);
+      expect(state.activeTab).toBe(1);
+    });
+  });
+
   describe('addHistory', () => {
     let store: QueryStateStore;
     beforeEach(() => {

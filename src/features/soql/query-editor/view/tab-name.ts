@@ -98,6 +98,23 @@ export function deriveTabName(soql: string, otherNames: string[], currentName?: 
 }
 
 /**
+ * Whether a tab whose name was adopted from a saved query should hand itself
+ * back to auto-naming. It should once the query stops targeting the object the
+ * name was adopted for: a tab loaded as `Open cases` and then rewritten to
+ * `SELECT Id FROM Lead` is no longer that saved query, so the label misleads.
+ * Editing the same object's query (a WHERE clause, a LIMIT) keeps the label.
+ *
+ * A name the user typed by hand carries no `nameObject` and so never reverts —
+ * that one they chose deliberately.
+ *
+ * Compared case-insensitively, like every other object-name comparison here.
+ */
+export function shouldRevertToAuto(soql: string, nameObject: string | null | undefined): boolean {
+  if (!nameObject) return false;
+  return baseNameFor(soql).toLowerCase() !== nameObject.toLowerCase();
+}
+
+/**
  * The name a clone of a tab named `name` should get, numbered to the first
  * free slot — `asset` clones to `asset (1)`, `asset (1)` clones to `asset (2)`
  * once `(1)` is taken, etc. Independent of the query text, so a
