@@ -1,7 +1,7 @@
 // Routes incoming webview messages to their handlers:
 //   - Built-in host routes (ready, openRecord, openInBrowser, refreshOrg,
 //     confirmAction, openExternalUrl, restCall, loadRestCallState,
-//     saveRestCallState, addRestCallHistory, saveRestCallSavedRequests, describeGlobal,
+//     saveRestCallTabs, addRestCallHistory, saveRestCallSavedRequests, describeGlobal,
 //     describeSObject, operationStarted/Ended, cancelOperation)
 //   - Feature routes registered via defineFeature()
 // On success: posts `{ type: successType, data: <result + context> }`.
@@ -15,6 +15,7 @@ import type { RestCallService } from '../services/rest/RestCallService';
 import type {
   RestCallStateStore,
   HeaderEntry,
+  RestCallTab,
   SavedRestCall,
 } from '../services/rest/RestCallStateStore';
 import type { DescribeService } from '../services/describe/DescribeService';
@@ -67,17 +68,7 @@ export class MessageRouter {
         await this.onReady();
         return;
       case 'restCall':
-        await this._route(
-          () =>
-            this.restCallService.send(
-              message.method as string,
-              message.endpoint as string,
-              message.body as string,
-              message.headers as HeaderEntry[] | undefined,
-            ),
-          'restCallResult',
-          'restCallError',
-        );
+        await this._routeRestCall(message);
         return;
       case 'loadRestCallState':
         await this._route(
@@ -86,13 +77,12 @@ export class MessageRouter {
           'restCallStateError',
         );
         return;
-      case 'saveRestCallState':
-        await this.restCallStateStore.save({
-          method: message.method as string,
-          endpoint: message.endpoint as string,
-          body: message.body as string,
-          headers: (message.headers as HeaderEntry[] | undefined) ?? [],
-        });
+      case 'saveRestCallTabs':
+        // Fire-and-forget: the webview owns the authoritative copy.
+        await this.restCallStateStore.saveTabs(
+          message.tabs as RestCallTab[],
+          message.activeTab as number,
+        );
         return;
       case 'addRestCallHistory':
         await this._route(
@@ -190,6 +180,46 @@ export class MessageRouter {
       default:
         await this._dispatchFeatureRoute(message);
     }
+  }
+
+  /**
+   * Send one REST request, tracked under the webview's `opId` so a request tab can
+   * cancel it and so the reply can be matched back to the tab that started it.
+   *
+   * Registers the abort the same way `_dispatchFeatureRoute` does — a built-in
+   * route otherwise bypasses `OperationRegistry` entirely and could not be
+   * cancelled. Only `opId` is echoed as context, never the whole message: `_route`
+   * merges context *over* the result, so the request's own `headers` would
+   * clobber the response's.
+   */
+  private async _routeRestCall(message: IncomingMessage): Promise<void> {
+    const opId = message.opId as string | undefined;
+    const ac = opId ? this.operations.createTerminalAbort(opId) : undefined;
+
+    await this._route(
+      async () => {
+        try {
+          const result = await this.restCallService.send(
+            message.method as string,
+            message.endpoint as string,
+            message.body as string,
+            message.headers as HeaderEntry[] | undefined,
+            ac?.signal,
+          );
+          // A cancelled request has no result the tab still wants; staying silent
+          // also spares the webview from having to recognise an abort error.
+          return ac?.signal.aborted ? NO_REPLY : result;
+        } catch (err) {
+          if (ac?.signal.aborted) return NO_REPLY;
+          throw err;
+        }
+      },
+      'restCallResult',
+      'restCallError',
+      opId ? { opId } : {},
+    );
+
+    if (opId) this.operations.endTerminalOp(opId);
   }
 
   private async _dispatchFeatureRoute(message: IncomingMessage): Promise<void> {

@@ -101,4 +101,11 @@ describe('RestCallService.send', () => {
       expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
     );
   });
+
+  it('forwards an abort signal, so the REST tab can cancel a send in flight', async () => {
+    const cm = makeMock();
+    const ac = new AbortController();
+    await new RestCallService(cm).send('GET', '/x', '', [], ac.signal);
+    expect(cm.request).toHaveBeenCalledWith(expect.objectContaining({ signal: ac.signal }));
+  });
 });

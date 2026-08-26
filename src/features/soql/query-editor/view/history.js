@@ -18,11 +18,14 @@
  * @property {() => { query: string, useToolingApi: boolean }} getCurrent
  * @property {(entry: { query: string, useToolingApi: boolean, name?: string }) => void} onPick
  *   `name` is set only for a Saved pick — Recent entries carry no name.
+ * @property {() => string} [getDefaultName]  Name to pre-fill the save input with —
+ *   the active tab's own title, whether auto-derived, hand-renamed or adopted from a
+ *   saved entry. Pre-selected, so typing still replaces it.
  */
 
 /** @param {QueryHistoryCtx} ctx */
 export function createQueryHistory(ctx) {
-  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick } = ctx;
+  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick, getDefaultName } = ctx;
 
   /** @type {HistoryEntry[]} */
   let history = [];
@@ -66,6 +69,7 @@ export function createQueryHistory(ctx) {
     input.type = 'text';
     input.className = 'query-history-save-input';
     input.placeholder = 'Name this query…';
+    input.value = (getDefaultName?.() ?? '').trim();
     const confirm = document.createElement('button');
     confirm.type = 'button';
     confirm.className = 'btn btn-ghost';
@@ -97,7 +101,12 @@ export function createQueryHistory(ctx) {
 
     row.appendChild(input);
     row.appendChild(confirm);
-    setTimeout(() => input.focus(), 0);
+    // Focus AND select: the pre-filled tab name is a suggestion, so typing over it
+    // has to be as cheap as accepting it.
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
     return row;
   }
 

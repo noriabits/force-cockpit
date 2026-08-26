@@ -15,48 +15,95 @@ function makeMemento(initial: Record<string, unknown> = {}): Memento {
 
 describe('RestCallStateStore', () => {
   describe('getState', () => {
-    it('returns the default config when nothing is stored', () => {
+    it('starts a fresh workspace on one default tab', () => {
       const state = new RestCallStateStore(makeMemento()).getState();
       expect(state).toEqual({
-        method: 'POST',
-        endpoint: '',
-        body: '',
-        headers: [],
+        tabs: [
+          {
+            name: 'Request',
+            method: 'POST',
+            endpoint: '',
+            body: '',
+            headers: [],
+            autoName: true,
+            nameObject: null,
+          },
+        ],
+        activeTab: 0,
         history: [],
         savedRequests: [],
       });
     });
 
-    it('merges stored fields over the defaults', () => {
+    it('carries a pre-tabs request into the first tab rather than dropping it', () => {
       const store = new RestCallStateStore(
-        makeMemento({ 'restCall.lastConfig': { method: 'GET', endpoint: '/x' } }),
+        makeMemento({
+          'restCall.lastConfig': {
+            method: 'GET',
+            endpoint: '/x',
+            headers: [{ key: 'X-Foo', value: 'bar' }],
+          },
+        }),
       );
-      expect(store.getState()).toEqual({
-        method: 'GET',
-        endpoint: '/x',
-        body: '',
-        headers: [],
-        history: [],
-        savedRequests: [],
-      });
+      expect(store.getState().tabs).toEqual([
+        {
+          name: 'Request',
+          method: 'GET',
+          endpoint: '/x',
+          body: '',
+          headers: [{ key: 'X-Foo', value: 'bar' }],
+          autoName: true,
+          nameObject: null,
+        },
+      ]);
+    });
+
+    it('ignores the pre-tabs request once real tabs exist', () => {
+      const store = new RestCallStateStore(
+        makeMemento({
+          'restCall.lastConfig': { method: 'GET', endpoint: '/old' },
+          'restCall.tabs': [
+            { name: 'Account', method: 'GET', endpoint: '/new', body: '', headers: [] },
+          ],
+          'restCall.activeTab': 0,
+        }),
+      );
+      expect(store.getState().tabs).toEqual([
+        { name: 'Account', method: 'GET', endpoint: '/new', body: '', headers: [] },
+      ]);
+    });
+
+    it('clamps an out-of-range active tab back to the first', () => {
+      const tabs = [{ name: 'A', method: 'GET', endpoint: '/a', body: '', headers: [] }];
+      for (const activeTab of [3, -1]) {
+        const store = new RestCallStateStore(
+          makeMemento({ 'restCall.tabs': tabs, 'restCall.activeTab': activeTab }),
+        );
+        expect(store.getState().activeTab).toBe(0);
+      }
     });
   });
 
-  describe('save', () => {
-    it('round-trips a saved config including headers', async () => {
+  describe('saveTabs', () => {
+    it('round-trips tabs and the active index', async () => {
       const memento = makeMemento();
       const store = new RestCallStateStore(memento);
-      await store.save({
-        method: 'PATCH',
-        endpoint: '/services/apexrest/x',
-        body: '{"a":1}',
-        headers: [{ key: 'X-Foo', value: 'bar' }],
-      });
+      const tabs = [
+        { name: 'Account', method: 'GET', endpoint: '/a', body: '', headers: [] },
+        {
+          name: 'Cases',
+          method: 'PATCH',
+          endpoint: '/services/apexrest/x',
+          body: '{"a":1}',
+          headers: [{ key: 'X-Foo', value: 'bar' }],
+          autoName: false,
+          nameObject: 'x',
+        },
+      ];
+      await store.saveTabs(tabs, 1);
       const state = store.getState();
-      expect(state.method).toBe('PATCH');
-      expect(state.endpoint).toBe('/services/apexrest/x');
-      expect(state.body).toBe('{"a":1}');
-      expect(state.headers).toEqual([{ key: 'X-Foo', value: 'bar' }]);
+      expect(state.tabs).toEqual(tabs);
+      expect(state.activeTab).toBe(1);
     });
   });
 

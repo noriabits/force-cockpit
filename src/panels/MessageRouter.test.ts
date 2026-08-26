@@ -65,14 +65,12 @@ function makeRouter(
   } as unknown as RestCallService;
   const restCallStateStore = {
     getState: vi.fn(() => ({
-      method: 'POST',
-      endpoint: '',
-      body: '',
-      headers: [],
+      tabs: [],
+      activeTab: 0,
       history: [],
       savedRequests: [],
     })),
-    save: vi.fn().mockResolvedValue(undefined),
+    saveTabs: vi.fn().mockResolvedValue(undefined),
     addHistory: vi.fn().mockResolvedValue([]),
     saveSavedRequests: vi.fn().mockResolvedValue([]),
     ...opts.restCallStateStore,
@@ -141,11 +139,76 @@ describe('MessageRouter built-in routes', () => {
       body: '{"a":1}',
       headers,
     });
-    expect(send).toHaveBeenCalledWith('POST', '/x', '{"a":1}', headers);
+    expect(send).toHaveBeenCalledWith('POST', '/x', '{"a":1}', headers, undefined);
     expect(postMessage).toHaveBeenCalledWith({
       type: 'restCallResult',
       data: { status: 201, headers: {}, body: { id: '001' } },
     });
+  });
+
+  // A request tab matches a reply back to the tab that sent it by opId, so both
+  // branches have to echo it — and the response's own `headers` must survive the
+  // context merge rather than being overwritten by the request's.
+  it('restCall → echoes opId and registers an abort so the send can be cancelled', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValue({ status: 200, headers: { etag: 'w/1' }, body: { ok: true } });
+    const ac = new AbortController();
+    const createTerminalAbort = vi.fn(() => ac);
+    const endTerminalOp = vi.fn();
+    const { router, postMessage } = makeRouter({
+      restCallService: { send },
+      operations: { createTerminalAbort, endTerminalOp },
+    });
+    await router.handle({
+      type: 'restCall',
+      method: 'GET',
+      endpoint: '/x',
+      body: '',
+      headers: [{ key: 'X-Foo', value: 'bar' }],
+      opId: 'rest-1',
+    });
+    expect(createTerminalAbort).toHaveBeenCalledWith('rest-1');
+    expect(send).toHaveBeenCalledWith('GET', '/x', '', [{ key: 'X-Foo', value: 'bar' }], ac.signal);
+    expect(endTerminalOp).toHaveBeenCalledWith('rest-1');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallResult',
+      data: { status: 200, headers: { etag: 'w/1' }, body: { ok: true }, opId: 'rest-1' },
+    });
+  });
+
+  it('restCall failure → echoes opId alongside the message', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('NOT_FOUND'));
+    const { router, postMessage } = makeRouter({ restCallService: { send } });
+    await router.handle({ type: 'restCall', method: 'GET', endpoint: '/x', body: '', opId: 'r-2' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'restCallError',
+      data: { opId: 'r-2', message: 'NOT_FOUND' },
+    });
+  });
+
+  // Whether the aborted fetch rejects or slips through with a response, a
+  // cancelled request has no reply the tab still wants.
+  it.each([
+    ['resolves', async () => ({ status: 200, headers: {}, body: {} })],
+    [
+      'throws',
+      async () => {
+        throw new Error('The operation was aborted');
+      },
+    ],
+  ])('restCall → posts nothing once cancelled, even if the send %s', async (_case, settle) => {
+    const ac = new AbortController();
+    const send = vi.fn(async () => {
+      ac.abort();
+      return settle();
+    });
+    const { router, postMessage } = makeRouter({
+      restCallService: { send },
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+    await router.handle({ type: 'restCall', method: 'GET', endpoint: '/x', body: '', opId: 'c' });
+    expect(postMessage).not.toHaveBeenCalled();
   });
 
   it('restCall failure → posts restCallError with the message', async () => {
@@ -160,10 +223,10 @@ describe('MessageRouter built-in routes', () => {
 
   it('loadRestCallState → posts restCallStateLoaded with the stored state', async () => {
     const state = {
-      method: 'PATCH',
-      endpoint: '/services/apexrest/x',
-      body: '{}',
-      headers: [],
+      tabs: [
+        { name: 'x', method: 'PATCH', endpoint: '/services/apexrest/x', body: '{}', headers: [] },
+      ],
+      activeTab: 0,
       history: [],
       savedRequests: [],
     };
@@ -174,18 +237,20 @@ describe('MessageRouter built-in routes', () => {
     expect(postMessage).toHaveBeenCalledWith({ type: 'restCallStateLoaded', data: state });
   });
 
-  it('saveRestCallState → persists the config incl. headers (fire-and-forget, no post)', async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const { router, postMessage } = makeRouter({ restCallStateStore: { save } });
-    const headers = [{ key: 'X-Foo', value: 'bar' }];
-    await router.handle({
-      type: 'saveRestCallState',
-      method: 'GET',
-      endpoint: '/x',
-      body: '',
-      headers,
-    });
-    expect(save).toHaveBeenCalledWith({ method: 'GET', endpoint: '/x', body: '', headers });
+  it('saveRestCallTabs → persists the tabs (fire-and-forget, no post)', async () => {
+    const saveTabs = vi.fn().mockResolvedValue(undefined);
+    const { router, postMessage } = makeRouter({ restCallStateStore: { saveTabs } });
+    const tabs = [
+      {
+        name: 'Account',
+        method: 'GET',
+        endpoint: '/x',
+        body: '',
+        headers: [{ key: 'X-Foo', value: 'bar' }],
+      },
+    ];
+    await router.handle({ type: 'saveRestCallTabs', tabs, activeTab: 0 });
+    expect(saveTabs).toHaveBeenCalledWith(tabs, 0);
     expect(postMessage).not.toHaveBeenCalled();
   });
 

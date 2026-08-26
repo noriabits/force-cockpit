@@ -5,7 +5,7 @@ export interface HeaderEntry {
   value: string;
 }
 
-/** The last-used REST tab request config. Persisted so it survives panel reloads. */
+/** One request's editable content — what a request tab holds. */
 export interface RestCallConfig {
   method: string;
   endpoint: string;
@@ -30,11 +30,32 @@ export interface SavedRestCall {
   headers: HeaderEntry[];
 }
 
-export interface RestCallState extends RestCallConfig {
+/**
+ * One request tab. Mirrors `QueryTab` in the SOQL tab's QueryStateStore: the
+ * request itself plus the naming flags the shared tab strip needs. In-flight and
+ * response state is deliberately not persisted, so a reload restores idle tabs.
+ */
+export interface RestCallTab extends RestCallConfig {
+  name: string;
+  /** False once the user renames the tab by hand; blank rename hands it back to auto. */
+  autoName?: boolean;
+  /** The endpoint base a label adopted from a saved request was taken under. */
+  nameObject?: string | null;
+}
+
+export interface RestCallState {
+  tabs: RestCallTab[];
+  activeTab: number;
   history: RestCallHistoryEntry[];
   savedRequests: SavedRestCall[];
 }
 
+const KEY_TABS = 'restCall.tabs';
+const KEY_ACTIVE = 'restCall.activeTab';
+/**
+ * Pre-tabs key, holding the single request the REST tab used to have. Still read
+ * once, to carry that request into the first tab; nothing writes it any more.
+ */
 const KEY_LAST_CONFIG = 'restCall.lastConfig';
 const KEY_HISTORY = 'restCall.history';
 const KEY_SAVED = 'restCall.savedRequests';
@@ -44,8 +65,11 @@ const SAVED_CAP = 50;
 
 const DEFAULT_CONFIG: RestCallConfig = { method: 'POST', endpoint: '', body: '', headers: [] };
 
+/** Placeholder name for the migrated tab; the webview re-derives it on load. */
+const DEFAULT_TAB_NAME = 'Request';
+
 /**
- * Persists the REST tab's last request config, recent history, and saved/named requests
+ * Persists the REST tab's request tabs, recent history, and saved/named requests
  * in workspaceState — the same store the SOQL tab uses (`QueryStateStore`'s pattern).
  * Pure logic over an injected `Memento` for unit-testability.
  */
@@ -53,24 +77,33 @@ export class RestCallStateStore {
   constructor(private readonly memento: Memento) {}
 
   getState(): RestCallState {
-    const config = {
-      ...DEFAULT_CONFIG,
-      ...this.memento.get<Partial<RestCallConfig>>(KEY_LAST_CONFIG, {}),
-    };
+    const tabs = this.memento.get<RestCallTab[]>(KEY_TABS, []);
+    const activeTab = this.memento.get<number>(KEY_ACTIVE, 0);
     return {
-      ...config,
+      tabs: tabs.length > 0 ? tabs : [this.migratedTab()],
+      activeTab: tabs.length > 0 && activeTab >= 0 && activeTab < tabs.length ? activeTab : 0,
       history: this.memento.get<RestCallHistoryEntry[]>(KEY_HISTORY, []),
       savedRequests: this.memento.get<SavedRestCall[]>(KEY_SAVED, []),
     };
   }
 
-  async save(config: RestCallConfig): Promise<void> {
-    await this.memento.update(KEY_LAST_CONFIG, {
-      method: config.method,
-      endpoint: config.endpoint,
-      body: config.body,
-      headers: config.headers,
-    });
+  /**
+   * The single tab a workspace starts with: the pre-tabs request when there was
+   * one, so upgrading doesn't silently drop what the user had open. Named by the
+   * webview — `autoName` makes its `load()` re-derive the label from the endpoint,
+   * which keeps the naming rules in one place.
+   */
+  private migratedTab(): RestCallTab {
+    const config = {
+      ...DEFAULT_CONFIG,
+      ...this.memento.get<Partial<RestCallConfig>>(KEY_LAST_CONFIG, {}),
+    };
+    return { name: DEFAULT_TAB_NAME, ...config, autoName: true, nameObject: null };
+  }
+
+  async saveTabs(tabs: RestCallTab[], activeTab: number): Promise<void> {
+    await this.memento.update(KEY_TABS, tabs);
+    await this.memento.update(KEY_ACTIVE, activeTab);
   }
 
   /** Unshift a new entry, dedup by method + endpoint + body, cap to HISTORY_CAP. Returns the new list. */

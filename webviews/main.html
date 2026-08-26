@@ -265,6 +265,7 @@
         </section>
 
         <section class="card" id="restcall-card">
+          <div class="query-tab-bar" id="rest-tab-bar"></div>
           <div class="rest-request-row">
             <select id="rest-method" class="text-input rest-method" aria-label="HTTP method">
               <option value="GET">GET</option>
@@ -311,6 +312,14 @@
 
           <div class="query-toolbar">
             <button class="btn btn-primary" id="btn-rest-send">Send</button>
+            <button
+              class="btn btn-ghost"
+              id="btn-rest-clone"
+              data-tooltip="Clone the current tab into a new tab"
+              aria-label="Clone the current request tab"
+            >
+              ⧉ Clone
+            </button>
             <div class="query-history-wrap">
               <button class="btn btn-ghost" id="btn-rest-history">History ▾</button>
               <div

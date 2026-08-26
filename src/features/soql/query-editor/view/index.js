@@ -199,8 +199,13 @@ const history = createQueryHistory({
   saveBtn: btnSaveQuery,
   vscode,
   getCurrent: () => ({ query: soqlInput.value, useToolingApi: toolingCheckbox.checked }),
+  getDefaultName: () => tabs.getActive()?.name ?? '',
   // Its own tab (or a pristine active one), so a pick never destroys open work.
-  onPick: (entry) => tabs.openQuery(entry),
+  onPick: (entry) =>
+    tabs.openTab({
+      payload: { query: entry.query, useToolingApi: entry.useToolingApi },
+      name: entry.name,
+    }),
 });
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────

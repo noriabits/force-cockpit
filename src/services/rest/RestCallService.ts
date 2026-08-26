@@ -35,6 +35,7 @@ export class RestCallService {
     endpoint: string,
     body: string,
     headers: HeaderEntry[] = [],
+    signal?: AbortSignal,
   ): Promise<RestCallResult> {
     const verb = this.normalizeMethod(method);
     const url = this.normalizeEndpoint(endpoint);
@@ -44,10 +45,12 @@ export class RestCallService {
       url: string;
       headers: Record<string, string>;
       body?: string;
+      signal?: AbortSignal;
     } = {
       method: verb,
       url,
       headers: this.mergeHeaders(headers),
+      signal,
     };
 
     const trimmedBody = body?.trim();

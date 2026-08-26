@@ -71,8 +71,15 @@ export function createHeadersEditor({ listEl, addBtn, onChange }) {
   });
 
   return {
-    /** @returns {HeaderEntry[]} Non-blank rows only. */
+    /** @returns {HeaderEntry[]} Non-blank rows only — what actually gets sent or saved. */
     getHeaders: () => headers.filter((h) => h.key.trim()),
+    /**
+     * Every row, blank keys included. This is what a tab stores: filtering here
+     * would delete a half-typed header the moment the user switched tabs and
+     * back. The host drops blank-key rows when it builds the request anyway.
+     * @returns {HeaderEntry[]}
+     */
+    getAllHeaders: () => headers.map((h) => ({ key: h.key, value: h.value })),
     /** @param {HeaderEntry[]} next */
     setHeaders: (next) => {
       headers = Array.isArray(next) ? next.map((h) => ({ key: h.key, value: h.value })) : [];

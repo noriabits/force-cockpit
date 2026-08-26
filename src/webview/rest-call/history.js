@@ -19,12 +19,16 @@
  * @property {HTMLButtonElement} saveBtn      "★ Save" current request.
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {() => { method: string, endpoint: string, body: string, headers: HeaderEntry[] }} getCurrent
- * @property {(entry: { method: string, endpoint: string, body: string, headers: HeaderEntry[] }) => void} onPick
+ * @property {(entry: { method: string, endpoint: string, body: string, headers: HeaderEntry[], name?: string }) => void} onPick
+ *   `name` is set only for a Saved row — its own label, which the opened tab adopts.
+ * @property {() => string} [getDefaultName]  Name to pre-fill the save input with —
+ *   the active tab's own title, whether auto-derived, hand-renamed or adopted from a
+ *   saved entry. Pre-selected, so typing still replaces it.
  */
 
 /** @param {RestCallHistoryCtx} ctx */
 export function createRestCallHistory(ctx) {
-  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick } = ctx;
+  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick, getDefaultName } = ctx;
 
   /** @type {RestHistoryEntry[]} */
   let history = [];
@@ -69,6 +73,7 @@ export function createRestCallHistory(ctx) {
     input.type = 'text';
     input.className = 'query-history-save-input';
     input.placeholder = 'Name this request…';
+    input.value = (getDefaultName?.() ?? '').trim();
     const confirm = document.createElement('button');
     confirm.type = 'button';
     confirm.className = 'btn btn-ghost';
@@ -106,7 +111,12 @@ export function createRestCallHistory(ctx) {
 
     row.appendChild(input);
     row.appendChild(confirm);
-    setTimeout(() => input.focus(), 0);
+    // Focus AND select: the pre-filled tab name is a suggestion, so typing over it
+    // has to be as cheap as accepting it.
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
     return row;
   }
 
@@ -152,6 +162,7 @@ export function createRestCallHistory(ctx) {
           endpoint: item.endpoint,
           body: item.body,
           headers: item.headers || [],
+          name: isSaved ? safeItem.name : undefined,
         });
         close();
       });

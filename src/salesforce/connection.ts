@@ -473,6 +473,8 @@ export class ConnectionManager extends EventEmitter {
     url: string;
     headers?: Record<string, string>;
     body?: string;
+    /** Aborts the request in flight — the REST tab cancels a send through this. */
+    signal?: AbortSignal;
   }): Promise<RawHttpResult> {
     if (!this._connection) {
       throw new Error(NOT_CONNECTED);
@@ -490,6 +492,7 @@ export class ConnectionManager extends EventEmitter {
     url: string;
     headers?: Record<string, string>;
     body?: string;
+    signal?: AbortSignal;
   }): Promise<RawHttpResult> {
     const conn = this._connection!;
     const url = /^https?:\/\//i.test(options.url)
@@ -502,6 +505,7 @@ export class ConnectionManager extends EventEmitter {
         Authorization: `Bearer ${conn.accessToken ?? ''}`,
       },
       body: options.body,
+      signal: options.signal,
     });
     const headers = Object.fromEntries(response.headers.entries());
     const contentType = response.headers.get('content-type') ?? '';
