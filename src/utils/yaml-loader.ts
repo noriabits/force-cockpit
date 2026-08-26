@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { compareByName } from './compareNames';
 
 export type YamlSource = 'builtin' | 'user' | 'private';
 
@@ -43,7 +44,7 @@ export async function loadYamlItems<T extends { id: string; name: string }>(
   for (const item of user) map.set(item.id, item);
   for (const item of priv) map.set(item.id, item);
 
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(map.values()).sort(compareByName);
 }
 
 async function loadFromPath<T extends { id: string; name: string }>(

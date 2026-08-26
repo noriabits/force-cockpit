@@ -6,6 +6,7 @@ import { createLogViewer } from './log-viewer.js';
 import { createExecuteHandler } from './execute-handler.js';
 import { createCategoryFilterBar } from '../../../shared/view/category-filter-bar.js';
 import { applyListFilter } from '../../../shared/view/list-filter';
+import { compareByName } from '../../../../utils/compareNames';
 import {
   scrollAndHighlight,
   isScrolledToBottom,
@@ -157,7 +158,10 @@ import {
    * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
-    currentScripts = scripts;
+    // Single ordering chokepoint: every render path (initial load, save, update,
+    // manual .yaml edit) goes through here, so the list can never come out
+    // unsorted regardless of the order the caller assembled.
+    currentScripts = [...scripts].sort(compareByName);
     executeStateUpdaters.clear();
     scriptsList.innerHTML = '';
     loadError.textContent = '';
@@ -177,7 +181,7 @@ import {
     // Populate folder dropdown for the new-script form
     scriptForm.refreshFolders();
 
-    for (const script of scripts) {
+    for (const script of currentScripts) {
       scriptsList.appendChild(buildAccordion(script));
     }
 
@@ -333,9 +337,7 @@ import {
       });
     }
     const after = savedScript
-      ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        )
+      ? [...currentScripts.filter((s) => s.id !== savedScript.id), savedScript]
       : currentScripts;
     renderScripts(after);
     win.__vscode.postMessage({ type: 'loadYamlScripts' });
@@ -358,7 +360,7 @@ import {
       ? [
           ...currentScripts.filter((s) => s.id !== oldScriptId && s.id !== updatedScript.id),
           updatedScript,
-        ].sort((a, b) => a.name.localeCompare(b.name))
+        ]
       : currentScripts;
     renderScripts(after);
     win.__vscode.postMessage({ type: 'loadYamlScripts' });
