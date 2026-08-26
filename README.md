@@ -54,7 +54,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                     |
+| **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                    |
 | **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                                                                       |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
@@ -178,7 +178,7 @@ Write `${variableName}` in your script code where you want the value substituted
 In addition to user-defined inputs, scripts can use built-in system placeholders that are automatically resolved from the connected org:
 
 | Placeholder      | Description                                          |
-| ---------------- | ----------------------------------------------------- |
+| ---------------- | ---------------------------------------------------- |
 | `${orgUsername}` | Salesforce username (not alias) of the connected org |
 
 System placeholders use the same `${name}` syntax and type-appropriate escaping as user inputs. If no org is connected, they resolve to an empty string. If a user-defined input has the same name as a system placeholder, the user input takes precedence.
@@ -190,7 +190,7 @@ apex: |
 ```
 
 | Type       | Badge  | Org required | Output                                  |
-| ---------- | ------ | ------------ | ---------------------------------------- |
+| ---------- | ------ | ------------ | --------------------------------------- |
 | Apex       | Blue   | Yes          | Debug log (USER_DEBUG filter available) |
 | Command    | Purple | No           | stdout/stderr                           |
 | JavaScript | Green  | No           | `log()` / `console.log()` output        |
@@ -204,7 +204,7 @@ Apex scripts run at a quiet, fixed log level (`Apex Code: DEBUG`, `System: ERROR
 
 Shared logic can live in one script and be reused by others instead of being copy-pasted. There are two ways to chain, and they interoperate:
 
-**`then:` — a declarative list, available on every script type.** The steps run in order once the script's own body succeeds, so an Apex script keeps all its Apex *and* hands off when it's done:
+**`then:` — a declarative list, available on every script type.** The steps run in order once the script's own body succeeds, so an Apex script keeps all its Apex _and_ hands off when it's done:
 
 ```yaml
 name: 🛖 Create Account Hierarchy
@@ -256,13 +256,13 @@ A loop, a value read back and per-item error handling — none of which `then:` 
 
 Because every call is a separate transaction, a script hands values on by publishing them — and any kind can hand a value to any other kind:
 
-| Kind | How it publishes a value |
-| ---- | ------------------------ |
-| Apex | `System.debug('::fc-output accountId=' + acc.Id);` |
-| Command | `echo "::fc-output buildId=$BUILD_ID"` on stdout |
+| Kind       | How it publishes a value                                  |
+| ---------- | --------------------------------------------------------- |
+| Apex       | `System.debug('::fc-output accountId=' + acc.Id);`        |
+| Command    | `echo "::fc-output buildId=$BUILD_ID"` on stdout          |
 | JavaScript | `setOutput('target', 'staging')` — **not** a printed line |
 
-A caller reads them as `result.outputs` in JS, or interpolates them as `${name}` in a `then:` step's `with`. Nothing is inherited — a called script sees only what `with:` hands it, so a value needed several scripts down must be forwarded at each hop. Values are always strings, and escaping is handled for the *receiving* script's type — pass raw values, never pre-escape. A name nothing published resolves to empty rather than to the literal text `${name}`, so a `required:` input on the callee reports it cleanly.
+A caller reads them as `result.outputs` in JS, or interpolates them as `${name}` in a `then:` step's `with`. Nothing is inherited — a called script sees only what `with:` hands it, so a value needed several scripts down must be forwarded at each hop. Values are always strings, and escaping is handled for the _receiving_ script's type — pass raw values, never pre-escape. A name nothing published resolves to empty rather than to the literal text `${name}`, so a `required:` input on the callee reports it cleanly.
 
 > [!WARNING]
 > In a JavaScript script, `log('::fc-output foo=bar')` does nothing — a JS script's log also contains the logs of everything it called, so it is never scraped for markers. Use `setOutput()`. Note also that command scripts receive values unescaped, since a shell has no safe universal quoting.
@@ -360,9 +360,9 @@ The results table supports:
 
 ### Generating a query with AI
 
-Click **✨ Ask AI** in the query toolbar and describe what you want — *"opportunities for Acme that closed this year"*.
+Click **✨ Ask AI** in the query toolbar and describe what you want — _"opportunities for Acme that closed this year"_.
 
-**What's on your screen goes along with your question** — both the query in the editor and the results of your last run. So you can ask about a query you're stuck on (*"why doesn't this work?"*, *"also filter by owner"*, *"make this count by stage instead"*) and about the data that came back (*"why is Amount empty on these?"*, *"which of these have no owner?"*). The assistant starts from your query and changes only what you asked for. If you're asking why it fails, it runs your query first so it's explaining the real error rather than guessing at one.
+**What's on your screen goes along with your question** — both the query in the editor and the results of your last run. So you can ask about a query you're stuck on (_"why doesn't this work?"_, _"also filter by owner"_, _"make this count by stage instead"_) and about the data that came back (_"why is Amount empty on these?"_, _"which of these have no owner?"_). The assistant starts from your query and changes only what you asked for. If you're asking why it fails, it runs your query first so it's explaining the real error rather than guessing at one.
 
 Only a small sample of rows is sent (the first few, trimmed to stay within the model's limits) along with the true row count — so the assistant knows how many records you really matched, and runs a query when it needs more than the sample can tell it.
 
