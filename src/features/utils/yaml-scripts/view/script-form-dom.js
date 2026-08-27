@@ -20,6 +20,8 @@
  *   formGatherFilePath: HTMLInputElement, formGatherBrowseBtn: HTMLButtonElement,
  *   formAllowFollowup: HTMLInputElement, formAllowReadFiles: HTMLInputElement,
  *   formSkills: HTMLElement, formSkillsHint: HTMLElement,
+ *   formRestMethod: HTMLSelectElement, formRestEndpoint: HTMLInputElement,
+ *   formRestHeadersList: HTMLElement, formRestAddHeaderBtn: HTMLButtonElement,
  * }}
  */
 export function collectFormRefs() {
@@ -101,7 +103,32 @@ export function collectFormRefs() {
     ),
     formSkills: /** @type {HTMLElement} */ (document.getElementById('yaml-form-skills')),
     formSkillsHint: /** @type {HTMLElement} */ (document.getElementById('yaml-form-skills-hint')),
+    formRestMethod: /** @type {HTMLSelectElement} */ (
+      document.getElementById('yaml-form-rest-method')
+    ),
+    formRestEndpoint: /** @type {HTMLInputElement} */ (
+      document.getElementById('yaml-form-rest-endpoint')
+    ),
+    formRestHeadersList: /** @type {HTMLElement} */ (
+      document.getElementById('yaml-form-rest-headers-list')
+    ),
+    formRestAddHeaderBtn: /** @type {HTMLButtonElement} */ (
+      document.getElementById('yaml-form-rest-add-header-btn')
+    ),
   };
+}
+
+/**
+ * Labels a <select>'s options by their `value`, leaving any option the map does
+ * not mention untouched.
+ * @param {HTMLSelectElement} select
+ * @param {Record<string, string>} byValue
+ */
+function setOptionLabels(select, byValue) {
+  for (const option of Array.from(select.options)) {
+    const text = byValue[option.value];
+    if (text !== undefined) option.text = text;
+  }
 }
 
 /**
@@ -114,10 +141,16 @@ export function initFormLabels(refs, L) {
   refs.formSaveBtn.textContent = L.btnSave;
   refs.formCancelBtn.textContent = L.btnCancel;
   refs.formCloneBtn.textContent = L.btnClone;
-  refs.formType.options[0].text = L.typeApex;
-  refs.formType.options[1].text = L.typeCommand;
-  refs.formType.options[2].text = L.typeJs;
-  refs.formType.options[3].text = L.typeAi;
+  // Keyed by value, not by index: positional binding silently mislabels every
+  // option if one is ever inserted out of order, and the markup has already
+  // grown a fifth type.
+  setOptionLabels(refs.formType, {
+    apex: L.typeApex,
+    command: L.typeCommand,
+    js: L.typeJs,
+    ai: L.typeAi,
+    rest: L.typeRest,
+  });
   const labelName = document.querySelector('label[for="yaml-form-name"]');
   const labelDescription = document.querySelector('label[for="yaml-form-description"]');
   const labelType = document.querySelector('label[for="yaml-form-type"]');
@@ -134,14 +167,22 @@ export function initFormLabels(refs, L) {
   refs.formFolder.placeholder = L.placeholderFolder;
   if (refs.formInputsLabel) refs.formInputsLabel.textContent = L.labelInputs;
   refs.addInputBtn.textContent = L.btnAddInput;
-  refs.formSource.options[0].text = L.sourceInline;
-  refs.formSource.options[1].text = L.sourceFile;
+  setOptionLabels(refs.formSource, { inline: L.sourceInline, file: L.sourceFile });
   const labelSource = document.querySelector('label[for="yaml-form-source"]');
   if (labelSource) labelSource.textContent = L.labelSource;
   const labelFilePath = document.querySelector('label[for="yaml-form-file-path"]');
   if (labelFilePath) labelFilePath.textContent = L.labelFilePath;
   refs.formFilePath.placeholder = L.placeholderFilePath;
   refs.formBrowseBtn.textContent = L.btnBrowse;
+  const labelRestMethod = document.querySelector('label[for="yaml-form-rest-method"]');
+  const labelRestEndpoint = document.getElementById('yaml-form-rest-endpoint-label');
+  const labelRestHeaders = document.getElementById('yaml-form-rest-headers-label');
+  if (labelRestMethod) labelRestMethod.textContent = L.labelRestMethod;
+  if (labelRestEndpoint) labelRestEndpoint.textContent = L.labelRestEndpoint;
+  if (labelRestHeaders) labelRestHeaders.textContent = L.labelRestHeaders;
+  refs.formRestEndpoint.placeholder = L.placeholderRestEndpoint;
+  refs.formRestAddHeaderBtn.textContent = L.btnAddHeader;
+
   if (refs.formPrivateLabel) refs.formPrivateLabel.textContent = L.labelPrivate;
   const apexDefaultsLabel = document.getElementById('yaml-form-apex-defaults-label');
   const filterUserDebugLabel = document.getElementById('yaml-form-filter-user-debug-label');

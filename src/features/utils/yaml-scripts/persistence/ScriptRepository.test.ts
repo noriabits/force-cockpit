@@ -350,4 +350,68 @@ describe('ScriptRepository', () => {
       expect(yaml.load(content)).not.toHaveProperty('then');
     });
   });
+
+  describe('rest scripts', () => {
+    function saveRest(over: Record<string, unknown> = {}) {
+      const userDir = path.join(tmpDir, 'user');
+      const repo = new ScriptRepository({
+        userPath: userDir,
+        privatePath: '',
+        workspaceRoot: tmpDir,
+      });
+      const saved = repo.save({
+        name: 'Create account',
+        description: 'Creates one.',
+        type: 'rest',
+        script: '{"Name": "Acme"}',
+        folder: 'cat',
+        inputs: [],
+        rest: {
+          method: 'POST',
+          endpoint: '/services/data/v65.0/sobjects/Account',
+          headers: { Accept: 'application/json' },
+        },
+        ...over,
+      } as never);
+      const file = path.join(userDir, 'cat', 'create-account.yaml');
+      return { saved, doc: yaml.load(fs.readFileSync(file, 'utf8')) as Record<string, unknown> };
+    }
+
+    it('writes one nested rest block and no top-level body key', () => {
+      const { doc } = saveRest();
+      expect(doc.rest).toEqual({
+        method: 'POST',
+        endpoint: '/services/data/v65.0/sobjects/Account',
+        headers: { Accept: 'application/json' },
+        body: '{"Name": "Acme"}',
+      });
+      for (const key of ['apex', 'js', 'command', 'ai', 'apex-file']) {
+        expect(doc[key]).toBeUndefined();
+      }
+    });
+
+    it('omits headers when there are none', () => {
+      const { doc } = saveRest({ rest: { method: 'GET', endpoint: '/limits' } });
+      expect(doc.rest).toEqual({ method: 'GET', endpoint: '/limits', body: '{"Name": "Acme"}' });
+    });
+
+    it('omits body for a body-less request', () => {
+      const { doc } = saveRest({ script: '', rest: { method: 'GET', endpoint: '/limits' } });
+      expect(doc.rest).toEqual({ method: 'GET', endpoint: '/limits' });
+    });
+
+    it('writes body-file instead of body for a file-sourced body', () => {
+      fs.writeFileSync(path.join(tmpDir, 'body.json'), '{}', 'utf8');
+      const { doc } = saveRest({ script: '', scriptFile: 'body.json' });
+      const rest = doc.rest as Record<string, unknown>;
+      expect(rest['body-file']).toBe('body.json');
+      expect(rest.body).toBeUndefined();
+    });
+
+    it('returns the rest spec on the saved script', () => {
+      const { saved } = saveRest();
+      expect(saved.type).toBe('rest');
+      expect(saved.rest?.endpoint).toBe('/services/data/v65.0/sobjects/Account');
+    });
+  });
 });

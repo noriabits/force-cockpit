@@ -249,6 +249,8 @@ export function createYamlScriptsFeature(paths: {
               js: 'js',
               command: 'sh',
               ai: 'md',
+              // A rest script's code body is its JSON request body.
+              rest: 'json',
             };
             const ext = extByType[scriptType] ?? 'txt';
             const title = ((msg.name as string) || '').replace(/[\\/]/g, '_').trim() || 'script';

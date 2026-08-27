@@ -161,15 +161,21 @@ export class ScriptRepository {
     const serializedThen = this.serializeThen(input.then);
     if (serializedThen) data.then = serializedThen;
 
-    const fileField = {
-      apex: 'apex-file',
-      js: 'js-file',
-      command: 'command-file',
-      ai: 'ai-file',
-    } as const;
-    const inlineField = { apex: 'apex', js: 'js', command: 'command', ai: 'ai' } as const;
-    if (input.scriptFile) data[fileField[input.type]] = input.scriptFile;
-    else data[inlineField[input.type]] = input.script;
+    // A rest script has no top-level body key — method/endpoint/headers and the
+    // body all live inside one nested `rest:` block, mirroring ai's `gather:`.
+    if (input.type === 'rest') {
+      data.rest = this.buildRestYaml(input);
+    } else {
+      const fileField = {
+        apex: 'apex-file',
+        js: 'js-file',
+        command: 'command-file',
+        ai: 'ai-file',
+      } as const;
+      const inlineField = { apex: 'apex', js: 'js', command: 'command', ai: 'ai' } as const;
+      if (input.scriptFile) data[fileField[input.type]] = input.scriptFile;
+      else data[inlineField[input.type]] = input.script;
+    }
 
     if (input.type === 'ai') {
       if (input.gather) data.gather = this.buildGatherYaml(input.gather);
@@ -179,6 +185,23 @@ export class ScriptRepository {
     }
     if (input.type === 'apex' && input.filterUserDebug) data['filter-user-debug'] = true;
     if (input.type === 'apex' && input.formatJson) data['format-json'] = true;
+    return data;
+  }
+
+  /**
+   * The `rest:` block. Key order is deliberate — method, endpoint, headers, body
+   * reads as the request itself, and `body` goes last so its `|-` literal block
+   * does not push the short scalars below a wall of JSON.
+   */
+  private buildRestYaml(input: SaveScriptInput): Record<string, unknown> {
+    const rest = input.rest;
+    const data: Record<string, unknown> = {
+      method: rest?.method ?? 'GET',
+      endpoint: rest?.endpoint ?? '',
+    };
+    if (rest?.headers && Object.keys(rest.headers).length) data.headers = rest.headers;
+    if (input.scriptFile) data['body-file'] = input.scriptFile;
+    else if (input.script) data.body = input.script;
     return data;
   }
 
@@ -242,6 +265,7 @@ export class ScriptRepository {
         ? { allowReadWorkspaceFiles: true }
         : {}),
       ...(input.type === 'ai' && input.skills?.length ? { skills: input.skills } : {}),
+      ...(input.type === 'rest' && input.rest ? { rest: input.rest } : {}),
     };
   }
 

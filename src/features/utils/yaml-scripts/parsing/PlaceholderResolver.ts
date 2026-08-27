@@ -1,4 +1,4 @@
-import type { ScriptType, YamlScript } from '../types';
+import type { RestSpec, ScriptInput, ScriptType, YamlScript } from '../types';
 import { escapeApexString } from '../execution/ApexHelper';
 
 export function escapeForType(value: string, type: ScriptType): string {
@@ -6,6 +6,7 @@ export function escapeForType(value: string, type: ScriptType): string {
     case 'apex':
       return escapeApexString(value);
     case 'js':
+    case 'rest':
       // JSON.stringify escapes \ and " for double-quoted destinations; scripts
       // also embed placeholders in single-quoted literals (e.g. `'${name}'`),
       // so ' must be escaped too or the value breaks out of the string.
@@ -51,10 +52,42 @@ export function substituteVars(
   return result;
 }
 
+/**
+ * The `${name}` → value map for a script's declared inputs. A name the user
+ * supplied nothing for maps to '' rather than being absent, so it still
+ * substitutes away instead of leaking the literal `${name}`.
+ */
+export function buildInputVars(
+  inputs: ScriptInput[] | undefined,
+  values?: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries((inputs ?? []).map((inp) => [inp.name, values?.[inp.name] ?? '']));
+}
+
 export function substituteInputs(script: YamlScript, values?: Record<string, string>): string {
   if (!script.inputs?.length || !values) return script.script;
-  const vars = Object.fromEntries(script.inputs.map((inp) => [inp.name, values[inp.name] ?? '']));
-  return substituteVars(script.script, vars, script.type);
+  return substituteVars(script.script, buildInputVars(script.inputs, values), script.type);
+}
+
+/**
+ * The rest request line. The endpoint and header values are URLs and header
+ * text, not JSON, so they take raw ('command') substitution — the body goes
+ * through the JSON-escaping path as the script's own `script` field. Nothing is
+ * URL-encoded: the REST tab encodes nothing either, and encoding here would
+ * corrupt an endpoint the author deliberately escaped.
+ */
+export function substituteRestSpec(rest: RestSpec, vars: Record<string, string>): RestSpec {
+  return {
+    ...rest,
+    endpoint: substituteVars(rest.endpoint, vars, 'command'),
+    ...(rest.headers
+      ? {
+          headers: Object.fromEntries(
+            Object.entries(rest.headers).map(([k, v]) => [k, substituteVars(v, vars, 'command')]),
+          ),
+        }
+      : {}),
+  };
 }
 
 export function substituteSystemPlaceholders(

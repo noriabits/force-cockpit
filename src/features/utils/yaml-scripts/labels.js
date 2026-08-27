@@ -13,6 +13,7 @@ window.YamlScriptsLabels = {
   badgeCommand: 'Command',
   badgeJs: 'JS',
   badgeAi: 'AI',
+  badgeRest: 'REST',
   badgeInvalid: '⚠ Invalid',
   tooltipInvalidScript: 'Fix the YAML file to execute this script',
   btnNewScript: '+ New',
@@ -36,8 +37,18 @@ window.YamlScriptsLabels = {
   typeCommand: 'Command',
   typeJs: 'JavaScript',
   typeAi: 'AI',
+  typeRest: 'REST',
   errorNameRequired: 'Name is required.',
   errorContentRequired: 'Content is required.',
+  // REST scripts
+  labelRestMethod: 'Method',
+  labelRestEndpoint: 'Endpoint',
+  labelRestHeaders: 'Headers',
+  labelRequestBody: 'Request body',
+  placeholderRestEndpoint: '/services/data/v65.0/sobjects/Account',
+  placeholderRestContent: '{\n  "Name": "${accountName}"\n}',
+  btnAddHeader: '+ Add header',
+  errorEndpointRequired: 'Endpoint is required.',
   // AI scripts
   placeholderAiContent:
     'Analyse the gathered data and summarise anything notable about ${recordId}.',

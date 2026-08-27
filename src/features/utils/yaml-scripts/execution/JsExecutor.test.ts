@@ -142,3 +142,88 @@ describe('JsExecutor — Apex helpers in the sandbox', () => {
     expect(result.debugLog).toBe('reached');
   });
 });
+
+describe('JsExecutor — restCall()', () => {
+  function makeRestService(result: unknown = { status: 200, body: { ok: true } }) {
+    const send = vi.fn(async () => result);
+    return { send: send as never, sendSpy: send };
+  }
+
+  function runWithRest(body: string, rest: { send: never }, signal?: AbortSignal) {
+    return new JsExecutor(makeConnectionManager(), undefined, rest as never).execute(
+      makeScript(body),
+      signal,
+    );
+  }
+
+  it('forwards method, endpoint, body and headers to the REST service', async () => {
+    const rest = makeRestService();
+    const result = await runWithRest(
+      `await restCall('POST', '/sobjects/Account', '{"Name":"Acme"}', { Accept: 'application/json' });`,
+      rest,
+    );
+
+    expect(result.success).toBe(true);
+    expect(rest.sendSpy).toHaveBeenCalledWith(
+      'POST',
+      '/sobjects/Account',
+      '{"Name":"Acme"}',
+      [{ key: 'Accept', value: 'application/json' }],
+      undefined,
+    );
+  });
+
+  it('defaults body and headers when omitted', async () => {
+    const rest = makeRestService();
+    await runWithRest(`await restCall('GET', '/limits');`, rest);
+    expect(rest.sendSpy).toHaveBeenCalledWith('GET', '/limits', '', [], undefined);
+  });
+
+  it('resolves the full result — status included, unlike jsforce request()', async () => {
+    const rest = makeRestService({ status: 404, statusText: 'Not Found', headers: {}, body: null });
+    const result = await runWithRest(
+      `const r = await restCall('GET', '/nope'); log('status: ' + r.status);`,
+      rest,
+    );
+    // A non-2xx must be an ordinary value the script can branch on, not a throw.
+    expect(result.success).toBe(true);
+    expect(result.debugLog).toContain('status: 404');
+  });
+
+  it('forwards the abort signal so a cancel aborts the request in flight', async () => {
+    const rest = makeRestService();
+    const controller = new AbortController();
+    await runWithRest(`await restCall('GET', '/limits');`, rest, controller.signal);
+    expect(rest.sendSpy).toHaveBeenCalledWith('GET', '/limits', '', [], controller.signal);
+  });
+
+  // The service silently downgrades an unknown verb to GET; in a script that
+  // would issue a different request than the one written.
+  it('rejects an unsupported method instead of downgrading it to GET', async () => {
+    const rest = makeRestService();
+    const result = await runWithRest(`await restCall('FETCH', '/limits');`, rest);
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('FETCH');
+    expect(rest.sendSpy).not.toHaveBeenCalled();
+  });
+
+  // Porting from jsforce's connection.request(), which takes an object body.
+  // Forwarded raw it would hit `body?.trim()` in the service and throw a TypeError.
+  it('serializes an object body to JSON', async () => {
+    const rest = makeRestService();
+    await runWithRest(`await restCall('POST', '/sobjects/Account', { Name: 'Acme' });`, rest);
+    expect(rest.sendSpy).toHaveBeenCalledWith(
+      'POST',
+      '/sobjects/Account',
+      '{"Name":"Acme"}',
+      [],
+      undefined,
+    );
+  });
+
+  it('accepts a lowercase method', async () => {
+    const rest = makeRestService();
+    await runWithRest(`await restCall('patch', '/x', '{}');`, rest);
+    expect(rest.sendSpy).toHaveBeenCalledWith('patch', '/x', '{}', [], undefined);
+  });
+});

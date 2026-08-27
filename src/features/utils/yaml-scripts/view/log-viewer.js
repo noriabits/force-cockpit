@@ -3,6 +3,7 @@
 // the apex-only filter bar (USER_DEBUG + Format JSON checkboxes honoring the
 // script's YAML defaults), plus the Open-in-editor and Copy buttons. Factory
 // receives a `ctx` so it never reaches into the orchestrator's scope.
+import { defaultFormatJson } from './log-defaults';
 import {
   wireOpenInEditorButton,
   wireCopyToClipboardButton,
@@ -91,12 +92,14 @@ export function createLogViewer(ctx) {
    */
   function buildLogViewer(script) {
     const fragment = document.createDocumentFragment();
-    // Apex shows the USER_DEBUG + Format-JSON filter bar. AI shows only the
-    // Format-JSON toggle (default-on, so SOQL records render as a table; the
-    // user can untick it to see raw JSON). Command/JS get no filter bar.
+    // Apex shows the USER_DEBUG + Format-JSON filter bar. AI and REST show only
+    // the Format-JSON toggle (default-on, so SOQL records and REST response
+    // bodies render as a table; the user can untick it to see raw JSON).
+    // Command/JS get no filter bar.
     const isApex = script.type === 'apex';
     const isAi = script.type === 'ai';
-    const showFilterBar = isApex || isAi;
+    const isRest = script.type === 'rest';
+    const showFilterBar = isApex || isAi || isRest;
 
     const statusHint = document.createElement('span');
     statusHint.className = 'status-hint yaml-status';
@@ -143,8 +146,7 @@ export function createLogViewer(ctx) {
       const jsonCheckbox = document.createElement('input');
       jsonCheckbox.type = 'checkbox';
       jsonCheckbox.className = 'yaml-log-json-checkbox';
-      // Default-on for AI so SOQL records render as a table out of the box.
-      jsonCheckbox.checked = isAi ? true : (script.formatJson ?? false);
+      jsonCheckbox.checked = defaultFormatJson(script);
       const jsonLabel = document.createElement('label');
       jsonLabel.className = 'yaml-log-filter-label';
       jsonLabel.appendChild(jsonCheckbox);

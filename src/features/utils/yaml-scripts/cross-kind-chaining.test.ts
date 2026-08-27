@@ -30,9 +30,16 @@ function makeSvc(apexEcho: (body: string) => string = () => '') {
     success: true,
     debugLog: apexEcho(body),
   }));
+  // RestCallService goes straight to ConnectionManager.request, so a rest step
+  // is exercised end to end through the real service (header merge, endpoint
+  // normalization, body-drop-on-GET) with only the HTTP call itself faked.
+  const request = vi
+    .fn()
+    .mockResolvedValue({ status: 200, statusText: 'OK', headers: {}, body: {} });
   const cm = {
     executeAnonymousWithDebugLog: exec,
     query: vi.fn(),
+    request,
     getConnection: vi.fn().mockReturnValue(null),
     getCurrentOrg: vi.fn().mockReturnValue(null),
   } as unknown as CM;
@@ -44,7 +51,7 @@ function makeSvc(apexEcho: (body: string) => string = () => '') {
     new SkillsRepository('', []),
     new DescribeService(cm),
   );
-  return { svc, exec };
+  return { svc, exec, request };
 }
 
 const dbg = (line: string) => `12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|${line}`;
@@ -208,5 +215,162 @@ describe('cancellation propagation through chained scripts', () => {
     expect(result.success).toBe(false);
     expect(result.cancelled).toBe(true);
     expect(result.debugLog).not.toContain('failed:');
+  });
+
+  // The abort reaches the rest step as an AbortError from `fetch`, never as the
+  // shared 'Operation cancelled' sentinel the chain matches on — so a cancelled
+  // request must be recognised from the signal, not from the error message.
+  it('a cancelled rest step reports cancelled, not a wrapped failure', async () => {
+    const { svc, exec, request } = makeSvc();
+    const controller = new AbortController();
+    request.mockImplementation(async () => {
+      controller.abort();
+      throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+    });
+    const scripts = [
+      script({
+        id: 'cat/call',
+        type: 'rest',
+        script: '',
+        rest: { method: 'GET', endpoint: '/slow' },
+        then: [{ script: 'cat/note' }],
+      }),
+      script({ id: 'cat/note', type: 'apex', script: "System.debug('never');" }),
+    ];
+
+    const result = await svc.executeScript('cat/call', scripts, {}, controller.signal);
+
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(result.debugLog).not.toContain('failed:');
+    expect(exec).not.toHaveBeenCalled();
+  });
+});
+
+describe('rest steps in a chain', () => {
+  it("REST publishes the response body's scalars → apex step consumes them", async () => {
+    const { svc, exec, request } = makeSvc();
+    request.mockResolvedValue({
+      status: 201,
+      statusText: 'Created',
+      headers: {},
+      body: { id: '001xx000003DGb2AAG', success: true },
+    });
+    const scripts = [
+      script({
+        id: 'cat/create',
+        type: 'rest',
+        script: '{"Name": "Acme"}',
+        rest: { method: 'POST', endpoint: '/services/data/v65.0/sobjects/Account' },
+        then: [{ script: 'cat/note', with: { accountId: '${id}' } }],
+      }),
+      script({
+        id: 'cat/note',
+        type: 'apex',
+        script: "System.debug('created ${accountId}');",
+        inputs: [{ name: 'accountId' }],
+      }),
+    ];
+
+    const result = await svc.executeScript('cat/create', scripts, {});
+
+    expect(result.success).toBe(true);
+    expect(exec.mock.calls[0][0]).toBe("System.debug('created 001xx000003DGb2AAG');");
+  });
+
+  it('APEX publishes ::fc-output → rest step substitutes it into the endpoint', async () => {
+    const { svc, request } = makeSvc((body) =>
+      body.includes('lookup') ? dbg('::fc-output recordId=001xx000003DGb2AAG') : '',
+    );
+    const scripts = [
+      script({
+        id: 'cat/lookup',
+        type: 'apex',
+        script: "System.debug('lookup');",
+        then: [{ script: 'cat/fetch', with: { recordId: '${recordId}' } }],
+      }),
+      script({
+        id: 'cat/fetch',
+        type: 'rest',
+        script: '',
+        rest: { method: 'GET', endpoint: '/services/data/v65.0/sobjects/Account/${recordId}' },
+        inputs: [{ name: 'recordId' }],
+      }),
+    ];
+
+    const result = await svc.executeScript('cat/lookup', scripts, {});
+
+    expect(result.success).toBe(true);
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: '/services/data/v65.0/sobjects/Account/001xx000003DGb2AAG',
+      }),
+    );
+  });
+
+  it('substitutes inputs into a rest header value', async () => {
+    const { svc, request } = makeSvc();
+    const scripts = [
+      script({
+        id: 'cat/hdr',
+        type: 'rest',
+        script: '',
+        rest: { method: 'GET', endpoint: '/x', headers: { 'X-Trace': '${trace}' } },
+        inputs: [{ name: 'trace' }],
+      }),
+    ];
+
+    await svc.executeScript('cat/hdr', scripts, { trace: 'abc-123' });
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: expect.objectContaining({ 'X-Trace': 'abc-123' }) }),
+    );
+  });
+
+  // A rest body is JSON, so it takes the same escaping as a js script's — an
+  // apostrophe in an org value must not break out of the string literal.
+  it('JSON-escapes an input substituted into a rest body', async () => {
+    const { svc, request } = makeSvc();
+    const scripts = [
+      script({
+        id: 'cat/body',
+        type: 'rest',
+        script: '{"Name": "${accountName}"}',
+        rest: { method: 'POST', endpoint: '/sobjects/Account' },
+        inputs: [{ name: 'accountName' }],
+      }),
+    ];
+
+    await svc.executeScript('cat/body', scripts, { accountName: 'O"Brien \\ Co' });
+
+    const sent = request.mock.calls[0][0] as { body: string };
+    expect(() => JSON.parse(sent.body)).not.toThrow();
+    expect(JSON.parse(sent.body).Name).toBe('O"Brien \\ Co');
+  });
+
+  it('a failed rest step stops the chain', async () => {
+    const { svc, exec, request } = makeSvc();
+    request.mockResolvedValue({
+      status: 400,
+      statusText: 'Bad Request',
+      headers: {},
+      body: [{ message: 'bad', errorCode: 'INVALID_FIELD' }],
+    });
+    const scripts = [
+      script({
+        id: 'cat/create',
+        type: 'rest',
+        script: '{}',
+        rest: { method: 'POST', endpoint: '/sobjects/Account' },
+        then: [{ script: 'cat/note' }],
+      }),
+      script({ id: 'cat/note', type: 'apex', script: "System.debug('never');" }),
+    ];
+
+    const result = await svc.executeScript('cat/create', scripts, {});
+
+    expect(result.success).toBe(false);
+    expect(exec).not.toHaveBeenCalled();
   });
 });

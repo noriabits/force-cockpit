@@ -41,6 +41,18 @@ export type AiFieldsPayload = {
   allowReadWorkspaceFiles?: boolean;
 };
 
+/**
+ * The rest-only save fields. Spread flat onto the payload like `AiFieldsPayload`,
+ * so `rest` arrives as a top-level key the host's SaveScriptInput already names.
+ */
+export type RestFieldsPayload = {
+  rest: {
+    method: string;
+    endpoint: string;
+    headers?: Record<string, string>;
+  };
+};
+
 export function cleanInputs(rawInputs: RawFormInput[]): CleanedInput[] {
   return rawInputs
     .filter((inp) => inp.name.trim())
@@ -81,7 +93,7 @@ export function validateInputs(cleanedInputs: CleanedInput[]): string | null {
 export function buildScriptPayload(opts: {
   name: string;
   description: string;
-  type: 'apex' | 'command' | 'js' | 'ai';
+  type: 'apex' | 'command' | 'js' | 'ai' | 'rest';
   folder: string;
   isFile: boolean;
   filePath: string;
@@ -91,6 +103,7 @@ export function buildScriptPayload(opts: {
   filterUserDebug: boolean;
   formatJson: boolean;
   aiFields?: AiFieldsPayload;
+  restFields?: RestFieldsPayload;
 }) {
   return {
     name: opts.name,
@@ -104,5 +117,6 @@ export function buildScriptPayload(opts: {
     ...(opts.type === 'apex' && opts.filterUserDebug ? { filterUserDebug: true } : {}),
     ...(opts.type === 'apex' && opts.formatJson ? { formatJson: true } : {}),
     ...(opts.type === 'ai' && opts.aiFields ? opts.aiFields : {}),
+    ...(opts.type === 'rest' && opts.restFields ? opts.restFields : {}),
   };
 }

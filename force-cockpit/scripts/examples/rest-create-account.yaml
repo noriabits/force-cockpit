@@ -1,0 +1,28 @@
+name: 🌐 Create Account (REST)
+description: >-
+  Creates an Account through the REST API instead of Apex, then chains to
+  "Create Contact For Account" with the new record Id. Shows the `rest:` script
+  type and how a REST response hands its body's fields to the next script.
+inputs:
+  - name: accountName
+    label: Account Name
+    required: true
+  - name: createContact
+    label: Also create a contact?
+    type: checkbox
+rest:
+  method: POST
+  endpoint: /services/data/v65.0/sobjects/Account
+  body: |
+    {
+      "Name": "${accountName}"
+    }
+# A rest script publishes its HTTP `status` plus every top-level scalar of a
+# JSON response body — so Salesforce's `{"id": "...", "success": true}` is
+# readable as ${id} below with no parsing step in between.
+then:
+  - script: examples/create-contact-for-account
+    when: ${createContact}
+    with:
+      accountId: ${id}
+      lastName: ${accountName}

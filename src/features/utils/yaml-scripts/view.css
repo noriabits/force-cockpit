@@ -55,6 +55,19 @@
   border: 1px solid color-mix(in srgb, var(--vscode-charts-orange, #d18616) 40%, transparent);
 }
 
+.script-type-badge--rest {
+  background: color-mix(in srgb, var(--vscode-charts-red, #f14c4c) 18%, transparent);
+  color: var(--vscode-charts-red, #f14c4c);
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-red, #f14c4c) 40%, transparent);
+}
+
+/* REST form: the method picker only needs to fit a verb, so it must not take an
+   equal share of the row from the endpoint, which is the long field. */
+.yaml-form-col--narrow {
+  flex: 0 0 auto;
+  width: 110px;
+}
+
 /* AI form: optional gather body (revealed by the checkbox) stacks its controls */
 #yaml-form-gather-body {
   display: flex;

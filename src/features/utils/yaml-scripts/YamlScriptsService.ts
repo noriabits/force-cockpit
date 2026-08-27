@@ -3,7 +3,9 @@ import type { DescribeService } from '../../../services/describe/DescribeService
 import { loadYamlItems } from '../../../utils/yaml-loader';
 import { ScriptParser } from './parsing/ScriptParser';
 import {
+  buildInputVars,
   substituteInputs,
+  substituteRestSpec,
   substituteSystemPlaceholders,
   substituteVars,
   validateRequiredInputs,
@@ -12,6 +14,8 @@ import { ApexExecutor } from './execution/ApexExecutor';
 import { CommandExecutor } from './execution/CommandExecutor';
 import { JsExecutor } from './execution/JsExecutor';
 import { AiExecutor } from './execution/ai/AiExecutor';
+import { RestExecutor } from './execution/RestExecutor';
+import { RestCallService } from '../../../services/rest/RestCallService';
 import type { LmGateway, WorkspaceSearch } from '../../../services/ai/types';
 import { ScriptRepository } from './persistence/ScriptRepository';
 import type { SkillsRepository } from '../../../services/skills/SkillsRepository';
@@ -44,6 +48,7 @@ export class YamlScriptsService {
   private readonly command: CommandExecutor;
   private readonly js: JsExecutor;
   private readonly ai: AiExecutor;
+  private readonly rest: RestExecutor;
 
   constructor(
     private readonly connectionManager: ConnectionManager,
@@ -59,10 +64,15 @@ export class YamlScriptsService {
       privatePath: paths.privatePath,
       workspaceRoot: paths.workspaceRoot,
     });
+    // One REST service shared by the `rest` type and the `js` sandbox's
+    // restCall() global — it is stateless, and both want identical header
+    // merging, endpoint normalization and 401-replay behaviour.
+    const restCallService = new RestCallService(connectionManager);
     this.apex = new ApexExecutor(connectionManager);
     this.command = new CommandExecutor(paths.workspaceRoot);
-    this.js = new JsExecutor(connectionManager, paths.workspaceRoot);
+    this.js = new JsExecutor(connectionManager, paths.workspaceRoot, restCallService);
     this.ai = new AiExecutor(connectionManager, gateway, skills, describeService, workspaceSearch);
+    this.rest = new RestExecutor(restCallService);
   }
 
   async loadScripts(): Promise<YamlScript[]> {
@@ -130,10 +140,13 @@ export class YamlScriptsService {
     // carries the logs of everything it called, so scraping markers out of it
     // would silently adopt its children's outputs as its own — it uses
     // setOutput() exclusively and re-exports a child's value deliberately.
-    const outputs =
-      script.type === 'js'
-        ? (result.outputs ?? {})
-        : extractOutputMarkers(result.filteredDebugLog ?? result.debugLog);
+    // A `rest` script builds its outputs from the response itself (status plus
+    // the body's top-level scalars); scanning its log for markers would let a
+    // response body that happens to contain the marker text define outputs.
+    const publishesDirectly = script.type === 'js' || script.type === 'rest';
+    const outputs = publishesDirectly
+      ? (result.outputs ?? {})
+      : extractOutputMarkers(result.filteredDebugLog ?? result.debugLog);
 
     const chained = await this.runThenSteps(
       script,
@@ -279,19 +292,23 @@ export class YamlScriptsService {
     const withInputs = substituteInputs(script, values);
     const finalCode = substituteSystemPlaceholders(withInputs, script.type, { orgUsername });
 
-    // ai gather step: substitute into the gather code with Apex-style escaping
-    // (quote-safe for both inline Apex and SOQL WHERE clauses). User inputs win
-    // over system vars, matching the prompt/code substitution order.
-    let gather = script.gather;
-    if (gather) {
-      const inputVars = Object.fromEntries(
-        (script.inputs ?? []).map((inp) => [inp.name, values?.[inp.name] ?? '']),
-      );
-      const value = substituteVars(gather.value, { orgUsername, ...inputVars }, 'apex');
-      gather = { ...gather, value };
-    }
+    // User inputs win over system vars, matching the prompt/code substitution order.
+    const vars = { orgUsername, ...buildInputVars(script.inputs, values) };
 
-    return { ...script, script: finalCode, ...(gather ? { gather } : {}) };
+    // ai gather step: Apex-style escaping, quote-safe for both inline Apex and
+    // SOQL WHERE clauses.
+    const gather = script.gather
+      ? { ...script.gather, value: substituteVars(script.gather.value, vars, 'apex') }
+      : undefined;
+
+    const rest = script.rest ? substituteRestSpec(script.rest, vars) : undefined;
+
+    return {
+      ...script,
+      script: finalCode,
+      ...(gather ? { gather } : {}),
+      ...(rest ? { rest } : {}),
+    };
   }
 
   private dispatchExecution(
@@ -310,6 +327,8 @@ export class YamlScriptsService {
         return this.apex.execute(script);
       case 'ai':
         return this.ai.execute(script, signal, onLogChunk, onModelFallback);
+      case 'rest':
+        return this.rest.execute(script, signal, onLogChunk);
     }
   }
 }

@@ -4,6 +4,8 @@
 // CLAUDE.md), opId tracking and the executeYamlScript dispatch. The
 // opIdToScriptId Map stays owned by index.js and is injected via ctx.
 
+import { defaultFormatJson } from './log-defaults';
+
 /** @typedef {import('./log-viewer.js').LogViewerRefs} LogViewerRefs */
 
 /**
@@ -89,7 +91,7 @@ export function createExecuteHandler(ctx) {
         const jsonCheckbox = /** @type {HTMLInputElement | null} */ (
           section.querySelector('.yaml-log-json-checkbox')
         );
-        if (jsonCheckbox) jsonCheckbox.checked = script.formatJson ?? false;
+        if (jsonCheckbox) jsonCheckbox.checked = defaultFormatJson(script);
 
         section.classList.add('open');
         scriptOpId = startAction(executeBtn, () => {

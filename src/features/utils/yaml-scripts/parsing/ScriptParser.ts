@@ -2,8 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { YamlSource } from '../../../../utils/yaml-loader';
-import type { GatherSpec, ScriptInput, ScriptThenStep, ScriptType, YamlScript } from '../types';
+import type {
+  GatherSpec,
+  RestSpec,
+  ScriptInput,
+  ScriptThenStep,
+  ScriptType,
+  YamlScript,
+} from '../types';
 import { resolveWorkspaceFile } from './workspaceFile';
+import { hasRestKey, parseRestSpec, restBody, restBodyFile, type ParsedRest } from './restSpec';
 import { validateWhenExpression } from '../execution/thenCondition';
 
 type ParsedGather = {
@@ -33,6 +41,8 @@ type ParsedYamlDoc = {
   'allow-followup-queries'?: boolean;
   'allow-read-workspace-files'?: boolean;
   skills?: unknown;
+  // ── rest-only ──
+  rest?: ParsedRest;
 };
 
 interface InvalidBase {
@@ -66,6 +76,18 @@ export class ScriptParser {
 
     const { type, scriptFile } = this.detectScriptKind(doc);
 
+    // Validated before the body is resolved: a malformed request line makes the
+    // script unrunnable regardless of whether its `body-file` reads cleanly, and
+    // reporting the request-line error first is the more actionable message.
+    let rest: RestSpec | undefined;
+    if (type === 'rest') {
+      const restOutcome = parseRestSpec(doc.rest);
+      if ('error' in restOutcome) {
+        return this.invalidCard(doc, id, folder, source, type, parsedInputs, restOutcome.error);
+      }
+      rest = restOutcome.rest;
+    }
+
     const resolved = this.resolveScriptContent(
       doc,
       id,
@@ -88,18 +110,7 @@ export class ScriptParser {
 
     const thenOutcome = this.parseThen(doc.then);
     if ('error' in thenOutcome) {
-      return this.makeInvalidScript(
-        {
-          id,
-          folder,
-          name: doc.name!,
-          description: doc.description ?? '',
-          source,
-          type,
-          inputs: parsedInputs,
-        },
-        thenOutcome.error,
-      );
+      return this.invalidCard(doc, id, folder, source, type, parsedInputs, thenOutcome.error);
     }
 
     return {
@@ -126,6 +137,7 @@ export class ScriptParser {
       ...(type === 'ai' && this.parseSkills(doc.skills).length
         ? { skills: this.parseSkills(doc.skills) }
         : {}),
+      ...(rest ? { rest } : {}),
     };
   }
 
@@ -259,19 +271,23 @@ export class ScriptParser {
       parsed['command-file'],
       parsed['js-file'],
       parsed['ai-file'],
+      // `rest` is a block, not a code string. A bare `rest:` (YAML null) still
+      // means "this is a rest script" — counting it here routes it to
+      // resolveRest's specific error instead of the generic missing-field one.
+      hasRestKey(parsed) || undefined,
     ].filter(Boolean);
 
     if (scriptFields.length > 1) {
       return this.makeInvalidScript(
         { ...base, name: parsed.name },
-        "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'ai', 'apex-file', 'command-file', 'js-file', or 'ai-file')",
+        "Ambiguous: multiple script fields set (use exactly one of 'apex', 'command', 'js', 'ai', 'rest', 'apex-file', 'command-file', 'js-file', or 'ai-file')",
       );
     }
 
     if (scriptFields.length === 0) {
       return this.makeInvalidScript(
         { ...base, name: parsed.name },
-        "Missing required field: 'apex', 'command', 'js', 'ai', 'apex-file', 'command-file', 'js-file', or 'ai-file'",
+        "Missing required field: 'apex', 'command', 'js', 'ai', 'rest', 'apex-file', 'command-file', 'js-file', or 'ai-file'",
       );
     }
 
@@ -283,6 +299,13 @@ export class ScriptParser {
     isFileRef: boolean;
     scriptFile: string | undefined;
   } {
+    // `rest` is checked first: `command` is the fallthrough default below, so a
+    // rest script reaching that ternary would be silently mistyped.
+    if (hasRestKey(parsed)) {
+      const scriptFile = restBodyFile(parsed.rest);
+      return { type: 'rest', isFileRef: scriptFile !== undefined, scriptFile };
+    }
+
     const isFileRef = !parsed.apex && !parsed.js && !parsed.command && !parsed.ai;
     const type: ScriptType =
       parsed.apex || parsed['apex-file']
@@ -308,6 +331,9 @@ export class ScriptParser {
     scriptFile: string | undefined,
   ): { content: string } | { invalid: YamlScript } {
     if (!scriptFile) {
+      if (type === 'rest') {
+        return { content: restBody(parsed.rest) };
+      }
       return { content: (parsed.apex ?? parsed.js ?? parsed.command ?? parsed.ai)! };
     }
 
@@ -429,6 +455,35 @@ export class ScriptParser {
   }
 
   // ── Invalid-script factory ───────────────────────────────────────────────
+
+  /**
+   * An invalid card for a document that already parsed far enough to know its
+   * name, type and inputs — the shape every failure inside `parse()` needs.
+   * The helpers that validate their own sub-block (`resolveGather`) build the
+   * base themselves because they hold it across several exits.
+   */
+  private invalidCard(
+    doc: ParsedYamlDoc,
+    id: string,
+    folder: string,
+    source: YamlSource,
+    type: ScriptType,
+    inputs: ScriptInput[],
+    error: string,
+  ): YamlScript {
+    return this.makeInvalidScript(
+      {
+        id,
+        folder,
+        name: doc.name!,
+        description: doc.description ?? '',
+        source,
+        type,
+        inputs,
+      },
+      error,
+    );
+  }
 
   makeInvalidScript(base: InvalidBase, error: string): YamlScript {
     return {

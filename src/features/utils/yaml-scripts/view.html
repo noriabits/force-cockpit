@@ -32,6 +32,7 @@
           <option value="command"></option>
           <option value="js"></option>
           <option value="ai"></option>
+          <option value="rest"></option>
         </select>
       </div>
       <div class="yaml-form-col">
@@ -66,6 +67,40 @@
     <div class="yaml-form-row yaml-form-row--inline">
       <label class="yaml-form-label" for="yaml-form-private" id="yaml-form-private-label"></label>
       <input type="checkbox" id="yaml-form-private" />
+    </div>
+    <div class="yaml-form-row yaml-form-row--inline yaml-form-rest-only" style="display: none">
+      <div class="yaml-form-col yaml-form-col--narrow">
+        <label class="yaml-form-label" for="yaml-form-rest-method"></label>
+        <select class="text-input" id="yaml-form-rest-method">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="PATCH">PATCH</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+      </div>
+      <div class="yaml-form-col">
+        <label
+          class="yaml-form-label yaml-form-label--required"
+          for="yaml-form-rest-endpoint"
+          id="yaml-form-rest-endpoint-label"
+        ></label>
+        <div class="input-with-paste">
+          <input type="text" class="text-input" id="yaml-form-rest-endpoint" autocomplete="off" />
+          <button type="button" class="paste-btn" data-tooltip="Paste from clipboard">
+            &#128203;
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="yaml-form-row yaml-form-rest-only" style="display: none">
+      <label class="yaml-form-label" id="yaml-form-rest-headers-label"></label>
+      <div class="rest-headers-list" id="yaml-form-rest-headers-list"></div>
+      <button
+        type="button"
+        class="btn yaml-add-input-btn"
+        id="yaml-form-rest-add-header-btn"
+      ></button>
     </div>
     <div
       class="yaml-form-row yaml-form-row--inline"

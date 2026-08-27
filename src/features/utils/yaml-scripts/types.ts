@@ -1,4 +1,6 @@
-export type ScriptType = 'apex' | 'command' | 'js' | 'ai';
+import type { HttpMethod } from '../../../salesforce/connection';
+
+export type ScriptType = 'apex' | 'command' | 'js' | 'ai' | 'rest';
 
 export interface ScriptInput {
   name: string;
@@ -20,6 +22,20 @@ export interface GatherSpec {
   kind: 'apex' | 'apex-file' | 'soql';
   value: string;
   file?: string;
+}
+
+/**
+ * The request line of a `rest` script — everything except the body, which lives
+ * in `YamlScript.script` (and `scriptFile` for `body-file`) so the form's content
+ * editor, the inline/file source mode and placeholder substitution all apply to
+ * it unchanged, exactly as they do for an apex/js body.
+ */
+export interface RestSpec {
+  method: HttpMethod;
+  /** Relative org path or an absolute URL, as the REST tab accepts. */
+  endpoint: string;
+  /** Merged over the default JSON Content-Type; a user header wins. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -74,6 +90,9 @@ export interface YamlScript {
   allowReadWorkspaceFiles?: boolean;
   /** Skill ids the model may pull in via the `read_skill` tool. */
   skills?: string[];
+  // ── rest-only ──
+  /** Method/endpoint/headers of a `rest` script; its body is `script`. */
+  rest?: RestSpec;
   invalid?: true;
   error?: string;
 }
@@ -142,4 +161,6 @@ export interface SaveScriptInput {
   allowFollowupQueries?: boolean;
   allowReadWorkspaceFiles?: boolean;
   skills?: string[];
+  // ── rest-only ──
+  rest?: RestSpec;
 }

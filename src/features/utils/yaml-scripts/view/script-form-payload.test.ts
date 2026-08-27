@@ -148,4 +148,52 @@ describe('buildScriptPayload', () => {
     expect(buildScriptPayload(base)).not.toHaveProperty('then');
     expect(buildScriptPayload({ ...base, then: [] })).not.toHaveProperty('then');
   });
+  describe('rest fields', () => {
+    const restBase = {
+      name: 'Call',
+      description: '',
+      folder: 'cat',
+      isFile: false,
+      filePath: '',
+      content: '{"Name": "Acme"}',
+      inputs: [],
+      filterUserDebug: false,
+      formatJson: false,
+    };
+
+    it('spreads restFields flat for a rest script', () => {
+      const payload = buildScriptPayload({
+        ...restBase,
+        type: 'rest',
+        restFields: {
+          rest: { method: 'POST', endpoint: '/sobjects/Account', headers: { Accept: 'json' } },
+        },
+      });
+      expect(payload).toMatchObject({
+        type: 'rest',
+        script: '{"Name": "Acme"}',
+        rest: { method: 'POST', endpoint: '/sobjects/Account', headers: { Accept: 'json' } },
+      });
+    });
+
+    it('drops restFields for a non-rest script', () => {
+      const payload = buildScriptPayload({
+        ...restBase,
+        type: 'apex',
+        restFields: { rest: { method: 'POST', endpoint: '/sobjects/Account' } },
+      });
+      expect(payload).not.toHaveProperty('rest');
+    });
+
+    it('carries a body-file path through scriptFile', () => {
+      const payload = buildScriptPayload({
+        ...restBase,
+        type: 'rest',
+        isFile: true,
+        filePath: 'bodies/account.json',
+        restFields: { rest: { method: 'POST', endpoint: '/sobjects/Account' } },
+      });
+      expect(payload).toMatchObject({ script: '', scriptFile: 'bodies/account.json' });
+    });
+  });
 });

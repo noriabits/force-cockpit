@@ -1,6 +1,11 @@
 // @ts-check
-// Key/value custom-headers editor for the REST tab. Dynamic add/remove rows,
-// mirrors the row-management pattern of yaml-scripts' form-inputs-editor.js.
+// Key/value custom-headers editor. Dynamic add/remove rows, mirroring the
+// row-management pattern of yaml-scripts' form-inputs-editor.js.
+//
+// Shared by the REST tab (a request's custom headers) and the yaml-scripts form
+// (a `rest:` script's headers). The `rest-header-*` class names are kept as-is
+// because their styles live in the global media/main.css, so both consumers get
+// them with no per-feature CSS.
 
 /**
  * @typedef {{ key: string, value: string }} HeaderEntry

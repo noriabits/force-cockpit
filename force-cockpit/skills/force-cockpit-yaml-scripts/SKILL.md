@@ -28,17 +28,18 @@ Every file needs:
 
 1. `name:` — **required**. Display name on the script card.
 2. `description:` — optional. Subtitle on the card.
-3. **Exactly one** of these 8 fields, which determines the script's kind and its content:
+3. **Exactly one** of these 9 fields, which determines the script's kind and its content:
    - `apex:` / `apex-file:`
    - `command:` / `command-file:`
    - `js:` / `js-file:`
    - `ai:` / `ai-file:`
+   - `rest:` — a block, not a string; it holds the whole request, body included
 4. `inputs:` — optional list of variables prompted for at execution time (see below).
 5. `then:` — optional list of scripts to run afterwards, each optionally guarded by a `when:` (see [Composing scripts](#composing-scripts)).
 
-Setting **zero** or **two or more** of the 8 script fields makes the script invalid — it still shows up in the UI, but as an error card with the exact validation message instead of an Execute button. Don't do this.
+Setting **zero** or **two or more** of the 9 script fields makes the script invalid — it still shows up in the UI, but as an error card with the exact validation message instead of an Execute button. Don't do this.
 
-### The 4 kinds at a glance
+### The 5 kinds at a glance
 
 | Kind | Inline field | File field | Org connection | Output |
 |---|---|---|---|---|
@@ -46,6 +47,7 @@ Setting **zero** or **two or more** of the 8 script fields makes the script inva
 | Command | `command:` | `command-file:` | Not used | stdout / stderr |
 | JavaScript | `js:` | `js-file:` | Optional | Whatever `log()`/`console.log()` writes |
 | AI | `ai:` | `ai-file:` | Required | Streamed model analysis |
+| REST | `rest.body:` | `rest.body-file:` | Required | Status, response headers and body |
 
 ### `*-file` variants
 
@@ -129,6 +131,43 @@ command: npm test
 
 A raw shell command executed in the workspace root. No org connection is made or required. Output is stdout+stderr combined.
 
+## REST scripts
+
+One REST / Apex REST request against the connected org, declared entirely in YAML. Requires an org connection.
+
+```yaml
+name: Deactivate a user
+description: Sets IsActive = false on a user.
+inputs:
+  - name: userId
+    label: User Id
+    required: true
+rest:
+  method: PATCH                    # optional; GET | POST | PUT | PATCH | DELETE (default GET)
+  endpoint: /services/data/v65.0/sobjects/User/${userId}
+  headers:                         # optional; merged over the default JSON Content-Type
+    Sforce-Auto-Assign: 'FALSE'
+  body: |                          # optional; or `body-file:` (workspace-relative)
+    { "IsActive": false }
+```
+
+Field rules — each of these makes the script **invalid** rather than silently doing something else:
+
+- `endpoint:` is **required**. It may be a relative org path or an absolute `https://` URL.
+- `method:` must be one of the five verbs. An unrecognized verb is rejected (it is *not* downgraded to GET).
+- `headers:` must be a flat map of names to scalar values.
+- `body:` and `body-file:` are mutually exclusive. Both are optional — a GET or DELETE normally has neither.
+- `body:` must be a **string**. Write JSON as a `|` block, as above — `body: {"Name": "Acme"}` is a YAML *mapping*, not a string, and is rejected.
+
+Behaviour worth knowing:
+
+- **A non-2xx response fails the script**, which stops any `then:` chain. Salesforce's `message` and `errorCode` are surfaced.
+- **Outputs are automatic**: `${status}` plus every top-level value of a JSON object response body. `${status}` always means the HTTP status, even if the body has a field by that name; nested objects and lists are skipped.
+- **Placeholders** work in `endpoint`, in each header value and in the body. The body is JSON-escaped for you. The endpoint is **not** URL-encoded — encode a value yourself if it may contain `&`, `?` or a space.
+- An absolute URL still receives the org's `Bearer` token, so only target hosts you trust.
+
+Use a `js:` script with `restCall()` instead when you need a loop, a condition, or several requests in one run.
+
 ## JavaScript scripts
 
 ```yaml
@@ -178,6 +217,7 @@ js: |-
 | `org` | Current org details, or `null` |
 | `query(soql)` | Runs a SOQL query against the connected org |
 | `executeApex(apexBody, options?)` | Runs anonymous Apex, returns the debug-log result |
+| `restCall(method, endpoint, body?, headers?)` | Sends one REST / Apex REST request; resolves `{ status, statusText, headers, body }`. The body may be a string or an object (serialized to JSON for you). Does **not** throw on 4xx/5xx — branch on `status` yourself. Prefer it over `connection.request()`, which returns only the body and throws on any non-2xx |
 | `assertApexSuccess(result)` | Throws with the compile problem, or the exception message and stack trace, if an `executeApex` result failed. Otherwise does nothing |
 | `filterUserDebugLines(log)` | Reduces a debug log to just your `System.debug` output — strips the `\|USER_DEBUG\|` prefixes and keeps multiline continuations. Same filter the apex-script `filter-user-debug` flag uses |
 | `apexValue(value)` | Renders a JS value as an Apex literal — quoted and escaped strings, bare numbers/booleans, objects and arrays as quoted JSON, empty/missing as `null`. Use it for every value you interpolate into Apex you build yourself; it supplies the quotes, so write `Id x = ${apexValue(id)};`, not `'${apexValue(id)}'` |
@@ -348,6 +388,7 @@ Each kind has **exactly one** way to publish, and it does not vary by what the c
 | `command` | a `::fc-output` line on stdout | `echo "::fc-output buildId=$BUILD_ID"` |
 | `js` | `setOutput(name, value)` — **not** a printed line | `setOutput('target', 'staging');` |
 | `ai` | a `::fc-output` line in the model's output | (unreliable — the model must be told to emit it) |
+| `rest` | automatically, from the response — `${status}` plus every top-level value of a JSON body | a `{"id": "001…", "success": true}` response gives `${id}` and `${success}` |
 
 ```yaml
 # command → apex
@@ -488,6 +529,8 @@ Safety model: **you** write the `gather` query/Apex and it runs exactly as writt
 - Setting two script fields at once (e.g. both `apex:` and `js:`) — the script becomes invalid with an "ambiguous" error.
 - Setting no script field at all — "missing required field" error.
 - On an `ai` script's `gather:`, setting zero or 2+ of `soql`/`apex`/`apex-file`.
+- On a `rest:` script, omitting `endpoint:`, using a verb outside GET/POST/PUT/PATCH/DELETE, setting both `body:` and `body-file:`, or writing the body as inline JSON (`body: {"Name": "Acme"}`) instead of a `|` block.
+- Assuming a `rest:` script needs a `::fc-output` line to publish a value — it publishes its response automatically; a marker line in a response body is ignored.
 - Pointing a `*-file` field outside the workspace root, or at a file that doesn't exist.
 - Writing a `js` script that never calls `log()`/`console.log()` — it will run "successfully" with empty output.
 - Expecting a chained call to substitute an input the callee never declared in its own `inputs:` — declare it there first.

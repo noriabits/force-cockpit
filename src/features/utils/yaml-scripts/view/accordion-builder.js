@@ -183,6 +183,7 @@ export function createAccordionBuilder(ctx) {
       js: { cls: 'script-type-badge--js', text: labels.badgeJs },
       command: { cls: 'script-type-badge--command', text: labels.badgeCommand },
       ai: { cls: 'script-type-badge--ai', text: labels.badgeAi },
+      rest: { cls: 'script-type-badge--rest', text: labels.badgeRest },
       apex: { cls: 'script-type-badge--apex', text: labels.badgeApex },
     };
     const meta = byType[script.type] || byType.apex;

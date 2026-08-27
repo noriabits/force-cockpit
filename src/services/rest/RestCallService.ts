@@ -15,7 +15,17 @@ export interface RestCallResult {
   sessionRefreshed?: boolean;
 }
 
-const VALID_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+export const VALID_METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+/**
+ * Case-insensitive verb check. Exported because `normalizeMethod` below silently
+ * downgrades an unrecognized verb to GET — fine for the REST tab, where the user
+ * sees the result immediately, but a saved `rest:` YAML script must reject a typo
+ * loudly at parse time instead of quietly issuing a different request.
+ */
+export function isHttpMethod(method: string): method is HttpMethod {
+  return VALID_METHODS.includes((method || '').toUpperCase() as HttpMethod);
+}
 
 /** HTTP methods that carry a request body. */
 const BODY_METHODS = new Set<HttpMethod>(['POST', 'PUT', 'PATCH']);

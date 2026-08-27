@@ -20,9 +20,16 @@ function makeService(echo: (body: string) => string = () => '') {
     success: true,
     debugLog: echo(body),
   }));
+  const request = vi.fn().mockResolvedValue({
+    status: 201,
+    statusText: 'Created',
+    headers: {},
+    body: { id: '001AAA', success: true },
+  });
   const cm = {
     executeAnonymousWithDebugLog: exec,
     query: vi.fn(),
+    request,
     getConnection: vi.fn().mockReturnValue(null),
     getCurrentOrg: vi.fn().mockReturnValue({ username: 'me@test.org' }),
   } as unknown as ConnectionManager;
@@ -39,7 +46,7 @@ function makeService(echo: (body: string) => string = () => '') {
     new SkillsRepository('', []),
     new DescribeService(cm),
   );
-  return { svc, exec };
+  return { svc, exec, request };
 }
 
 const debugLine = (text: string) => `12:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|${text}`;
@@ -129,6 +136,51 @@ describe('bundled scripts', () => {
       expect(result.success).toBe(true);
       expect(exec).toHaveBeenCalledTimes(1);
       expect(result.debugLog).toContain('⏭ examples/create-contact-for-account skipped');
+    });
+  });
+  describe('the REST example', () => {
+    const ID = 'examples/rest-create-account';
+
+    it('POSTs the account body and hands the new id to the contact script', async () => {
+      const { svc, exec, request } = makeService(() => debugLine('ok'));
+      const scripts = await svc.loadScripts();
+
+      const result = await svc.executeScript(ID, scripts, {
+        accountName: 'Acme',
+        createContact: 'true',
+      });
+
+      expect(result.success).toBe(true);
+      expect(request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'POST',
+          url: '/services/data/v65.0/sobjects/Account',
+          body: expect.stringContaining('"Acme"'),
+        }),
+      );
+      // ${id} comes from the response body, not from a ::fc-output marker.
+      expect(exec.mock.calls[0][0]).toContain("AccountId = '001AAA'");
+    });
+
+    it('skips the chained step when the checkbox is unticked', async () => {
+      const { svc, exec } = makeService(() => debugLine('ok'));
+      const scripts = await svc.loadScripts();
+
+      const result = await svc.executeScript(ID, scripts, { accountName: 'Acme' });
+
+      expect(result.success).toBe(true);
+      expect(exec).not.toHaveBeenCalled();
+    });
+
+    it('escapes an apostrophe in the account name so the JSON body stays valid', async () => {
+      const { svc, request } = makeService(() => debugLine('ok'));
+      const scripts = await svc.loadScripts();
+
+      await svc.executeScript(ID, scripts, { accountName: "O'Brien" });
+
+      const sent = request.mock.calls[0][0] as { body: string };
+      expect(() => JSON.parse(sent.body)).not.toThrow();
+      expect(JSON.parse(sent.body).Name).toBe("O'Brien");
     });
   });
 });

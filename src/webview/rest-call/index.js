@@ -9,7 +9,7 @@
 // (status/headers/body, incl. clickable record-Id links).
 
 import { createTabStrip } from '../../features/shared/view/tab-strip';
-import { createHeadersEditor } from './headers-editor';
+import { createHeadersEditor } from '../../features/shared/view/headers-editor';
 import { createRestCallHistory } from './history';
 import { createResponseView } from './response-view';
 import { endpointBaseName } from './rest-tab-name';

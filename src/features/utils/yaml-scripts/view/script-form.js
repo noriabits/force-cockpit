@@ -8,6 +8,7 @@ import { createFormInputsEditor } from './form-inputs-editor.js';
 import { createFolderCombobox } from '../../../shared/view/folder-combobox.js';
 import { collectFormRefs, initFormLabels } from './script-form-dom.js';
 import { createAiFields } from './script-form-ai.js';
+import { createRestFields } from './script-form-rest.js';
 import { cleanInputs, validateInputs, buildScriptPayload } from './script-form-payload';
 
 /**
@@ -95,14 +96,17 @@ export function createScriptForm(ctx) {
       command: L.placeholderCommandContent,
       js: L.placeholderJsContent,
       ai: L.placeholderAiContent,
+      rest: L.placeholderRestContent,
     };
     editor.setPlaceholder(
-      placeholders[/** @type {'apex'|'command'|'js'|'ai'} */ (formType.value)] ??
+      placeholders[/** @type {'apex'|'command'|'js'|'ai'|'rest'} */ (formType.value)] ??
         L.placeholderApexContent,
     );
     const contentLabelEl = document.getElementById('yaml-form-content-label');
     if (contentLabelEl) {
-      contentLabelEl.textContent = formType.value === 'ai' ? L.labelAiPrompt : L.labelContent;
+      /** @type {Record<string, string>} */
+      const contentLabelByType = { ai: L.labelAiPrompt, rest: L.labelRequestBody };
+      contentLabelEl.textContent = contentLabelByType[formType.value] ?? L.labelContent;
     }
   }
 
@@ -118,20 +122,25 @@ export function createScriptForm(ctx) {
 
   function updateSaveBtn() {
     const isFile = formSource.value === 'file';
-    const hasContent = isFile
-      ? formFilePath.value.trim() !== ''
-      : editor.getContent().trim() !== '';
+    // A rest script's body is optional — GET and DELETE carry none — so the
+    // endpoint, not the content, is what makes the request runnable.
+    const isRest = formType.value === 'rest';
+    const hasContent =
+      isRest || (isFile ? formFilePath.value.trim() !== '' : editor.getContent().trim() !== '');
     // Gather is optional; it's only required to be filled when its box is checked.
     const gatherOk =
       formType.value !== 'ai' || !formGatherEnabled.checked || aiFields.gatherFilled();
     // AI scripts require an explicit model choice.
     const modelOk = formType.value !== 'ai' || formModel.value !== '';
+    // A rest script cannot be built without somewhere to send the request.
+    const endpointOk = !isRest || restFields.endpointFilled();
     formSaveBtn.disabled =
       formName.value.trim() === '' ||
       formFolder.value.trim() === '' ||
       !hasContent ||
       !gatherOk ||
-      !modelOk;
+      !modelOk ||
+      !endpointOk;
   }
 
   // ── AI sub-controller (model/skills picker, gather step) ───────────────────
@@ -153,6 +162,17 @@ export function createScriptForm(ctx) {
     },
     labels: L,
     vscode,
+    updateSaveBtn,
+  });
+
+  // ── REST sub-controller (method + endpoint + headers) ──────────────────────
+  const restFields = createRestFields({
+    refs: {
+      formRestMethod: refs.formRestMethod,
+      formRestEndpoint: refs.formRestEndpoint,
+      formRestHeadersList: refs.formRestHeadersList,
+      formRestAddHeaderBtn: refs.formRestAddHeaderBtn,
+    },
     updateSaveBtn,
   });
 
@@ -178,6 +198,7 @@ export function createScriptForm(ctx) {
     formError.textContent = '';
     inputsEditor.clear();
     aiFields.reset();
+    restFields.reset();
     updateContentPlaceholder();
     updateSourceMode();
     updateSaveBtn();
@@ -185,6 +206,7 @@ export function createScriptForm(ctx) {
     if (formFormatJson) formFormatJson.checked = false;
     updateApexDefaultsVisibility();
     aiFields.updateAiVisibility(formType.value === 'ai');
+    restFields.updateRestVisibility(formType.value === 'rest');
   }
 
   const folderCombobox = createFolderCombobox({
@@ -225,7 +247,7 @@ export function createScriptForm(ctx) {
   }
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; allowReadWorkspaceFiles?: boolean; skills?: string[]; then?: Array<{ script: string; with?: Record<string, string>; when?: string }>; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai' | 'rest'; script: string; scriptFile?: string; invalid?: true; source?: 'builtin' | 'user' | 'private'; filterUserDebug?: boolean; formatJson?: boolean; model?: string; gather?: { kind: 'apex' | 'apex-file' | 'soql'; value: string; file?: string }; allowFollowupQueries?: boolean; allowReadWorkspaceFiles?: boolean; skills?: string[]; rest?: { method?: string; endpoint?: string; headers?: Record<string, string> }; then?: Array<{ script: string; with?: Record<string, string>; when?: string }>; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }} script
    */
   function showEditForm(script) {
     editingScriptId = script.id;
@@ -241,6 +263,7 @@ export function createScriptForm(ctx) {
     formFilePath.value = script.scriptFile ?? '';
     editor.setContent(script.scriptFile ? '' : (script.script ?? ''));
     aiFields.populateFromScript(script);
+    restFields.populateFromScript(script);
     formError.textContent = '';
     inputsEditor.setInputs(
       (script.inputs || []).map((/** @type {any} */ inp) => ({
@@ -262,6 +285,7 @@ export function createScriptForm(ctx) {
     if (formFormatJson) formFormatJson.checked = script.formatJson ?? false;
     updateApexDefaultsVisibility();
     aiFields.updateAiVisibility(formType.value === 'ai');
+    restFields.updateRestVisibility(formType.value === 'rest');
     if (formType.value === 'ai') aiFields.requestLists();
     formDeleteBtn.textContent = L.btnDelete;
     formDeleteBtn.style.display = '';
@@ -284,10 +308,12 @@ export function createScriptForm(ctx) {
   updateContentPlaceholder();
   updateSourceMode();
   aiFields.updateAiVisibility(formType.value === 'ai');
+  restFields.updateRestVisibility(formType.value === 'rest');
   formType.addEventListener('change', () => {
     updateContentPlaceholder();
     updateApexDefaultsVisibility();
     aiFields.updateAiVisibility(formType.value === 'ai');
+    restFields.updateRestVisibility(formType.value === 'rest');
     updateSaveBtn();
     if (formType.value === 'ai') aiFields.requestLists();
   });
@@ -334,9 +360,15 @@ export function createScriptForm(ctx) {
       formFolder.focus();
       return;
     }
-    if (!isFile && !contentVal) {
+    const isRestType = formType.value === 'rest';
+    if (!isFile && !contentVal && !isRestType) {
       formError.textContent = L.errorContentRequired;
       formContent.focus();
+      return;
+    }
+    if (isRestType && !restFields.endpointFilled()) {
+      formError.textContent = L.errorEndpointRequired;
+      refs.formRestEndpoint.focus();
       return;
     }
     if (isFile && !filePathVal) {
@@ -371,7 +403,7 @@ export function createScriptForm(ctx) {
     const payload = buildScriptPayload({
       name: nameVal,
       description: formDescription.value.trim(),
-      type: /** @type {'apex'|'command'|'js'|'ai'} */ (formType.value),
+      type: /** @type {'apex'|'command'|'js'|'ai'|'rest'} */ (formType.value),
       folder: folderVal,
       isFile,
       filePath: filePathVal,
@@ -381,6 +413,7 @@ export function createScriptForm(ctx) {
       filterUserDebug: !!formFilterUserDebug?.checked,
       formatJson: !!formFormatJson?.checked,
       ...(formType.value === 'ai' ? { aiFields: aiFields.buildAiFields() } : {}),
+      ...(isRestType ? { restFields: restFields.buildRestFields() } : {}),
     });
 
     const isPrivate = formPrivate.checked;

@@ -46,7 +46,7 @@ import {
   const favoriteIds = new Set();
   /** @type {string | null} */
   let lastSavedScriptId = null;
-  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; filterUserDebug?: boolean; formatJson?: boolean; then?: Array<{ script: string; with?: Record<string, string>; when?: string }>; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
+  /** @type {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai' | 'rest'; script: string; scriptFile?: string; source: string; invalid?: true; error?: string; filterUserDebug?: boolean; formatJson?: boolean; rest?: { method?: string; endpoint?: string; headers?: Record<string, string> }; then?: Array<{ script: string; with?: Record<string, string>; when?: string }>; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} */
   let currentScripts = [];
 
   // ── Category/visibility filter bar (shared module) ────────────────────────
@@ -155,7 +155,7 @@ import {
   // ── Render scripts list ───────────────────────────────────────────────────
 
   /**
-   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
+   * @param {{ id: string; folder: string; name: string; description: string; type: 'apex' | 'command' | 'js' | 'ai' | 'rest'; script: string; scriptFile?: string; source: 'builtin' | 'user' | 'private'; invalid?: true; error?: string; inputs?: Array<{ name: string; label?: string; type?: 'string' | 'picklist' | 'checkbox'; required?: boolean; options?: string[]; default?: boolean }> }[]} scripts
    */
   function renderScripts(scripts) {
     // Single ordering chokepoint: every render path (initial load, save, update,

@@ -451,4 +451,135 @@ describe('ScriptParser', () => {
       expect(result?.error).toContain('map input names to values');
     });
   });
+  describe('parse (rest scripts)', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'parser-rest-test-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function parseYaml(yaml: string, id = 'rest/x', folder = 'rest') {
+      const filePath = path.join(tmpDir, 'x.yaml');
+      fs.writeFileSync(filePath, yaml, 'utf8');
+      return new ScriptParser(tmpDir).parse(filePath, id, folder, 'user');
+    }
+
+    it('parses a full rest block, putting the body in `script`', () => {
+      const result = parseYaml(
+        [
+          'name: Create account',
+          'rest:',
+          '  method: POST',
+          '  endpoint: /services/data/v65.0/sobjects/Account',
+          '  headers:',
+          '    Sforce-Auto-Assign: "FALSE"',
+          '  body: |',
+          '    {"Name": "Acme"}',
+        ].join('\n'),
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.type).toBe('rest');
+      expect(result?.rest).toEqual({
+        method: 'POST',
+        endpoint: '/services/data/v65.0/sobjects/Account',
+        headers: { 'Sforce-Auto-Assign': 'FALSE' },
+      });
+      expect(result?.script).toContain('"Name": "Acme"');
+    });
+
+    it('defaults the method to GET and allows a body-less request', () => {
+      const result = parseYaml('name: Limits\nrest:\n  endpoint: /services/data/v65.0/limits');
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.rest).toEqual({ method: 'GET', endpoint: '/services/data/v65.0/limits' });
+      expect(result?.script).toBe('');
+    });
+
+    it('uppercases the method', () => {
+      const result = parseYaml('name: P\nrest:\n  method: patch\n  endpoint: /x');
+      expect(result?.rest?.method).toBe('PATCH');
+    });
+
+    it('resolves body-file into `script` and keeps the path in scriptFile', () => {
+      fs.writeFileSync(path.join(tmpDir, 'body.json'), '{"Name": "FromFile"}', 'utf8');
+      const result = parseYaml(
+        'name: F\nrest:\n  method: POST\n  endpoint: /x\n  body-file: body.json',
+      );
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.script).toContain('FromFile');
+      expect(result?.scriptFile).toBe('body.json');
+    });
+
+    it('is invalid without an endpoint', () => {
+      const result = parseYaml('name: NoUrl\nrest:\n  method: GET');
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'endpoint'");
+      expect(result?.type).toBe('rest');
+    });
+
+    // RestCallService silently downgrades an unknown verb to GET. In a saved
+    // script that would issue a different request than the one written, so the
+    // parser must reject it instead.
+    it('is invalid for an unsupported method', () => {
+      const result = parseYaml('name: Bad\nrest:\n  method: FETCH\n  endpoint: /x');
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('FETCH');
+    });
+
+    it('is invalid when both body and body-file are set', () => {
+      const result = parseYaml(
+        'name: Both\nrest:\n  method: POST\n  endpoint: /x\n  body: "{}"\n  body-file: b.json',
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('ambiguous');
+    });
+
+    // A JSON body written without a `|` block is a YAML flow *mapping*, not a
+    // string. Unvalidated it coerces to '' and the request goes out with no body:
+    // the PATCH returns 204 having changed nothing, from a file that looks right.
+    it('is invalid when body is a mapping rather than a string', () => {
+      const result = parseYaml(
+        'name: Obj\nrest:\n  method: POST\n  endpoint: /x\n  body: {"Name": "Acme"}',
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'rest.body'");
+    });
+
+    it('is invalid when headers is not a map of scalars', () => {
+      const result = parseYaml(
+        'name: H\nrest:\n  endpoint: /x\n  headers:\n    Accept:\n      - a',
+      );
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('headers');
+    });
+
+    it('coerces unquoted scalar header values to strings', () => {
+      const result = parseYaml('name: H\nrest:\n  endpoint: /x\n  headers:\n    X-Retry: 3');
+      expect(result?.rest?.headers).toEqual({ 'X-Retry': '3' });
+    });
+
+    // A bare `rest:` is YAML null. It still declares the type, so the error must
+    // name the rest block rather than claim no script field was set at all.
+    it('reports a bare rest: against the rest block', () => {
+      const result = parseYaml('name: Bare\nrest:');
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain("'rest'");
+      expect(result?.type).toBe('rest');
+    });
+
+    it('is invalid when rest is combined with another script field', () => {
+      const result = parseYaml('name: Amb\napex: "1"\nrest:\n  endpoint: /x');
+      expect(result?.invalid).toBe(true);
+      expect(result?.error).toContain('Ambiguous');
+    });
+
+    it('carries then: steps like any other kind', () => {
+      const result = parseYaml('name: Chain\nrest:\n  endpoint: /x\nthen:\n  - script: cat/next');
+      expect(result?.invalid).toBeUndefined();
+      expect(result?.then).toEqual([{ script: 'cat/next' }]);
+    });
+  });
 });

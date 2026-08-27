@@ -1,0 +1,7 @@
+name: 🌐 Org limits (REST)
+description: >-
+  Fetches the org's current API/storage limits with a one-line GET. The simplest
+  possible `rest:` script — no body, no inputs, no chaining.
+rest:
+  method: GET
+  endpoint: /services/data/v65.0/limits

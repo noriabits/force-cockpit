@@ -55,7 +55,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                    |
-| **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                                  |
+| **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted, REST), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                             |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, Tooling toggle, explained errors) with a filterable, sortable results table                                                                                                       |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with request tabs, custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                      |
@@ -106,7 +106,7 @@ Use **New chat** to clear the conversation and unlock the toggles again. **Open 
 > [!TIP]
 > Prefer hand-editing the raw YAML? When editing an existing script, click **📄 Open YAML** to open its underlying `.yaml` file in a VS Code editor tab. The edit form closes (you've switched to raw editing, so there's no risk of a stale form **Save** overwriting your changes), and the script list refreshes automatically when you save the file. (The button only appears when editing an existing script.)
 
-The **Custom** sub-tab executes scripts defined in YAML files. Four script types are supported (Apex, Command, JavaScript, and **AI** — see [AI scripts](#ai-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
+The **Custom** sub-tab executes scripts defined in YAML files. Five script types are supported (Apex, Command, JavaScript, **AI** — see [AI scripts](#ai-scripts) — and **REST** — see [REST scripts](#rest-scripts)). Scripts live under `force-cockpit/scripts/{category}/*.yaml` (shared) or `force-cockpit/private/scripts/{category}/*.yaml` (private, git-ignored). Sub-categories are also supported: `{category}/{sub-category}/*.yaml` gives a second row of pills for drilling down.
 
 > [!TIP]
 > **Repository examples:** Ready-to-use YAML script examples are available under [`force-cockpit/scripts/examples/`](force-cockpit/scripts/examples). They live in this repo rather than inside the extension — copy the ones you want into your own `force-cockpit/scripts/` folder.
@@ -132,9 +132,18 @@ description: Query Salesforce with jsforce.
 js: |
   const result = await query("SELECT Id, Name FROM Account LIMIT 5");
   log(JSON.stringify(result.records, null, 2));
+
+# REST script — one REST / Apex REST call against the connected org
+name: Create Account
+description: Creates an Account through the REST API.
+rest:
+  method: POST
+  endpoint: /services/data/v65.0/sobjects/Account
+  body: |
+    { "Name": "Acme" }
 ```
 
-Exactly one of `apex:`, `command:`, `js:`, or `ai:` is required. Click **Execute** on any script card to run it.
+Exactly one of `apex:`, `command:`, `js:`, `ai:`, or `rest:` is required. Click **Execute** on any script card to run it.
 
 ### Configurable Inputs
 
@@ -314,6 +323,57 @@ How it works and why it's safe:
 - **Open as markdown.** AI analysis is written in Markdown. Once a run finishes, an **Open as markdown** button (next to _Open in editor_ / _Copy to clipboard_) opens the output in VSCode's built-in Markdown preview — headings, lists, tables, and code blocks rendered nicely. Nothing is written to disk; it opens an in-memory untitled document. The gathered data is shown as a code block in the preview.
 
 `${input}` and `${orgUsername}` placeholders work in both the prompt and the gather step.
+
+### REST scripts
+
+A `rest:` script fires **one REST / Apex REST request** against the connected org — the same thing the [REST Tab](#rest-tab) does interactively, but saved, parameterised and chainable. Requires a connected org.
+
+```yaml
+name: Deactivate a user
+description: Sets IsActive = false on a user.
+inputs:
+  - name: userId
+    label: User Id
+    required: true
+rest:
+  method: PATCH                    # optional; GET | POST | PUT | PATCH | DELETE (default GET)
+  endpoint: /services/data/v65.0/sobjects/User/${userId}
+  headers:                         # optional
+    Sforce-Auto-Assign: 'FALSE'
+  body: |                          # optional; or `body-file: path/from/workspace/root.json`
+    { "IsActive": false }
+```
+
+- **The response is the output.** The log shows the request line, the status code, the response headers and the pretty-printed body (rendered as a table by default — untick **Format JSON** for raw).
+- **A non-2xx response fails the script.** Unlike the REST tab, which renders a 404 as an ordinary result, a script treats it as a failure so a `then:` chain stops instead of passing a bad response to the next step. Salesforce's own error message and `errorCode` are shown.
+- **Chaining works out of the box.** A rest script publishes `${status}` plus **every top-level value of a JSON response body** — so Salesforce's `{"id": "001…", "success": true}` gives the next script `${id}` with no parsing step:
+
+  ```yaml
+  rest:
+    method: POST
+    endpoint: /services/data/v65.0/sobjects/Account
+    body: '{ "Name": "${accountName}" }'
+  then:
+    - script: examples/create-contact-for-account
+      with:
+        accountId: ${id}
+  ```
+
+  Nested objects and lists are skipped (a chained value is always a string), and `${status}` always means the HTTP status even if the body has a field of that name.
+- **Placeholders** work in the endpoint, the header values and the body. Body values are JSON-escaped, so an apostrophe or a quote in an org value can't break the payload. Endpoint values are inserted **as-is, without URL-encoding** — the same as typing them in the REST tab — so if a value may contain `&`, `?` or a space, encode it yourself.
+- **The body must be a string** — a `|` block, or quoted as in the example below. Inline JSON (`body: {"Name": "Acme"}`) is a YAML *mapping*, not a string, and the script is rejected as invalid rather than silently sending an empty body.
+- **Absolute URLs are allowed** (`https://…`), matching the REST tab. Be aware that your org's access token is sent as a `Bearer` header on those requests too, so only point a script at a host you trust.
+- **Cancellable.** The **✕ Cancel** button aborts the request in flight, not just its reply.
+
+> [!TIP]
+> Need a loop, a condition, or several requests in one run? Use a `js:` script instead and call **`restCall(method, endpoint, body?, headers?)`** — the body may be a string or an object (serialized to JSON for you). It returns `{ status, statusText, headers, body }` and, unlike the raw jsforce `connection.request()`, does **not** throw on a 4xx/5xx, so you can branch on the status directly:
+>
+> ```yaml
+> js: |
+>   const r = await restCall('GET', `/services/data/v65.0/sobjects/Account/${accountId}`);
+>   if (r.status === 404) { log('No such account'); return; }
+>   log(r.body.Name);
+> ```
 
 ### Private scripts
 
