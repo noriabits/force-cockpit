@@ -175,6 +175,7 @@ const history = createRestCallHistory({
       },
       name: entry.name,
     }),
+  onSaved: (name) => tabs.renameActiveAsSaved(name),
 });
 
 // ── Run tracking ────────────────────────────────────────────────────────────────

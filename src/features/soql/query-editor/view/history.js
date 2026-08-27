@@ -21,11 +21,16 @@
  * @property {() => string} [getDefaultName]  Name to pre-fill the save input with —
  *   the active tab's own title, whether auto-derived, hand-renamed or adopted from a
  *   saved entry. Pre-selected, so typing still replaces it.
+ * @property {(name: string) => void} [onSaved]  Called once a Save is confirmed, with
+ *   the name it was saved under — lets the caller relabel the tab that was just saved
+ *   to match, so the box the user just typed a name into and the tab they're looking
+ *   at never disagree.
  */
 
 /** @param {QueryHistoryCtx} ctx */
 export function createQueryHistory(ctx) {
-  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick, getDefaultName } = ctx;
+  const { buttonEl, dropdownEl, saveBtn, vscode, getCurrent, onPick, getDefaultName, onSaved } =
+    ctx;
 
   /** @type {HistoryEntry[]} */
   let history = [];
@@ -85,6 +90,7 @@ export function createQueryHistory(ctx) {
         ...saved.filter((s) => s.name !== name),
       ];
       vscode.postMessage({ type: 'saveSavedQueries', savedQueries: saved });
+      onSaved?.(name);
       showSaveRow = false;
       render();
     };

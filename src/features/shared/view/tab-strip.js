@@ -114,6 +114,19 @@ export function createTabStrip(ctx) {
     return tabs.map((t) => t.name);
   }
 
+  /**
+   * Adopt `name` onto `tab` the way a Saved pick does: the label is deliberate
+   * (no dedup against other tabs), permanent until the tab's content moves to a
+   * different base (`nameObject` anchors that check), never re-derived in the
+   * meantime.
+   * @param {any} tab @param {string} name
+   */
+  function adoptName(tab, name) {
+    tab.name = name;
+    tab.autoName = false;
+    tab.nameObject = baseNameFor(tab);
+  }
+
   /** Pull the live control values into the active tab. */
   function syncActiveFromUI() {
     const tab = active();
@@ -508,6 +521,21 @@ export function createTabStrip(ctx) {
     renderBar();
   }
 
+  /**
+   * Relabel the active tab as if it had just been picked from Saved with this
+   * name — used when confirming the Save dialog, so the tab the user is looking
+   * at reflects the name they just typed rather than only the Saved-list entry.
+   * No-op with no active tab.
+   * @param {string} name
+   */
+  function renameActiveAsSaved(name) {
+    const tab = active();
+    if (!tab) return;
+    adoptName(tab, name);
+    renderBar();
+    persist();
+  }
+
   /** Called when the user edits the active tab — keep the tab + storage in sync. */
   function onActiveEdited() {
     syncActiveFromUI();
@@ -526,44 +554,81 @@ export function createTabStrip(ctx) {
   }
 
   /**
-   * Open an entry picked from the History dropdown in its own tab, right after the
-   * active one — a pick must never overwrite what the user has open. A pristine
-   * active tab is reused instead, so picking from a fresh tab leaves no blank behind.
-   *
-   * `name` (Saved picks only) becomes the tab's label, held only while the tab still
-   * matches that base — see `shouldRevertToAuto`. A Recent pick has no label and is
-   * auto-named from its content like any other tab.
-   * @param {{ payload: any, name?: string }} entry
+   * Load `entry` into the tab at `targetIndex` and finish the switch: reset its
+   * payload/outcome, (re)name it, then paint + persist. Shared tail for every
+   * `openTab` outcome — a fresh tab, a reused pristine one, or an existing tab
+   * being reset to a re-picked Saved entry.
+   * @param {number} targetIndex @param {{ payload: any, name?: string }} entry
    */
-  function openTab(entry) {
-    // The pristine test reads the tab, so the live controls have to land there first.
-    syncActiveFromUI();
-    const reuse = isActivePristine();
-    const tab = reuse ? active() : newTab('', entry.payload);
-    if (!reuse) {
-      tabs.splice(activeIndex + 1, 0, tab);
-      activeIndex++;
-    }
+  function finishOpenTab(targetIndex, entry) {
+    activeIndex = targetIndex;
+    const tab = tabs[targetIndex];
     Object.assign(tab, entry.payload);
     tab.results = null;
     tab.error = null;
     if (entry.name) {
-      // No dedup against other open tabs: the label was chosen on purpose, same
-      // as a name typed by hand — two tabs may legitimately show one saved entry.
-      tab.name = entry.name;
-      tab.autoName = false;
-      tab.nameObject = baseNameFor(tab);
+      adoptName(tab, entry.name);
     } else {
       tab.autoName = true;
       tab.nameObject = null;
       // No currentName: a reused tab must take the picked entry's own name, not
       // stick with whatever the tab was called before.
-      tab.name = deriveName(baseNameFor(tab), otherNames(activeIndex));
+      tab.name = deriveName(baseNameFor(tab), otherNames(targetIndex));
     }
     loadActiveIntoUI();
     renderBar();
     onActivate(active());
     persist();
+  }
+
+  /**
+   * Open an entry picked from the History dropdown.
+   *
+   * A **Saved** pick (`entry.name` set) is a stable identity — if a tab already
+   * carries that exact label, picking it again means "go back to (and reset) that
+   * item", not "open a second copy of it". So an existing same-name tab (matched
+   * case-insensitively, same as the rest of `tab-naming.ts`'s dedup) is targeted
+   * directly instead of spawning a duplicate pill. Resetting it is silent when
+   * there is nothing to lose — the tab is pristine, or already holds this exact
+   * payload — and gated behind a confirmation otherwise, since this is the one
+   * path in this file that can discard content the user typed and never saved.
+   *
+   * With no matching tab (or for a **Recent** pick, which carries no name to key
+   * on), the existing behavior applies: reuse a pristine active tab, or splice a
+   * new one in right after it, so a pick never silently overwrites open work.
+   * @param {{ payload: any, name?: string }} entry
+   */
+  function openTab(entry) {
+    // The pristine/payload comparisons below read tabs, so the live controls have
+    // to land there first.
+    syncActiveFromUI();
+
+    const savedName = entry.name;
+    const existingIdx = savedName
+      ? tabs.findIndex((t) => t.name.toLowerCase() === savedName.toLowerCase())
+      : -1;
+    if (existingIdx >= 0) {
+      const existing = tabs[existingIdx];
+      const wouldLoseContent =
+        !isPristine(existing) &&
+        JSON.stringify(payloadOf(existing)) !== JSON.stringify(entry.payload);
+      if (wouldLoseContent) {
+        /** @type {any} */ (window).__confirmAction(
+          `"${existing.name}" has unsaved changes. Reset it to the saved version?`,
+          () => finishOpenTab(existingIdx, entry),
+        );
+      } else {
+        finishOpenTab(existingIdx, entry);
+      }
+      return;
+    }
+
+    if (isActivePristine()) {
+      finishOpenTab(activeIndex, entry);
+      return;
+    }
+    tabs.splice(activeIndex + 1, 0, newTab('', entry.payload));
+    finishOpenTab(activeIndex + 1, entry);
   }
 
   // Bar-level dragover: live-shuffles the dragged pill into the slot the cursor
@@ -620,6 +685,7 @@ export function createTabStrip(ctx) {
     setActiveResults,
     onActiveEdited,
     openTab,
+    renameActiveAsSaved,
     persist,
     setActiveOpId,
     getActiveOpId,

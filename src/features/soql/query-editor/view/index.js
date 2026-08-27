@@ -206,6 +206,7 @@ const history = createQueryHistory({
       payload: { query: entry.query, useToolingApi: entry.useToolingApi },
       name: entry.name,
     }),
+  onSaved: (name) => tabs.renameActiveAsSaved(name),
 });
 
 // ── Autocomplete ──────────────────────────────────────────────────────────────

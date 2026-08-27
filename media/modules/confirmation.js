@@ -32,6 +32,20 @@
     });
   };
 
+  // Same confirmAction/confirmActionResult round-trip as __confirmIfSensitive,
+  // minus the org-sensitivity gate — always shows the modal; the caller decides
+  // whether asking is warranted at all (e.g. tab-strip.js only calls this when a
+  // reset would actually discard something).
+  win.__confirmAction = function (
+    /** @type {string} */ prompt,
+    /** @type {() => void} */ onConfirmed,
+    /** @type {(() => void) | undefined} */ onCancelled,
+  ) {
+    const requestId = 'confirm-' + ++_confirmSeq;
+    _pendingConfirmations.set(requestId, { onConfirmed, onCancelled });
+    vscode.postMessage({ type: 'confirmAction', requestId, prompt });
+  };
+
   win.__onMessage('confirmActionResult', (/** @type {any} */ message) => {
     const { confirmed, requestId } = message.data ?? {};
     const pending = requestId && _pendingConfirmations.get(requestId);
