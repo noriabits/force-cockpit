@@ -1,62 +1,109 @@
 <section class="card" id="query-card">
   <div class="query-editor">
     <div class="query-tab-bar" id="query-tab-bar"></div>
-    <!-- The <pre> renders the tokenized query underneath a transparent
-         textarea; both layers share one CSS metrics rule so they align. -->
-    <div class="soql-editor-stack" id="soql-editor-stack">
-      <pre class="soql-highlight" id="soql-highlight" aria-hidden="true"></pre>
-      <textarea
-        id="soql-input"
-        class="soql-textarea"
-        spellcheck="false"
-        placeholder="SELECT Id, Name FROM Account LIMIT 10"
-        rows="4"
-      ></textarea>
-    </div>
-    <div class="query-autocomplete" id="query-autocomplete" style="display: none"></div>
-    <div class="query-toolbar">
-      <!-- The ✕ Cancel button next to Run is injected/removed in JS while a
-           query is in flight (view/index.js), the same visual pattern
-           action-tracker.js uses elsewhere in the app. -->
-      <button class="btn btn-primary" id="btn-run-query">Run Query</button>
-      <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
-      <label
-        class="query-tooling-toggle"
-        data-tooltip="Run against the Tooling API"
-        aria-label="Run against the Tooling API"
-      >
-        <input type="checkbox" id="query-use-tooling" />
-        Tooling API
-      </label>
-      <div class="query-history-wrap">
-        <button class="btn btn-ghost" id="btn-query-history">History ▾</button>
-        <div class="query-history-dropdown" id="query-history-dropdown" style="display: none"></div>
+    <div class="query-editor-body">
+      <div class="query-editor-main">
+        <!-- The <pre> renders the tokenized query underneath a transparent
+             textarea; both layers share one CSS metrics rule so they align. -->
+        <div class="soql-editor-stack" id="soql-editor-stack">
+          <pre class="soql-highlight" id="soql-highlight" aria-hidden="true"></pre>
+          <textarea
+            id="soql-input"
+            class="soql-textarea"
+            spellcheck="false"
+            placeholder="SELECT Id, Name FROM Account LIMIT 10"
+            rows="4"
+          ></textarea>
+        </div>
+        <div class="query-autocomplete" id="query-autocomplete" style="display: none"></div>
+        <div class="query-toolbar">
+          <!-- The ✕ Cancel button next to Run is injected/removed in JS while a
+               query is in flight (view/index.js), the same visual pattern
+               action-tracker.js uses elsewhere in the app. -->
+          <button class="btn btn-primary" id="btn-run-query">Run Query</button>
+          <button class="btn btn-ghost" id="btn-clear-query">Clear</button>
+          <label
+            class="query-tooling-toggle"
+            data-tooltip="Run against the Tooling API"
+            aria-label="Run against the Tooling API"
+          >
+            <input type="checkbox" id="query-use-tooling" />
+            Tooling API
+          </label>
+          <div class="query-history-wrap">
+            <button class="btn btn-ghost" id="btn-query-history">History ▾</button>
+            <div
+              class="query-history-dropdown"
+              id="query-history-dropdown"
+              style="display: none"
+            ></div>
+          </div>
+          <button
+            class="btn btn-ghost"
+            id="btn-save-query"
+            data-tooltip="Save current query"
+            aria-label="Save current query"
+          >
+            ★ Save
+          </button>
+          <button
+            class="btn btn-ghost"
+            id="btn-clone-query"
+            data-tooltip="Clone the current tab into a new tab"
+            aria-label="Clone the current tab into a new tab"
+          >
+            ⧉ Clone
+          </button>
+          <button
+            class="btn btn-ghost"
+            id="btn-soql-ai"
+            data-tooltip="Describe the records you want and let AI write the query"
+            aria-label="Describe the records you want and let AI write the query"
+          >
+            ✨ Ask AI
+          </button>
+          <button
+            class="btn btn-ghost"
+            id="btn-soql-fields"
+            data-tooltip="Browse this object's fields"
+            aria-label="Browse this object's fields"
+          >
+            🗂 Fields
+          </button>
+          <span class="query-hint" id="query-hint"></span>
+        </div>
       </div>
-      <button
-        class="btn btn-ghost"
-        id="btn-save-query"
-        data-tooltip="Save current query"
-        aria-label="Save current query"
-      >
-        ★ Save
-      </button>
-      <button
-        class="btn btn-ghost"
-        id="btn-clone-query"
-        data-tooltip="Clone the current tab into a new tab"
-        aria-label="Clone the current tab into a new tab"
-      >
-        ⧉ Clone
-      </button>
-      <button
-        class="btn btn-ghost"
-        id="btn-soql-ai"
-        data-tooltip="Describe the records you want and let AI write the query"
-        aria-label="Describe the records you want and let AI write the query"
-      >
-        ✨ Ask AI
-      </button>
-      <span class="query-hint" id="query-hint"></span>
+
+      <!-- Field browser. Hidden until the 🗂 button reveals it — a persistent,
+           resizable column beside the editor (not a hide-on-blur dropdown like
+           History, and not below-the-fold like the AI panel), because "what
+           fields does this object even have" wants to stay open while typing. -->
+      <aside class="query-fields-panel" id="query-fields-panel" style="display: none">
+        <div class="query-fields-header">
+          <button
+            type="button"
+            class="btn btn-ghost query-fields-object-btn"
+            id="query-fields-object-btn"
+          ></button>
+          <button
+            type="button"
+            class="query-fields-close"
+            id="query-fields-close"
+            aria-label="Close fields panel"
+          >
+            ✕
+          </button>
+        </div>
+        <input
+          type="text"
+          id="query-fields-search"
+          class="text-input query-fields-search"
+          placeholder="Search…"
+          spellcheck="false"
+        />
+        <div class="query-fields-list" id="query-fields-list"></div>
+        <div class="query-fields-status" id="query-fields-status"></div>
+      </aside>
     </div>
   </div>
 

@@ -15,6 +15,7 @@ import { createSoqlHighlighter } from './highlight/highlighter';
 import { createQueryErrorView } from './error-view';
 import { capitalizeKeywordEndingAt } from './keyword-case';
 import { createSoqlAiPanel } from './ai-panel';
+import { createFieldsPanel } from './fields/fields-panel';
 import { MAX_RESULT_ROWS } from '../ai/requestMessage';
 
 const win = /** @type {any} */ (window);
@@ -45,6 +46,19 @@ const btnSaveQuery = /** @type {HTMLButtonElement} */ (document.getElementById('
 const btnCloneQuery = /** @type {HTMLButtonElement} */ (document.getElementById('btn-clone-query'));
 const autocompleteEl = /** @type {HTMLElement} */ (document.getElementById('query-autocomplete'));
 const highlightEl = /** @type {HTMLElement} */ (document.getElementById('soql-highlight'));
+const btnSoqlFields = /** @type {HTMLButtonElement} */ (document.getElementById('btn-soql-fields'));
+const fieldsPanelEl = /** @type {HTMLElement} */ (document.getElementById('query-fields-panel'));
+const fieldsCloseBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('query-fields-close')
+);
+const fieldsObjectBtn = /** @type {HTMLButtonElement} */ (
+  document.getElementById('query-fields-object-btn')
+);
+const fieldsSearchInput = /** @type {HTMLInputElement} */ (
+  document.getElementById('query-fields-search')
+);
+const fieldsListEl = /** @type {HTMLElement} */ (document.getElementById('query-fields-list'));
+const fieldsStatusEl = /** @type {HTMLElement} */ (document.getElementById('query-fields-status'));
 
 // Auto-uppercase SOQL keywords (SELECT, FROM, WHERE, AND, ...) as the user
 // finishes typing them. Registered before the highlighter/autocomplete/tabs
@@ -172,6 +186,7 @@ const tabs = createQueryTabs({
     highlighter.refresh();
     renderTabOutput(tab);
     paintRunState(tab);
+    fieldsPanel.syncFromQuery();
   },
   onTabClosed: (tab) => stopRun(tab.opId),
 });
@@ -190,6 +205,7 @@ function replaceActiveQuery(query, useToolingApi) {
   toolingCheckbox.checked = !!useToolingApi;
   tabs.onActiveEdited();
   highlighter.refresh();
+  fieldsPanel.syncFromQuery();
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
@@ -222,6 +238,32 @@ createAutocomplete({
     // every other programmatic textarea.value write in this file does).
     highlighter.refresh();
     tabs.onActiveEdited();
+    fieldsPanel.syncFromQuery();
+  },
+});
+
+// ── Field browser panel ──────────────────────────────────────────────────────
+// Shares the same describeCache instance as autocomplete above — no extra
+// describeGlobal/describeSObject round-trips are introduced by this panel.
+const fieldsPanel = createFieldsPanel({
+  panelEl: fieldsPanelEl,
+  toggleBtn: btnSoqlFields,
+  closeBtn: fieldsCloseBtn,
+  objectBtn: fieldsObjectBtn,
+  searchInput: fieldsSearchInput,
+  listEl: fieldsListEl,
+  statusEl: fieldsStatusEl,
+  textarea: soqlInput,
+  describeCache,
+  isConnected: () => !!win.__orgConnected,
+  applyEdit: (edit) => {
+    if (!edit) return;
+    soqlInput.setRangeText(edit.text, edit.start, edit.end, 'preserve');
+    // setRangeText fires no `input` event — refresh the same three things
+    // every other programmatic write in this file does.
+    highlighter.refresh();
+    tabs.onActiveEdited();
+    fieldsPanel.syncFromQuery();
   },
 });
 
@@ -263,6 +305,7 @@ win.__clearQueryResults = () => {
   hideResults();
   describeCache.clear();
   aiPanel.onOrgChanged();
+  fieldsPanel.onOrgChanged();
 };
 
 // Runs alongside action-tracker.js's own handler — __onMessage keeps a Set of
@@ -419,7 +462,10 @@ const aiPanel = createSoqlAiPanel({
 // An org-to-org switch never fires a disconnect, so both edges must reach the
 // panel: a run left in flight would otherwise query the NEW org under the old
 // question's framing.
-win.__onMessage('orgConnected', () => aiPanel.onOrgChanged());
+win.__onMessage('orgConnected', () => {
+  aiPanel.onOrgChanged();
+  fieldsPanel.onOrgChanged();
+});
 
 btnClearQuery.addEventListener('click', () => {
   soqlInput.value = '';
@@ -427,11 +473,15 @@ btnClearQuery.addEventListener('click', () => {
   highlighter.refresh();
   hideResults();
   tabs.setActiveResults(null);
+  fieldsPanel.syncFromQuery();
 });
 
 btnCloneQuery.addEventListener('click', () => tabs.cloneActive());
 
-soqlInput.addEventListener('input', () => tabs.onActiveEdited());
+soqlInput.addEventListener('input', () => {
+  tabs.onActiveEdited();
+  fieldsPanel.syncFromQuery();
+});
 toolingCheckbox.addEventListener('change', () => tabs.onActiveEdited());
 
 /** @param {'csv' | 'json'} format */

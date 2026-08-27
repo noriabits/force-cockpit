@@ -10,7 +10,33 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Editor column + fields panel, side by side. .query-editor itself no longer
+   carries `position: relative` — .query-editor-main does now, so it stays the
+   offsetParent the autocomplete dropdown positions itself against regardless
+   of whether the fields panel is open. */
+.query-editor-body {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.query-editor-main {
+  flex: 1;
+  /* Without this a long unwrapped query line would grow past the flex
+     container instead of wrapping/scrolling inside it. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   position: relative;
+}
+
+@media (max-width: 700px) {
+  .query-editor-body {
+    flex-direction: column;
+  }
 }
 
 /* SOQL autocomplete */
@@ -442,4 +468,183 @@
   flex: 1;
   min-width: 0;
   resize: vertical;
+}
+
+/* ── Field browser panel ─────────────────────────────────────────────────
+   Revealed by the 🗂 button in the query toolbar. Unlike History (a
+   hide-on-blur dropdown) and the AI panel (below the fold, flashed open),
+   this is a persistent resizable column beside the editor — the point is to
+   leave it open and browse while typing, not to look something up once. */
+
+/* Marks the toolbar toggle while the panel is open — it stays visible with no
+   other on-screen cue once you look away from the panel itself. */
+.query-fields-toggle--open {
+  background-color: var(
+    --vscode-button-secondaryBackground,
+    var(--vscode-list-activeSelectionBackground)
+  );
+  color: var(--vscode-button-secondaryForeground, var(--vscode-list-activeSelectionForeground));
+}
+
+.query-fields-panel {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  padding: 8px;
+  overflow: hidden;
+  resize: horizontal;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+}
+
+.query-fields-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.query-fields-object-btn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.query-fields-close {
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.query-fields-close:hover {
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.query-fields-search {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.query-fields-list {
+  flex: 1;
+  overflow-y: auto;
+  /* Reserve the scrollbar gutter so a row's right edge doesn't shift once the
+     list grows past the panel's max-height. */
+  scrollbar-gutter: stable;
+}
+
+.query-fields-status {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.query-fields-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.query-fields-row--object {
+  cursor: pointer;
+  justify-content: space-between;
+}
+
+.query-fields-row--object:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.query-fields-expand-slot {
+  flex: 0 0 14px;
+  display: flex;
+  justify-content: center;
+}
+
+.query-fields-expand {
+  border: none;
+  background: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+}
+
+.query-fields-checkbox {
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.query-fields-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+
+.query-fields-type {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.query-fields-picklist-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 4px 6px;
+}
+
+.query-fields-picklist-value {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background-color: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.1));
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.query-fields-picklist-value:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-textLink-activeForeground);
+}
+
+.query-fields-picklist-empty {
+  padding: 2px 4px 6px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
+
+.query-fields-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background-color: var(--vscode-inputValidation-warningBackground, rgba(255, 200, 0, 0.1));
+  border: 1px solid var(--vscode-inputValidation-warningBorder, transparent);
+  font-size: 11px;
+}
+
+.query-fields-back {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 2px 6px;
 }
