@@ -13,6 +13,20 @@ import {
 } from './types';
 
 type AssistantPart = vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart;
+type UserPart = vscode.LanguageModelTextPart | vscode.LanguageModelToolResultPart;
+
+/**
+ * Sent alongside every tool result, because Copilot's "Auto" model routes on the
+ * text of the LAST user message and refuses the request outright when it finds
+ * none — "Auto mode needs a prompt or a command to route a request". A tool
+ * result is a user message made of a single result part, so without this the
+ * very first round that calls a tool kills the whole run on Auto, no matter how
+ * well-formed the question was. Attached to every result rather than only the
+ * last one, so the prefix a round sends stays byte-identical on the next round
+ * and remains eligible for prompt caching. The wording mirrors VS Code's own
+ * tool-calling sample, which builds the same two-part message.
+ */
+const TOOL_RESULT_NOTE = 'Above is the result of the tool call. Continue from it.';
 
 function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
   if (msg.role === 'user') {
@@ -27,12 +41,15 @@ function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
     if (parts.length === 0) parts.push(new vscode.LanguageModelTextPart(''));
     return vscode.LanguageModelChatMessage.Assistant(parts);
   }
-  // toolResult → a User message carrying the tool result part.
-  return vscode.LanguageModelChatMessage.User([
+  // toolResult → a User message carrying the tool result part, plus the note
+  // above so the message is never text-free.
+  const parts: UserPart[] = [
     new vscode.LanguageModelToolResultPart(msg.callId, [
       new vscode.LanguageModelTextPart(msg.content),
     ]),
-  ]);
+    new vscode.LanguageModelTextPart(TOOL_RESULT_NOTE),
+  ];
+  return vscode.LanguageModelChatMessage.User(parts);
 }
 
 export class VsCodeLmGateway implements LmGateway {
