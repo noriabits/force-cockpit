@@ -9,6 +9,19 @@
 // The host's background-refresh path (`monitoringBackgroundRefreshResult`) is
 // routed through the same `onQueryResult` / `onTableQueryResult` returned here.
 import { extractMetric } from './metric-value';
+import { previewCanvasIdFor } from './edit-form';
+
+/**
+ * The three mutually-exclusive preview panes inside an edit form. Showing one
+ * means hiding the other two, which is the only thing every preview path did by
+ * hand three times over.
+ * @type {Array<[ 'canvas' | 'table' | 'metric', string ]>}
+ */
+const PREVIEW_PANES = [
+  ['canvas', '.monitoring-preview-canvas'],
+  ['table', '.monitoring-preview-table'],
+  ['metric', '.monitoring-preview-metric'],
+];
 
 /**
  * @typedef {Object} QueryRunnerCtx
@@ -21,8 +34,6 @@ import { extractMetric } from './metric-value';
  * @property {{ renderTable: Function, renderTableInEl: Function }} tableRenderer
  * @property {(configId: string, text: string) => void} setCardStatus
  * @property {(configId: string, msg: string | null) => void} setCardError
- * @property {(card: HTMLElement, text: string) => void} setEditStatus
- * @property {() => Element | null} findEditCard
  * @property {(configId: string) => HTMLSelectElement | null} findCardTypeSelect
  */
 
@@ -40,8 +51,6 @@ export function createQueryRunner(ctx) {
     tableRenderer,
     setCardStatus,
     setCardError,
-    setEditStatus,
-    findEditCard,
     findCardTypeSelect,
   } = ctx;
 
@@ -66,47 +75,81 @@ export function createQueryRunner(ctx) {
   }
 
   // ── Preview routing ──────────────────────────────────────────────────────
+  /**
+   * The edit form that asked for this preview, or `null` if it is gone.
+   *
+   * A preview reply carries only the `__preview__<key>` id the form minted, so
+   * the canvas that id names is what identifies the owning form; everything the
+   * reply then touches — the chart-type select, the three panes, the status
+   * line, the error box — is read out of THAT form and no other.
+   *
+   * This used to be `grid.querySelector('.monitoring-preview-canvas')` plus
+   * `findEditCard()`: the FIRST open form, which is only the right one while at
+   * most one is open. Two are reachable — `switchToEditMode` closes no others
+   * and `addNewCard` inserts one at `grid.firstChild` — and then form B's rows
+   * were drawn into form A's pane using A's chart type (so a `metric` A hid B's
+   * canvas entirely and showed B's number in A's tile), and B's failures
+   * appeared in A's error box. Exactly the position matching the save/delete
+   * replies were moved off; this was the last of it.
+   *
+   * @param {string} previewConfigId
+   * @returns {{ form: HTMLElement, canvas: HTMLElement | null } | null}
+   */
+  function previewTarget(previewConfigId) {
+    const canvas = document.getElementById(previewCanvasIdFor(previewConfigId));
+    const form = canvas && canvas.closest('.monitoring-edit-form');
+    return form ? { form: /** @type {HTMLElement} */ (form), canvas } : null;
+  }
+
+  /**
+   * @param {HTMLElement} form
+   * @param {string} selector
+   * @returns {HTMLElement | null}
+   */
+  function inForm(form, selector) {
+    return /** @type {HTMLElement | null} */ (form.querySelector(selector));
+  }
+
+  /**
+   * @param {HTMLElement} form
+   * @param {'canvas' | 'table' | 'metric'} shown
+   */
+  function showPreviewPane(form, shown) {
+    for (const [name, selector] of PREVIEW_PANES) {
+      const el = inForm(form, selector);
+      if (el) el.style.display = name === shown ? '' : 'none';
+    }
+  }
+
+  /**
+   * @param {HTMLElement} form
+   * @param {string} text
+   */
+  function setPreviewStatus(form, text) {
+    const status = inForm(form, '.monitoring-status');
+    if (status) status.textContent = text;
+  }
+
   /** @param {any} data */
   function handlePreviewResult(data) {
-    const editTypeSelect = /** @type {HTMLSelectElement | null} */ (
-      grid.querySelector('.monitoring-edit-form .monitoring-chart-type-select')
-    );
-    const previewChartType = editTypeSelect ? editTypeSelect.value : 'bar';
+    const target = previewTarget(data.configId);
+    if (!target) return; // The form that asked is gone; there is nowhere to render.
+    const { form, canvas } = target;
 
-    const previewCanvasEl = /** @type {HTMLElement | null} */ (
-      grid.querySelector('.monitoring-preview-canvas')
+    const typeSelect = /** @type {HTMLSelectElement | null} */ (
+      form.querySelector('.monitoring-chart-type-select')
     );
-    const previewTableEl = /** @type {HTMLElement | null} */ (
-      grid.querySelector('.monitoring-preview-table')
-    );
-    const previewMetricEl = /** @type {HTMLElement | null} */ (
-      grid.querySelector('.monitoring-preview-metric')
-    );
+    const previewChartType = typeSelect ? typeSelect.value : 'bar';
 
     if (previewChartType === 'metric') {
-      if (previewMetricEl) {
-        previewMetricEl.style.display = '';
-        renderMetricInEl(previewMetricEl, data, null);
-      }
-      if (previewCanvasEl) previewCanvasEl.style.display = 'none';
-      if (previewTableEl) previewTableEl.style.display = 'none';
-      const editCard = findEditCard();
-      if (editCard)
-        setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
-      return;
+      showPreviewPane(form, 'metric');
+      const metricEl = inForm(form, '.monitoring-preview-metric');
+      if (metricEl) renderMetricInEl(metricEl, data, null);
+    } else {
+      showPreviewPane(form, 'canvas');
+      chartRenderer.renderChart(data.configId, data, canvas, previewChartType, false, []);
     }
-
-    if (previewCanvasEl) previewCanvasEl.style.display = '';
-    if (previewTableEl) previewTableEl.style.display = 'none';
-    if (previewMetricEl) previewMetricEl.style.display = 'none';
-
-    const previewCanvas = document.getElementById(
-      'chart-preview-' + data.configId.replace('__preview__', '').replace(/\//g, '-'),
-    );
-    chartRenderer.renderChart(data.configId, data, previewCanvas, previewChartType, false, []);
-    const editCard = findEditCard();
-    if (editCard)
-      setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
+    setPreviewStatus(form, L.statusRows(data.totalRows));
   }
 
   // ── Chart / metric result ────────────────────────────────────────────────
@@ -144,15 +187,16 @@ export function createQueryRunner(ctx) {
   /** @param {any} data */
   function onQueryError(data) {
     if (data.configId.startsWith('__preview__')) {
-      const editCard = findEditCard();
-      if (editCard) setEditStatus(/** @type {HTMLElement} */ (editCard), '');
-      const editCardEl = grid.querySelector('.card[data-new-card], .monitoring-edit-form');
-      if (editCardEl) {
-        const errBox = editCardEl.querySelector('.error-box');
-        if (errBox) {
-          errBox.textContent = data.message;
-          /** @type {HTMLElement} */ (errBox).style.display = '';
-        }
+      const target = previewTarget(data.configId);
+      // Dropped rather than shown somewhere else: the form that ran this query
+      // is gone, and putting its error in whichever form happens to be open —
+      // which is what the old first-match lookup did — is worse than silence.
+      if (!target) return;
+      setPreviewStatus(target.form, '');
+      const errBox = inForm(target.form, '.error-box');
+      if (errBox) {
+        errBox.textContent = data.message;
+        errBox.style.display = '';
       }
       return;
     }
@@ -165,24 +209,12 @@ export function createQueryRunner(ctx) {
   /** @param {any} data */
   function onTableQueryResult(data) {
     if (data.configId.startsWith('__preview__')) {
-      const previewTableEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-table')
-      );
-      const previewCanvasEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-canvas')
-      );
-      const previewMetricEl = /** @type {HTMLElement | null} */ (
-        grid.querySelector('.monitoring-preview-metric')
-      );
-      if (previewTableEl) {
-        previewTableEl.style.display = '';
-        tableRenderer.renderTableInEl(previewTableEl, data);
-      }
-      if (previewCanvasEl) previewCanvasEl.style.display = 'none';
-      if (previewMetricEl) previewMetricEl.style.display = 'none';
-      const editCard = findEditCard();
-      if (editCard)
-        setEditStatus(/** @type {HTMLElement} */ (editCard), L.statusRows(data.totalRows));
+      const target = previewTarget(data.configId);
+      if (!target) return;
+      showPreviewPane(target.form, 'table');
+      const tableEl = inForm(target.form, '.monitoring-preview-table');
+      if (tableEl) tableRenderer.renderTableInEl(tableEl, data);
+      setPreviewStatus(target.form, L.statusRows(data.totalRows));
       return;
     }
 

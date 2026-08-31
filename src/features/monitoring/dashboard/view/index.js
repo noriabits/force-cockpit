@@ -8,7 +8,7 @@ import { createCategoryFilterBar } from '../../../shared/view/category-filter-ba
 import { applyListFilter } from '../../../shared/view/list-filter';
 import { createChartRenderer } from './chart-rendering';
 import { createTableRenderer } from './table-rendering';
-import { createEditForm } from './edit-form';
+import { createEditForm, drainOpenEditForms, resolveReply } from './edit-form';
 import { createDragOrder } from './drag-order';
 import { createQueryRunner } from './query-runner';
 import { createRefreshScheduler } from './refresh-scheduler';
@@ -79,8 +79,6 @@ import { hasNotifications } from '../notification-config';
     tableRenderer,
     setCardStatus,
     setCardError,
-    setEditStatus,
-    findEditCard,
     findCardTypeSelect,
   });
   const triggerQuery = queryRunner.triggerQuery;
@@ -103,7 +101,8 @@ import { hasNotifications } from '../notification-config';
   const { buildViewCard } = cardBuilder;
   const editForm = createEditForm({
     labels: L,
-    vscode,
+    // No `vscode` here: the form posts through the typed `post()` seam
+    // (shared/view/host.tsx) rather than an injected raw postMessage.
     chartInstances,
     getConfigs: () => configs,
     nextAvailablePosition: () => dragOrder.nextAvailablePosition(),
@@ -115,7 +114,8 @@ import { hasNotifications } from '../notification-config';
     vscode,
     loadErrorEl: loadError,
     monitoringPanel,
-    grid,
+    drainEditForms: () => drainOpenEditForms(grid),
+    resolveReply: (/** @type {unknown} */ requestId) => resolveReply(grid, requestId),
     applyConfigs: (/** @type {any[]} */ sorted) => {
       configs = sorted;
       renderAll(configs);
@@ -190,6 +190,10 @@ import { hasNotifications } from '../notification-config';
           onConfigsLoaded(message.data.configs, message.data.hiddenCount || 0);
           break;
         case 'loadMonitoringConfigsError':
+          // Touches no form. A reload failing is not the same event as "the
+          // reload my save asked for failed" — `loadConfigs()` is also called
+          // by a confirmed delete, the restore-hidden-built-ins reply and an
+          // org reconnect. Every submit is settled by its OWN correlated reply.
           showLoadError(message.data.message);
           break;
         case 'runMonitoringQueryResult':
@@ -205,16 +209,16 @@ import { hasNotifications } from '../notification-config';
           queryRunner.onQueryError(message.data);
           break;
         case 'saveMonitoringConfigResult':
-          onSaveResult();
+          onSaveResult(message.data);
           break;
         case 'saveMonitoringConfigError':
-          onSaveError(message.data.message);
+          onSaveError(message.data);
           break;
         case 'deleteMonitoringConfigResult':
           onDeleteResult(message.data);
           break;
         case 'deleteMonitoringConfigError':
-          onDeleteError(message.data.message);
+          onDeleteError(message.data);
           break;
         case 'restoreHiddenBuiltinsResult':
           loadConfigs();
@@ -340,6 +344,11 @@ import { hasNotifications } from '../notification-config';
 
   // ── Add new card ───────────────────────────────────────────────────────────
   function addNewCard() {
+    // A blank config for a brand-new card. Annotated so it is checked against
+    // the shared protocol shape rather than inferred as a loose literal —
+    // `format: ''` used to widen to `string` and silently diverge from
+    // `ValueFormat | undefined`.
+    /** @type {import('../../../../shared/protocol').MonitoringConfigPayload} */
     const newCfg = {
       id: '',
       folder: 'general',
@@ -347,7 +356,7 @@ import { hasNotifications } from '../notification-config';
       description: '',
       soql: '',
       labelField: '',
-      valueFields: [{ field: '', label: '', format: '' }],
+      valueFields: [{ field: '', label: '' }],
       chartType: 'bar',
       refreshInterval: 0,
       stacked: false,
@@ -366,39 +375,38 @@ import { hasNotifications } from '../notification-config';
 
   // ── Save handlers ──────────────────────────────────────────────────────────
   /**
-   * Find the card that initiated the in-flight save. We can't match by
-   * `savedCfg.id`: on a rename/category change the returned id differs from the
-   * editing card's `data-config-id` (which still holds the OLD id), so we'd
-   * never find it. The editing card is the one carrying the pending callback.
-   * @param {string} prop
+   * @param {any} data The save reply, carrying back the `requestId` the form
+   *   minted — echoed by `MessageRouter._dispatchFeatureRoute`.
    */
-  function findEditingCard(prop) {
-    return /** @type {any} */ (
-      [...grid.querySelectorAll('.card')].find((c) => /** @type {any} */ (c)[prop])
-    );
-  }
-
-  function onSaveResult() {
+  function onSaveResult(data) {
     // Mirror onDeleteResult: re-sync the whole grid from disk after a save.
     // The previous in-place card swap maintained the card's id by hand, so any
     // drift (e.g. after a rename) left the webview holding a STALE old id; the
     // next rename then sent that dead id and the host couldn't delete the real
     // old file — files piled up. A full reload makes the rebuilt card carry the
     // persisted id, so every subsequent rename sends the correct old id.
-    const card = findEditingCard('__pendingSaveResolveCleanups');
-    if (card) {
-      const cleanups = card.__pendingSaveResolveCleanups || [];
-      cleanups.forEach((/** @type {() => void} */ fn) => fn());
-    }
+    // The edit forms are drained by config-loader's onConfigsLoaded, when the
+    // reply that actually rebuilds the grid arrives — draining here, on the
+    // request, would strand every open form if that reply turned out to be an
+    // error. See the note in onConfigsLoaded.
+    //
+    // THIS save is settled here — its own terminal reply — so the button comes
+    // off "Saving…" and the form stops waiting. Matched by requestId, so a
+    // second form saving at the same moment is untouched: "the first card still
+    // waiting" disarmed an arbitrary one, and that form's real error then
+    // reached nothing. Settling is not draining: the form keeps its listeners,
+    // because the rebuild below may fail and leave it on screen.
+    resolveReply(grid, data && data.requestId)?.settle();
     loadConfigs();
   }
 
-  /** @param {string} errMsg */
-  function onSaveError(errMsg) {
-    const card = findEditingCard('__pendingSaveError');
-    if (card && card.__pendingSaveError) {
-      card.__pendingSaveError(errMsg);
-    }
+  /** @param {any} data */
+  function onSaveError(data) {
+    // Falls back to the grid-level box when nothing is waiting on this id — the
+    // form was cancelled or rebuilt away — so the message is never swallowed.
+    const reply = data && resolveReply(grid, data.requestId);
+    if (reply) reply.fail(data.message);
+    else showLoadError(data ? data.message : '');
   }
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
@@ -430,14 +438,12 @@ import { hasNotifications } from '../notification-config';
     }
   }
 
-  /**
-   * @param {HTMLElement} card
-   * @param {string} text
-   */
-  function setEditStatus(card, text) {
-    const status = card.querySelector('.monitoring-status');
-    if (status) status.textContent = text;
-  }
+  // NOTE: `setEditStatus(card, text)` and `findEditCard()` used to live here, for
+  // the edit-form preview alone. Both scanned the grid for the FIRST open form,
+  // which is only the right one while at most one is open — the same position
+  // matching the save/delete replies were moved off. `query-runner.js` now
+  // resolves the owning form from the preview's own id and reads the status line
+  // out of it directly, so neither helper has a caller.
 
   /** @param {string} configId */
   function findCardTypeSelect(configId) {
@@ -447,20 +453,25 @@ import { hasNotifications } from '../notification-config';
     );
   }
 
-  function findEditCard() {
-    return (
-      grid.querySelector('[data-new-card]') ||
-      grid.querySelector('.card:has(.monitoring-edit-form)')
-    );
-  }
-
-  /** @param {boolean} disabled */
+  /**
+   * View-card controls only — anything inside an open edit form is skipped.
+   *
+   * Those controls are rendered by Preact and the Save button's `disabled` is a
+   * CONTROLLED prop, so writing it from out here is the same "external write
+   * into a vdom-owned property" hazard edit-form.tsx's header calls out for the
+   * preview/status/error leaves. It survived only by luck (Preact skips a prop
+   * whose vdom value did not change between renders). The form owns its own
+   * disabled state; an org disconnect has no business reaching into it.
+   *
+   * @param {boolean} disabled
+   */
   function setAllButtonsDisabled(disabled) {
+    const outsideForm = (/** @type {Element} */ el) => !el.closest('.monitoring-edit-form');
     grid.querySelectorAll('.monitoring-refresh-btn, .btn').forEach((btn) => {
-      /** @type {HTMLButtonElement} */ (btn).disabled = disabled;
+      if (outsideForm(btn)) /** @type {HTMLButtonElement} */ (btn).disabled = disabled;
     });
     grid.querySelectorAll('.monitoring-chart-type-select').forEach((sel) => {
-      /** @type {HTMLSelectElement} */ (sel).disabled = disabled;
+      if (outsideForm(sel)) /** @type {HTMLSelectElement} */ (sel).disabled = disabled;
     });
   }
 })();
