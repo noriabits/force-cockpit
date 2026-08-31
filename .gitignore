@@ -11,3 +11,4 @@ vitest.config.js.map
 .claude
 .codegraph/
 *.log
+docs/next-steps.md
