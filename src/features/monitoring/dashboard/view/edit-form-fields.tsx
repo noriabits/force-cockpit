@@ -97,7 +97,7 @@ export type EditableCard = HTMLElement & {
   __pendingRunCleanups?: () => void;
 };
 
-export function setTooltip(el: HTMLElement | null, text: string): void {
+function setTooltip(el: HTMLElement | null, text: string): void {
   if (el)
     (window as unknown as { __setTooltip(e: HTMLElement, t: string): void }).__setTooltip(el, text);
 }

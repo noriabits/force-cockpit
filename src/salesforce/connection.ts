@@ -34,7 +34,6 @@ export interface RawHttpResult {
   sessionRefreshed?: boolean;
 }
 
-export type { ApexLogLevel } from './soap/SoapEnvelope';
 import type { ApexLogLevel } from './soap/SoapEnvelope';
 
 export interface DebuggingOptions {

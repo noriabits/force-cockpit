@@ -28,8 +28,34 @@ env:
   HUSKY: 0
 
 jobs:
+  # Gate the release. `release` declares `needs: [verify]`, so GitHub will not
+  # start it at all when this fails — nothing is bumped, committed, tagged or
+  # pushed on a red tree. Before this existed the release mutated `main` (commit
+  # + tag + push) BEFORE it ever built, so a failing `npm run package` left a
+  # version bump on `main` with no release behind it. Steps are a flat list
+  # rather than the six parallel jobs pr-validate uses: this is a manual
+  # dispatch, not a per-PR loop, so failing fast on the cheapest check beats
+  # paying for six runners.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run compile
+      - run: npm test
+      - run: npm run knip
+      - run: npm audit --audit-level=high --omit=dev
+
   release:
     name: Release
+    needs: [verify]
     runs-on: ubuntu-latest
 
     steps:

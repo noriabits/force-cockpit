@@ -2,7 +2,7 @@
 import { DEBUG_LEVEL_PRESETS, LOG_CATEGORIES } from '../debugLevelPresets';
 
 /** Fence language the UI looks for when offering "Apply these levels". */
-export const DEBUG_LEVEL_FENCE = 'debug-level';
+const DEBUG_LEVEL_FENCE = 'debug-level';
 
 function presetCatalogue(): string {
   return DEBUG_LEVEL_PRESETS.map((p) => `- ${p.id}: ${p.whenToUse}`).join('\n');

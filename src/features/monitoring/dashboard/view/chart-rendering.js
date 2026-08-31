@@ -7,7 +7,7 @@ import { formatValue } from './format-value';
 import { nonNumericDatasets } from './numeric-data';
 
 /** Palette applied one colour per label across datasets */
-export const CHART_COLORS = [
+const CHART_COLORS = [
   '#4ec9b0',
   '#569cd6',
   '#ce9178',

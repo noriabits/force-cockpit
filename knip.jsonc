@@ -1,0 +1,55 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // Almost nothing in the webview layer is reached by an `import`, so nearly
+  // every entry below is a file some loader resolves by PATH STRING at runtime.
+  // Miss one and knip reports a live file as dead code.
+  "entry": [
+    "src/extension.ts",
+
+    // The six browser bundles. KEEP IN STEP WITH `BUNDLES` in scripts/build.mjs.
+    "src/features/utils/yaml-scripts/view/index.js",
+    "src/features/monitoring/dashboard/view/index.js",
+    "src/features/soql/query-editor/view/index.js",
+    "src/webview/rest-call/index.js",
+    "src/features/debug-logs/explorer/view/index.js",
+    "src/features/overview/ask-ai/view/index.js",
+
+    // Script tags, not imports: main.js is WebviewAssets' `jsUri`, and
+    // media/modules/*.js is its WEBVIEW_MODULES list. Imported by nothing.
+    "media/main.js",
+    "media/modules/*.js",
+
+    // Self-registering IIFEs and `window.*Labels` globals, whose paths
+    // defineFeature derives from `id` + `tab`. Also never imported.
+    "src/features/**/view.js",
+    "src/features/**/labels.js",
+
+    // Without these, every symbol a test is the only consumer of reads as dead.
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+
+    "scripts/*.{js,mjs}"
+  ],
+
+  "project": ["src/**/*.{ts,tsx,js}", "media/**/*.js", "scripts/**/*.{js,mjs}"],
+
+  // `@knipignore` + a comment saying why = a deliberate seam whose consumer is
+  // still coming. Same discipline as an eslint-disable: a justified suppression
+  // is a better outcome than a gate loose enough to permit anything.
+  "tags": ["-knipignore"],
+
+  // Scoped to types ONLY, never values. An interface used one line below its
+  // own declaration is normal API surface — the base of an exported type, say —
+  // and flagging it is noise that trains people to stop reading the output.
+  // This does NOT weaken the gate: it only silences exports that ARE used in
+  // their own file, so an entirely-unreferenced type is still caught. That is
+  // the species of every defect this gate was added for (the five orphaned
+  // monitoring payload types), and it is pinned by a canary check in the plan.
+  // A VALUE exported for nobody stays an error — that was `ctx.log`.
+  "ignoreExportsUsedInFile": { "interface": true, "type": true },
+
+  // Served as a vendor file from dist/vendor/ by scripts/copy-vendor-assets.js
+  // and loaded by its own <script> tag, so nothing ever imports it.
+  "ignoreDependencies": ["chart.js"]
+}

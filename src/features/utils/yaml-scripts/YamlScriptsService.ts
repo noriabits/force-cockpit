@@ -29,7 +29,7 @@ import type {
   YamlScript,
 } from './types';
 
-export type { ExecuteScriptResult, SaveScriptInput, ScriptInput, YamlScript } from './types';
+export type { ExecuteScriptResult, SaveScriptInput, YamlScript } from './types';
 
 /** Guards against a runaway chain when scripts call each other legitimately. */
 const MAX_CHAIN_DEPTH = 10;

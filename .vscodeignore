@@ -15,6 +15,7 @@ node_modules/**
 **/tsconfig.*.json
 **/.eslintrc.json
 eslint.config.mjs
+knip.jsonc
 .prettierrc
 .prettierignore
 CLAUDE.md

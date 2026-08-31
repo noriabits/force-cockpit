@@ -5,7 +5,7 @@
   "version": "1.0.9",
   "license": "MIT",
   "author": {
-    "name": "Pablo Fern\u00e1ndez Posadas",
+    "name": "Pablo Fernández Posadas",
     "email": "pablo@noriabits.com"
   },
   "engines": {
@@ -81,6 +81,7 @@
     "lint:fix": "eslint src/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"scripts/**/*.{js,mjs}\" \"src/features/**/*.{js,css,html}\" \"src/webview/**/*.js\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"scripts/**/*.{js,mjs}\" \"src/features/**/*.{js,css,html}\" \"src/webview/**/*.js\" \"media/**/*.{js,css}\" \"webviews/**/*.html\"",
+    "knip": "knip",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit:prod": "npm audit --audit-level=high --omit=dev",
@@ -137,6 +138,7 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "jsdom": "27.0.0",
+    "knip": "6.34.0",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.1",
     "typescript": "^5.3.0",

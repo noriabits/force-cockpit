@@ -7,7 +7,7 @@
 import type { ApexLogRow, LogEvent, LogIssue, LogSummary, ParsedLog } from '../types';
 
 /** Roughly 10k characters ≈ a few thousand tokens, leaving room for the conversation. */
-export const DEFAULT_DIGEST_BUDGET = 10_000;
+const DEFAULT_DIGEST_BUDGET = 10_000;
 
 interface DigestInput {
   row: ApexLogRow | null;
@@ -48,7 +48,7 @@ function formatErrors(summary: LogSummary, events: LogEvent[]): string {
 }
 
 /** ±`radius` raw lines around a line number, prefixed with their line numbers. */
-export function contextAround(events: LogEvent[], lineNo: number, radius: number): string {
+function contextAround(events: LogEvent[], lineNo: number, radius: number): string {
   const index = events.findIndex((e) => e.lineNo === lineNo);
   if (index < 0) return '';
   const from = Math.max(0, index - radius);

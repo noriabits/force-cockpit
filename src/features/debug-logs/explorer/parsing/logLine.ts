@@ -11,7 +11,7 @@ import type { LogEvent, LogHeader, LogLevel } from '../types';
 const LINE_RE = /^(\d{2}:\d{2}:\d{2}\.\d+)\s\((\d+)\)\|(.*)$/;
 const HEADER_RE = /^(\d+\.\d+)\s+([A-Z_]+,[A-Z]+(?:;[A-Z_]+,[A-Z]+)*)\s*$/;
 
-export const TRUNCATION_MARKER = 'MAXIMUM DEBUG LOG SIZE REACHED';
+const TRUNCATION_MARKER = 'MAXIMUM DEBUG LOG SIZE REACHED';
 
 /** Parse the first line of a log into its API version and captured category levels. */
 export function parseHeader(firstLine: string): LogHeader | null {

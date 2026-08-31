@@ -127,7 +127,6 @@ export const DEBUG_LEVEL_PRESETS: DebugLevelPreset[] = [
 ];
 
 export const RECOMMENDED_PRESET_ID = 'balanced';
-export const SENSITIVE_ORG_PRESET_ID = 'production-safe';
 
 export function findPreset(id: string): DebugLevelPreset | undefined {
   return DEBUG_LEVEL_PRESETS.find((p) => p.id === id);

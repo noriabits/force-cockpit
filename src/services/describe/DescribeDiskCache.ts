@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { DescribeGlobalProjection, DescribeSObjectProjection } from './DescribeService';
 
 /** 2 weeks — Salesforce schema rarely changes and the user can force-refresh via 🔄. */
-export const DEFAULT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const DEFAULT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 interface CacheEntry<T> {
   cachedAt: number;

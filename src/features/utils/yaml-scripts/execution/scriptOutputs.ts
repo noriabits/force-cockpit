@@ -11,7 +11,6 @@
  * Anything that is not a marker line is left alone, which keeps the convention
  * invisible to scripts that don't use it.
  */
-export const OUTPUT_MARKER = '::fc-output';
 
 const MARKER_RE = /^\s*::fc-output\s+([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
 

@@ -196,7 +196,7 @@ export function durationFromEvents(events: LogEvent[]): number | null {
 }
 
 /** The slowest code units by self time — the "where did the time go" list. */
-export function slowestUnits(events: LogEvent[], limit = 15): CodeUnitTiming[] {
+function slowestUnits(events: LogEvent[], limit = 15): CodeUnitTiming[] {
   const timings = flattenTimings(buildExecutionTree(events));
   return timings
     .filter((t) => t.selfMs !== null)

@@ -1,0 +1,9 @@
+# Pre-PUSH, not pre-commit. knip is whole-project by design, so lint-staged's
+# "here are the staged files" model does not apply; and mid-branch a seam
+# committed before its consumer is legitimately "unused", so a pre-commit gate
+# would block it and train everyone to --no-verify.
+#
+# PRs are rare in this repo and pr-validate.yml only fires on `pull_request`,
+# so on a straight-to-main push this is the only check that runs before the
+# code lands. `--no-verify` remains the escape hatch.
+npm run compile && npm test && npm run knip
