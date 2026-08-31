@@ -44,4 +44,25 @@ describe('extractMetric', () => {
     const result = extractMetric({ datasets: [{ data: [7] }] }, null);
     expect(result).toEqual({ empty: false, text: (7).toLocaleString(), label: '' });
   });
+
+  it('reports the field when the value is not a number, instead of showing "NaN"', () => {
+    // `chartType: metric` over `SELECT Id FROM Contact` with `valueFields: [{ field: Id }]`.
+    // The host's Number() coercion makes this NaN; the tile used to render the
+    // literal string "NaN" as though it were the measure.
+    const result = extractMetric(
+      { datasets: [{ label: 'Id', data: [Number('0031r00AAC')] }] },
+      null,
+    );
+    expect(result).toEqual({ empty: true, notNumeric: 'Id' });
+  });
+
+  it('names the field generically when the dataset has no label', () => {
+    const result = extractMetric({ datasets: [{ data: [NaN] }] }, null);
+    expect(result).toEqual({ empty: true, notNumeric: 'the selected field' });
+  });
+
+  it('still treats a real zero as a value, not as missing', () => {
+    const result = extractMetric({ datasets: [{ label: 'Open', data: [0] }] }, null);
+    expect(result).toEqual({ empty: false, text: (0).toLocaleString(), label: 'Open' });
+  });
 });

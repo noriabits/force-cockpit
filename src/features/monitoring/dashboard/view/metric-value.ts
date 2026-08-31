@@ -17,7 +17,11 @@ interface MetricValueField {
   format?: 'currency' | 'percent';
 }
 
-export type MetricExtraction = { empty: true } | { empty: false; text: string; label: string };
+export type MetricExtraction =
+  /** `notNumeric` carries the offending dataset's label when rows came back but
+   *  the value is not a number, so the view can say which field is at fault
+   *  instead of the misleading "No data returned." */
+  { empty: true; notNumeric?: string } | { empty: false; text: string; label: string };
 
 /**
  * Extract the single metric value from a query result.
@@ -32,6 +36,14 @@ export function extractMetric(
     return { empty: true };
   }
   const value = dataset.data[0];
+  // Deliberately NOT `nonNumericDatasets` (chart-rendering's rule): a chart is
+  // worth drawing if ANY value in the dataset is a number, but a metric tile
+  // shows exactly data[0], so that one value is what has to be finite. Charting
+  // a text column coerces to NaN, which used to render the string "NaN" as
+  // though it were the measure.
+  if (!Number.isFinite(value)) {
+    return { empty: true, notNumeric: dataset.label || 'the selected field' };
+  }
   const fmt = valueFields?.[0]?.format;
   return {
     empty: false,

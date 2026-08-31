@@ -10,6 +10,8 @@ window.MonitoringLabels = {
   btnRemoveValueField: '−',
   statusLoading: 'Loading...',
   statusNoData: 'No data returned.',
+  /** @param {string} fields */
+  statusNoNumericData: (fields) => `No numeric values in ${fields} — check valueFields.`,
   statusRows: (n) => `${n} row${n === 1 ? '' : 's'}`,
   placeholderTableFilter: 'Filter rows...',
   statusFilteredRows: (matches, total) => `${matches} of ${total}`,

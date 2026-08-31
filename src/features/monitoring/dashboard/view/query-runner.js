@@ -248,7 +248,9 @@ export function createQueryRunner(ctx) {
     const metric = extractMetric(data, cfg?.valueFields);
     if (metric.empty) {
       const empty = document.createElement('span');
-      empty.textContent = L.statusNoData;
+      empty.textContent = metric.notNumeric
+        ? L.statusNoNumericData(metric.notNumeric)
+        : L.statusNoData;
       el.appendChild(empty);
       return;
     }

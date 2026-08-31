@@ -4,6 +4,7 @@
 // state of its own — the `chartInstances` Map and labels are injected via ctx,
 // keeping a single owner for chart lifecycle (see CLAUDE.md risks note).
 import { formatValue } from './format-value';
+import { nonNumericDatasets } from './numeric-data';
 
 /** Palette applied one colour per label across datasets */
 export const CHART_COLORS = [
@@ -118,6 +119,17 @@ export function createChartRenderer(ctx) {
 
     if (!data.labels || data.labels.length === 0) {
       setCardStatus(configId, L.statusNoData);
+      return;
+    }
+
+    // Rows came back but NOTHING in them is a number — a text column charted as
+    // a measure. Bail only when every dataset fails: with a mix, the numeric
+    // ones still plot and the chart is worth drawing. Without this the canvas
+    // stays blank while the legend renders from `labels`, which reads as a
+    // broken card rather than a misconfigured one.
+    const unplottable = nonNumericDatasets(data.datasets);
+    if (unplottable.length > 0 && unplottable.length === (data.datasets?.length ?? 0)) {
+      setCardStatus(configId, L.statusNoNumericData(unplottable.join(', ')));
       return;
     }
 
