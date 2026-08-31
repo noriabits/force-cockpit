@@ -55,7 +55,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | Tab            | Description                                                                                                                                                                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                    |
-| **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted, REST), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                             |
+| **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted, REST), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                            |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, a browsable fields side panel, Tooling toggle, explained errors) with a filterable, sortable results table                                                                        |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with request tabs, custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                      |
@@ -284,7 +284,7 @@ Chains nest (a script reached by `then:` runs its own `then:` too) and run depth
 > The script form has no editor for `then:`; author it in the YAML via **📄 Open YAML**. Saving from the form preserves it.
 
 > [!NOTE]
-> The confirmation prompt shown on production and protected sandboxes appears **once**, for the script you clicked — called scripts do not prompt again.
+> On a production org or a protected sandbox, **every** click of Execute prompts for confirmation — nothing is remembered between runs. The prompt you answer covers the whole chain: the scripts it goes on to call do not each add a prompt of their own.
 
 ### AI scripts
 
@@ -336,11 +336,11 @@ inputs:
     label: User Id
     required: true
 rest:
-  method: PATCH                    # optional; GET | POST | PUT | PATCH | DELETE (default GET)
+  method: PATCH # optional; GET | POST | PUT | PATCH | DELETE (default GET)
   endpoint: /services/data/v65.0/sobjects/User/${userId}
-  headers:                         # optional
+  headers: # optional
     Sforce-Auto-Assign: 'FALSE'
-  body: |                          # optional; or `body-file: path/from/workspace/root.json`
+  body: | # optional; or `body-file: path/from/workspace/root.json`
     { "IsActive": false }
 ```
 
@@ -360,8 +360,9 @@ rest:
   ```
 
   Nested objects and lists are skipped (a chained value is always a string), and `${status}` always means the HTTP status even if the body has a field of that name.
+
 - **Placeholders** work in the endpoint, the header values and the body. Body values are JSON-escaped, so an apostrophe or a quote in an org value can't break the payload. Endpoint values are inserted **as-is, without URL-encoding** — the same as typing them in the REST tab — so if a value may contain `&`, `?` or a space, encode it yourself.
-- **The body must be a string** — a `|` block, or quoted as in the example below. Inline JSON (`body: {"Name": "Acme"}`) is a YAML *mapping*, not a string, and the script is rejected as invalid rather than silently sending an empty body.
+- **The body must be a string** — a `|` block, or quoted as in the example below. Inline JSON (`body: {"Name": "Acme"}`) is a YAML _mapping_, not a string, and the script is rejected as invalid rather than silently sending an empty body.
 - **Absolute URLs are allowed** (`https://…`), matching the REST tab. Be aware that your org's access token is sent as a `Bearer` header on those requests too, so only point a script at a host you trust.
 - **Cancellable.** The **✕ Cancel** button aborts the request in flight, not just its reply.
 
@@ -797,12 +798,64 @@ The `.vsix` for every release is available on the [GitHub Releases page](https:/
 
 ```bash
 npm install
-npm run build       # Build extension (copy assets + esbuild bundle)
-npm run watch       # Build in watch mode
-npm run compile     # TypeScript type-check only
-npm run package     # Build + create .vsix
-npm run audit:prod  # Check production dependencies for known vulnerabilities
+npm run build        # Build extension (copy assets + esbuild bundles)
+npm run watch        # Build in watch mode
+npm run compile      # TypeScript type-check only (both tsconfigs)
+npm run lint         # ESLint over src/ and scripts/, including the complexity gates
+npm test             # Vitest
+npm run package      # Build + create .vsix
+npm run audit:prod   # Check production dependencies for known vulnerabilities
 ```
+
+### Code layout conventions
+
+The extension has two compilation targets and the file extension tells you which
+one a file belongs to:
+
+| Extension                 | Runs in                       | Checked by `npm run compile`                                        |
+| ------------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| `.ts`                     | The extension host (Node)     | `tsconfig.host.json` — no DOM                                       |
+| `.ts` under a `view/` dir | **The webview**               | `tsconfig.host.json` — no DOM, which is _why_ it must stay DOM-free |
+| `.ts` under `src/shared/` | Both                          | **Both** configs — so it may import neither DOM nor Node            |
+| `.tsx`                    | The webview (browser sandbox) | `tsconfig.webview.json` — DOM + Preact JSX                          |
+| `.js`                     | The webview                   | `tsconfig.webview.json`, only with a `// @ts-check` pragma          |
+
+There are **three** tsconfigs and only two of them are gates. `tsconfig.host.json`
+and `tsconfig.webview.json` are the build, run by `npm run compile`, and they are
+what enforce the separation above. `tsconfig.json` is for your **editor** only:
+VS Code resolves a file to the nearest `tsconfig.json` and to nothing else, so
+without it every `.tsx` file showed `Cannot use JSX` / `react/jsx-runtime`
+squiggles even though the build was green. It is the union of the other two, so
+it is deliberately weaker — it will not flag a host module reaching for
+`document`. `npm run compile` still will.
+
+The two middle rows are the confusable ones. A pure helper like
+`select-clause.ts` or `table-sort.ts` **runs in the browser** but is compiled by
+the _host_ config, which has no DOM lib — that is not an oversight, it is the
+mechanism that keeps those files importable from both sides. Reach for `window`
+in one and the build fails; that is the rule working.
+
+A few consequences worth knowing before you edit:
+
+- **`.tsx` means "browser", not "has JSX".** A DOM-coupled module carries that
+  extension even with no markup in it, because it is the only thing keeping the
+  host type-check from trying to compile `window`.
+- **Filenames follow the layer, not the file type.** Everything in the webview
+  is kebab-case (`card-builder.js`, `select-clause.ts`, `edit-form.tsx`) —
+  including Preact components, which are _not_ PascalCase here. Host modules are
+  `PascalCase` when they export a class and `camelCase` when they export pure
+  functions. Component _symbols_ stay PascalCase either way.
+- **Webview UI is [Preact](https://preactjs.com) + signals** for new code.
+  Existing hand-written DOM modules are migrated as they are touched, not in
+  bulk. Signals must not be shared across feature bundles — each bundle embeds
+  its own Preact instance.
+- **Every host ↔ webview message name lives in `src/shared/protocol/`.** Both
+  compilation targets import it, so a typo is a build error instead of a message
+  that silently goes nowhere. Add the name there before you use it.
+- **ESLint enforces complexity ceilings** (`max-lines`, `max-lines-per-function`,
+  `complexity`). They are set just above the current worst offender and are
+  tightened over time, so they should never fail on existing code — only on new
+  code that is worse than anything already there.
 
 ---
 
