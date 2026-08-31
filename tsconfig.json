@@ -1,16 +1,50 @@
+// The EDITOR's project. Not a build gate — see `npm run compile`, which runs the
+// two strict configs beside this one.
+//
+// Why it exists: VS Code resolves a file to the nearest `tsconfig.json` and to
+// nothing else — a config under any other name is never auto-discovered. The
+// build splits `src/` into two targets with deliberately disjoint `lib`/`types`
+// (`tsconfig.host.json`, no DOM; `tsconfig.webview.json`, no @types/node), and
+// the host config EXCLUDED `src/**/*.tsx`. So every `.tsx` file fell into an
+// inferred project with no `jsx` setting at all, and the editor reported
+// TS17004 / TS7026 / "requires the module path 'react/jsx-runtime'" on every
+// JSX element in the file — while `npm run compile` was green, because the
+// command line names the right config and the editor cannot.
+//
+// This config is the UNION of the two targets — every file, DOM + node libs,
+// Preact JSX — so the editor understands each file. It is deliberately weaker
+// than either: it cannot notice a host module reaching for `document`, or a
+// webview module reaching for `process`. Both remain build errors, caught by
+// the strict configs in CI. That is the trade: the editor stops being able to
+// flag one class of mistake it never flagged in `.tsx` files anyway, and in
+// exchange those files stop being unreadable.
+//
+// Keep it green. It is a union of two passing configs, so it should be — if it
+// ever is not, the editor goes noisy and people start ignoring squiggles.
 {
   "compilerOptions": {
-    "module": "commonjs",
     "target": "ES2020",
-    "outDir": "out",
-    "lib": ["ES2020"],
-    "sourceMap": true,
-    "rootDir": "src",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    // Both targets' libs at once. Each strict config narrows this back down.
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["node", "vscode"],
+    // What the webview bundles are built with (see scripts/build.mjs).
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    // `checkJs: false` mirrors tsconfig.webview.json: only files carrying a
+    // `// @ts-check` pragma are checked, which is what the IDE already did.
+    "allowJs": true,
+    "checkJs": false,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "exclude": ["node_modules", ".vscode-test", "src/**/*.test.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js"],
+  // Tests are excluded from both strict configs today (a known debt recorded in
+  // tsconfig.webview.json); excluding them here keeps the editor consistent
+  // with the build rather than inventing a third policy.
+  "exclude": ["node_modules", ".vscode-test", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

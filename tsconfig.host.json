@@ -1,0 +1,38 @@
+// The extension HOST target: everything that runs in Node, inside VS Code.
+//
+// One of the two build gates (`npm run compile` runs this, then
+// tsconfig.webview.json). The pair is what enforces the layer split described in
+// CLAUDE.md — this config has NO DOM lib, so a host module reaching for
+// `window`/`document` is a build error, and so is a pure `view/*.ts` helper that
+// stops being DOM-free. That is the mechanism, not a side effect: those helpers
+// are shared by both targets and are compiled HERE, which is what keeps them
+// importable from the host as well as the webview bundles.
+//
+// `.tsx` is excluded on purpose — it is this repo's marker for a browser-context
+// module (see src/features/shared/view/host.tsx) and belongs to the webview
+// config. TypeScript's `*.ts` include glob does not match `.tsx` anyway; the
+// exclude is stated so the intent is not left to a glob subtlety.
+//
+// `types` is explicit rather than "whatever @types/* happens to be installed",
+// so a transitively-installed package cannot quietly reintroduce DOM globals
+// that `lib` deliberately leaves out. Package-scoped types (@types/js-yaml and
+// friends) still resolve normally through imports — `types` only governs the
+// global auto-include.
+//
+// Tests are excluded here and checked by nothing; that asymmetry is known and
+// recorded in tsconfig.webview.json. Do not "fix" it by weakening either gate.
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "types": ["node", "vscode"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", ".vscode-test", "src/**/*.test.ts", "src/**/*.tsx"]
+}

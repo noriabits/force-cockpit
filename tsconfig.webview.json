@@ -6,6 +6,8 @@
   // The base tsconfig.json (Node host, no DOM, no allowJs) never sees these
   // files, which is why `// @ts-check` errors only showed up in the editor.
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "target": "ES2020",
@@ -21,6 +23,18 @@
     "checkJs": false,
     "noEmit": true
   },
-  "include": ["src/**/*.js"],
+  "include": ["src/**/*.js", "src/**/*.tsx", "src/shared/**/*.ts"],
+  // The `*.test.tsx` component tests ARE checked here (they are matched by the
+  // `*.tsx` include and nothing excludes them) while `*.test.ts` is excluded
+  // from BOTH configs and so type-checked by nothing. That asymmetry is known
+  // and, for now, deliberate: turning host tests on surfaces ~79 pre-existing
+  // errors (loose `as` casts, tuple mocks, a `.at()` needing lib es2022) that
+  // have nothing to do with the code under test. Do NOT "fix" it by excluding
+  // `*.test.tsx` — that removes a gate that passes today. Fix it by turning the
+  // host tests on and clearing those errors, as its own change.
+  //
+  // It matters more than it looks: `FeatureModule.routes` is a `Partial<>`, so
+  // `routes['x'].handler` in an unchecked test is a possibly-undefined access
+  // no compiler is looking at.
   "exclude": ["node_modules", ".vscode-test", "src/**/*.test.ts"]
 }

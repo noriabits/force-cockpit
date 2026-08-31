@@ -23,6 +23,9 @@ package-lock.json
 **/*.ts
 out/**
 !dist/**
+# ...but never sourcemaps: `!dist/**` above re-includes everything under dist/,
+# and a stale map left by `npm run watch` would otherwise ship (9.5 MB once).
+dist/**/*.map
 force-cockpit/**
 scripts/**
 *.log
