@@ -17,7 +17,6 @@ import { extractQueryPlans } from './parsing/queryPlan';
 import type {
   ApexLogRow,
   CategoryLevels,
-  DebugLevelRecord,
   NoiseOptions,
   ParsedLog,
   TraceEntity,
@@ -138,10 +137,6 @@ export class DebugLogsService {
 
   async listTraceFlags(): Promise<TraceFlagInfo[]> {
     return this.traceFlags.listActive();
-  }
-
-  async listDebugLevels(): Promise<DebugLevelRecord[]> {
-    return this.traceFlags.listDebugLevels();
   }
 
   /**

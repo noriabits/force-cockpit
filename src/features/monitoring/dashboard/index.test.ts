@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFeatureContext } from '../../__fixtures__/featureContext';
 
 const showWarningMessage = vi.fn();
 vi.mock('vscode', () => ({
@@ -53,16 +54,12 @@ describe('monitoring snooze persistence', () => {
       'monitoring.notificationCooldowns': { 'chart1:0': futureTime },
     });
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
@@ -93,17 +90,13 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
     // Trigger a query for the "expired" config — should NOT be suppressed
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
@@ -128,16 +121,12 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
@@ -173,16 +162,12 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
@@ -218,14 +203,10 @@ describe('monitoring snooze persistence', () => {
       'monitoring.notificationCooldowns': { 'chart1:0': futureTime, 'other:0': futureTime },
     });
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
@@ -255,14 +236,10 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
@@ -290,16 +267,12 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
     serviceInstance.runQuery.mockResolvedValue({
@@ -323,16 +296,12 @@ describe('monitoring snooze persistence', () => {
     showWarningMessage.mockResolvedValue(undefined);
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const { factory } = createFeature({
-      builtInPath: '',
-      userPath: '',
-      privatePath: '',
-      workspaceState: memento as any,
-    });
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
-    const feature = factory(cm);
+    const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
 
-    const handler = feature.routes['runMonitoringQuery'].handler;
+    const handler = feature.routes['runMonitoringQuery']!.handler;
     const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
     const serviceInstance = (mockService as any).mock.results.at(-1).value;
 

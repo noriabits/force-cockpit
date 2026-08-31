@@ -42,7 +42,7 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "media/**/*.js"],
   // Tests are excluded from both strict configs today (a known debt recorded in
   // tsconfig.webview.json); excluding them here keeps the editor consistent
   // with the build rather than inventing a third policy.

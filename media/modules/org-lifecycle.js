@@ -98,7 +98,9 @@
   }
 
   // ── Message handlers ────────────────────────────────────────────────────
-  win.__onMessage('orgConnecting', (/** @type {any} */ msg) => setConnecting(msg.orgName));
+  // `?.` because this is the untrusted side of the boundary — the protocol says
+  // `data` is always sent, but nothing here can check that.
+  win.__onMessage('orgConnecting', (/** @type {any} */ msg) => setConnecting(msg.data?.orgName));
 
   win.__onMessage('orgConnected', (/** @type {any} */ msg) => {
     setConnected(msg.data);
@@ -141,8 +143,11 @@
   });
 
   // ── Refresh Org buttons (header + empty state) ──────────────────────────
-  /** @type {HTMLButtonElement[]} */
-  const refreshButtons = [btnRefreshOrg, btnRefreshOrgEmpty].filter((/** @type {any} */ b) => b);
+  // No `@type {any}` on the parameter: that annotation is what defeated TS's
+  // inferred type predicate, so `.filter` returned `(HTMLButtonElement | null)[]`
+  // and the declared type above was a lie the checker rejected. Typed as written,
+  // TS narrows the result to HTMLButtonElement[] on its own.
+  const refreshButtons = [btnRefreshOrg, btnRefreshOrgEmpty].filter((b) => b !== null);
 
   refreshButtons.forEach((btn) => {
     btn.addEventListener('click', () => {

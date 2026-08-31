@@ -35,16 +35,24 @@
   );
   if (!panel || !searchInput || !pillsContainer) return;
 
+  // Re-bound after the guard because TS drops the narrowing inside the nested
+  // FUNCTION DECLARATIONS below: those are hoisted, so the checker cannot prove
+  // they only run after the check above, and JSDoc has no `!` operator. The
+  // casts are honest — the guard on the line above is what makes them true.
+  const panelEl = /** @type {HTMLElement} */ (panel);
+  const searchEl = /** @type {HTMLInputElement} */ (searchInput);
+  const pillsEl = /** @type {HTMLElement} */ (pillsContainer);
+
   let activeCategory = 'all';
 
   const noResults = document.createElement('div');
   noResults.className = 'feature-no-results';
   noResults.textContent = 'No matching features found.';
-  panel.appendChild(noResults);
+  panelEl.appendChild(noResults);
 
   function applyFilters() {
-    const query = searchInput.value.toLowerCase().trim();
-    const sections = panel.querySelectorAll('.accordion');
+    const query = searchEl.value.toLowerCase().trim();
+    const sections = panelEl.querySelectorAll('.accordion');
     let visible = 0;
 
     sections.forEach((el) => {
@@ -66,13 +74,13 @@
    */
   function setActiveCategory(category, activePill) {
     activeCategory = category;
-    pillsContainer.querySelectorAll('.category-pill').forEach((p) => {
+    pillsEl.querySelectorAll('.category-pill').forEach((p) => {
       p.classList.toggle('active', p === activePill);
     });
     applyFilters();
   }
 
-  const accordions = panel.querySelectorAll('.accordion[data-category]');
+  const accordions = panelEl.querySelectorAll('.accordion[data-category]');
   const categories = /** @type {string[]} */ ([
     ...new Set([...accordions].map((a) => a.getAttribute('data-category'))),
   ]).sort();
@@ -82,16 +90,16 @@
     allPill.className = 'category-pill active';
     allPill.textContent = 'All';
     allPill.addEventListener('click', () => setActiveCategory('all', allPill));
-    pillsContainer.appendChild(allPill);
+    pillsEl.appendChild(allPill);
 
     for (const cat of categories) {
       const pill = /** @type {HTMLButtonElement} */ (document.createElement('button'));
       pill.className = 'category-pill';
       pill.textContent = cat;
       pill.addEventListener('click', () => setActiveCategory(cat, pill));
-      pillsContainer.appendChild(pill);
+      pillsEl.appendChild(pill);
     }
   }
 
-  searchInput.addEventListener('input', applyFilters);
+  searchEl.addEventListener('input', applyFilters);
 })();

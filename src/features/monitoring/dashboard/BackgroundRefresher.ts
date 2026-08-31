@@ -12,6 +12,7 @@ import {
   fireRowCountNotifications,
 } from './notifications';
 import { hasNotifications } from './notification-config';
+import type { HostMessage } from '../../../shared/protocol';
 
 // Re-exported so existing importers (and tests) keep working after the
 // predicate moved to the leaf `notification-config` module shared with the webview.
@@ -23,7 +24,7 @@ interface RefresherOptions {
   service: MonitoringDashboardService;
   connectionManager: ConnectionManager;
   workspaceState: vscode.Memento;
-  postToWebview: (msg: unknown) => void;
+  postToWebview: (msg: HostMessage) => void;
   outputChannel?: vscode.OutputChannel;
 }
 

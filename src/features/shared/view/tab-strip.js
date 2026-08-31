@@ -46,7 +46,10 @@ const REORDER_DEADZONE_PX = 6;
  * @typedef {Object} TabStripCtx
  * @property {HTMLElement} tabBarEl
  * @property {{ postMessage: (msg: any) => void }} vscode
- * @property {string} persistType  Message type the tab list is persisted under.
+ * @property {import('../../../shared/protocol').TabPersistType} persistType
+ *   Message type the tab list is persisted under. Narrowed to the two real names
+ *   ('saveQueryTabs' | 'saveRestCallTabs') because this is the one place a
+ *   message type is posted from a VARIABLE — the protocol union cannot see it.
  * @property {() => any} newPayload  Payload for a brand-new tab.
  * @property {(record: any) => any} payloadOf  The persisted payload fields of a tab/record.
  * @property {() => any} readUI  Payload as the live controls currently hold it.

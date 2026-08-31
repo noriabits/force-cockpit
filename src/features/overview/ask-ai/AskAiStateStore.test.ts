@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AskAiStateStore, DEFAULT_STATE } from './AskAiStateStore';
+import { createAskAiStateStore, DEFAULT_STATE } from './AskAiStateStore';
 
 function makeMemento() {
   const store = new Map<string, unknown>();
@@ -11,9 +11,9 @@ function makeMemento() {
   };
 }
 
-describe('AskAiStateStore', () => {
+describe('createAskAiStateStore', () => {
   it('starts from the defaults — auto model, both tools on', () => {
-    const state = new AskAiStateStore(makeMemento()).getState();
+    const state = createAskAiStateStore(makeMemento()).getState();
     expect(state).toEqual(DEFAULT_STATE);
     expect(state.modelId).toBe('');
     expect(state.allowWorkspaceFiles).toBe(true);
@@ -22,9 +22,9 @@ describe('AskAiStateStore', () => {
 
   it('merges a partial patch and persists it', async () => {
     const memento = makeMemento();
-    const store = new AskAiStateStore(memento);
+    const store = createAskAiStateStore(memento);
     await store.save({ allowOrgQueries: false });
-    const state = new AskAiStateStore(memento).getState();
+    const state = createAskAiStateStore(memento).getState();
     expect(state.allowOrgQueries).toBe(false);
     // Untouched keys keep their defaults.
     expect(state.allowWorkspaceFiles).toBe(true);
@@ -33,7 +33,7 @@ describe('AskAiStateStore', () => {
   it('fills in keys added after the state was first written', () => {
     const memento = makeMemento();
     void memento.update('askAi.state', { modelId: 'gpt-4o' });
-    const state = new AskAiStateStore(memento).getState();
+    const state = createAskAiStateStore(memento).getState();
     expect(state.modelId).toBe('gpt-4o');
     expect(state.allowWorkspaceFiles).toBe(true);
   });

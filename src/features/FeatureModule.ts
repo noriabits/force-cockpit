@@ -1,4 +1,5 @@
-import type { ConnectionManager } from '../salesforce/connection';
+import type { FeatureContext } from './FeatureContext';
+import type { HostToWebviewType, WebviewToHostType } from '../shared/protocol';
 
 /**
  * Resolve a handler with this to post nothing back. For routes that are
@@ -27,8 +28,11 @@ export interface RouteDescriptor {
     signal?: AbortSignal,
     onChunk?: (chunk: string) => void,
   ) => Promise<unknown>;
-  successType: string;
-  errorType: string;
+  // Typed against the shared protocol so a typo is a build error rather than a
+  // reply the webview silently never receives. Adding a route means adding its
+  // names to the unions in src/shared/protocol/messages.ts first.
+  successType: HostToWebviewType;
+  errorType: HostToWebviewType;
 }
 
 export interface FeatureModule {
@@ -42,11 +46,16 @@ export interface FeatureModule {
   // Should set a global (e.g. window.MyFeatureLabels) with all user-facing strings
   // so they are centralised and not scattered across view.js and view.html.
   labelsPath?: string; // e.g. path.join('dist', 'features', 'utils', 'clone-user', 'labels.js')
-  routes: Record<string, RouteDescriptor>;
+  routes: Partial<Record<WebviewToHostType, RouteDescriptor>>;
   // Optional: release any resources the factory acquired (e.g. registered
   // providers/emitters). Called by MainPanel when the panel is disposed so a
   // reopened panel can re-create the feature without leaking registrations.
   dispose?: () => void;
 }
 
-export type FeatureModuleFactory = (connectionManager: ConnectionManager) => FeatureModule;
+/**
+ * A feature is built from the shared context, not from a bare ConnectionManager.
+ * Use `defineFeature` unless the feature genuinely needs to expose something
+ * beyond a FeatureModule (monitoring returns its BackgroundRefresher too).
+ */
+export type FeatureModuleFactory = (ctx: FeatureContext) => FeatureModule;

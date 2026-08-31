@@ -32,14 +32,6 @@ export interface DebugLevelPreset {
   levels: CategoryLevels;
 }
 
-/** An existing DebugLevel record in the org. */
-export interface DebugLevelRecord {
-  id: string;
-  developerName: string;
-  masterLabel: string;
-  levels: CategoryLevels;
-}
-
 /** `USER_DEBUG` traces a user; `CLASS_TRACING` overrides levels inside one class/trigger. */
 export type TraceLogType = 'USER_DEBUG' | 'CLASS_TRACING' | 'DEVELOPER_LOG';
 

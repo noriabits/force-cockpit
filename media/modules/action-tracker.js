@@ -81,8 +81,13 @@
     vscode.postMessage({ type: 'operationEnded', count: 0 });
   });
 
-  // operationStarted/operationEnded are echoed to the webview for busy-tracking on the host side —
-  // no webview action needed. Register no-ops so they don't fall through to feature handlers.
-  win.__onMessage('operationStarted', () => {});
-  win.__onMessage('operationEnded', () => {});
+  // NOTE: this file used to register inbound no-op handlers for the two
+  // operation-lifecycle messages posted above, on the claim that the host
+  // echoes them back. It does not: `MessageRouter.handle`'s cases call
+  // `operations.startWebviewOp(opId)` / `endWebviewOp(opId)` and return with no
+  // reply. Both names are `WebviewToHostType` — outbound only — so the handlers
+  // could never fire, and nothing could fall through to feature handlers
+  // either. Removed. (Named indirectly on purpose: the audit that found this
+  // greps for a subscription naming a webview->host type, and a comment
+  // spelling one out reads as a live hit.)
 })();

@@ -6,17 +6,18 @@ import { MainPanel } from './panels/MainPanel';
 import { getOrgDetails, refreshOrgToken } from './utils/sfCli';
 import { buildOrgUrl } from './utils/salesforceUrl';
 import { featureRegistry } from './features/registry';
-import { createYamlScriptsFeature } from './features/utils/yaml-scripts/index';
-import { createExecutionLogsFeature } from './features/utils/execution-logs/index';
+import { yamlScriptsFeature } from './features/utils/yaml-scripts/index';
+import { executionLogsFeature } from './features/utils/execution-logs/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
-import { createDebugLogsFeature } from './features/debug-logs/explorer/index';
-import { createAskAiFeature } from './features/overview/ask-ai/index';
-import { createSoqlFeature } from './features/soql/query-editor/index';
+import { debugLogsFeature } from './features/debug-logs/explorer/index';
+import { askAiFeature } from './features/overview/ask-ai/index';
+import { soqlFeature } from './features/soql/query-editor/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
 import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
 import { OrgConnectionController } from './services/org/OrgConnectionController';
+import type { FeatureContext } from './features/FeatureContext';
 import { DescribeService } from './services/describe/DescribeService';
 import { DescribeDiskCache } from './services/describe/DescribeDiskCache';
 import { registerChatModelWatcher } from './services/ai/ChatModelWatcher';
@@ -91,7 +92,9 @@ export function activate(context: vscode.ExtensionContext): void {
   function reloadConfig(): void {
     cockpitConfig = loadConfig(context.extensionPath, userBasePath);
     connectionManager.setApiVersion(cockpitConfig.apiVersion);
-    MainPanel.currentPanel?.updateConfig(cockpitConfig);
+    // No config argument: the panel reads it through `featureCtx.getConfig`,
+    // which closes over the `cockpitConfig` reassigned just above.
+    MainPanel.currentPanel?.refreshForConfigChange();
   }
   if (workspaceRoot) {
     const configWatcher = vscode.workspace.createFileSystemWatcher(
@@ -103,54 +106,45 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(configWatcher);
   }
 
-  const monitoringFeature = createMonitoringDashboardFeature({
-    builtInPath: path.join(builtInPath, 'monitoring'),
-    userPath: path.join(userBasePath, 'monitoring'),
-    privatePath: path.join(userBasePath, 'private', 'monitoring'),
-    workspaceState: context.workspaceState,
+  // Everything shared, assembled once. Feature factories take this instead of
+  // each declaring its own options bag — which is what used to make five of the
+  // seven features unable to use `defineFeature` and turned this file into a
+  // by-hand wiring exercise.
+  //
+  // `getConfig` is a getter, not a snapshot, so a live config.yaml reload is
+  // observed by whoever reads it: the debug-log noise filter, and MainPanel's
+  // own `protectedSandboxes` check (which used to hold a snapshot kept in step
+  // by hand from `reloadConfig` above).
+  const featureCtx: FeatureContext = {
     connectionManager,
+    workspaceState: context.workspaceState,
+    describeService,
+    gateway: lmGateway,
+    workspaceSearch,
+    skillsRepo,
+    paths: {
+      // Note: monitoring/scripts sub-paths are derived per-feature from these.
+      builtIn: builtInPath,
+      user: userBasePath,
+      private: path.join(userBasePath, 'private'),
+      workspaceRoot,
+      logs: path.join(userBasePath, 'logs'),
+    },
     outputChannel,
     postToWebview: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
-  });
+    getConfig: () => cockpitConfig,
+  };
+
+  const monitoringFeature = createMonitoringDashboardFeature(featureCtx);
 
   const allFeatures = [
     ...featureRegistry,
-    createSoqlFeature({
-      workspaceState: context.workspaceState,
-      describeService,
-      gateway: lmGateway,
-    }),
-    createYamlScriptsFeature({
-      builtInPath: path.join(builtInPath, 'scripts'),
-      userPath: path.join(userBasePath, 'scripts'),
-      privatePath: path.join(userBasePath, 'private', 'scripts'),
-      workspaceRoot,
-      workspaceState: context.workspaceState,
-      skillsRepo,
-      describeService,
-      gateway: lmGateway,
-      workspaceSearch,
-      postToWebview: (msg) => MainPanel.currentPanel?.postWebviewMessage(msg),
-    }),
+    soqlFeature,
+    yamlScriptsFeature,
     monitoringFeature.factory,
-    createExecutionLogsFeature(path.join(userBasePath, 'logs')),
-    createDebugLogsFeature({
-      workspaceState: context.workspaceState,
-      describeService,
-      gateway: lmGateway,
-      workspaceSearch,
-      logsPath: path.join(userBasePath, 'logs'),
-      // Read through the closure so a live config.yaml reload takes effect.
-      getNoiseOptions: () => cockpitConfig.debugLogNoise,
-    }),
-    createAskAiFeature({
-      workspaceState: context.workspaceState,
-      userBasePath,
-      describeService,
-      gateway: lmGateway,
-      workspaceSearch,
-      skillsRepo,
-    }),
+    executionLogsFeature,
+    debugLogsFeature,
+    askAiFeature,
   ];
 
   // Background auto-refresh: keeps notification-enabled dashboards polling even when
@@ -233,14 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
   sidebarView.title = ` v${context.extension.packageJSON.version}`;
   sidebarView.onDidChangeVisibility(({ visible }) => {
     if (!visible) return;
-    MainPanel.createOrShow(
-      context,
-      connectionManager,
-      allFeatures,
-      cockpitConfig,
-      describeService,
-      outputChannel,
-    );
+    MainPanel.createOrShow(context, featureCtx, allFeatures);
     void vscode.commands.executeCommand('workbench.action.closeSidebar');
   });
   context.subscriptions.push(sidebarView);
@@ -248,14 +235,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // --- Commands ---
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
-      MainPanel.createOrShow(
-        context,
-        connectionManager,
-        allFeatures,
-        cockpitConfig,
-        describeService,
-        outputChannel,
-      );
+      MainPanel.createOrShow(context, featureCtx, allFeatures);
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {

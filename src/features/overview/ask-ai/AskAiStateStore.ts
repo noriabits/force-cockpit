@@ -1,6 +1,8 @@
-// Remembers the Overview tab's "Ask the AI" panel choices between sessions
-// (workspaceState-backed, same pattern as DebugLogsStateStore/RestCallStateStore).
-// Pure apart from the injected Memento, so it is unit-testable with a plain object.
+// Remembers the Overview tab's "Ask the AI" panel choices between sessions.
+// The get/merge/save mechanics live in the shared MementoStore; only the key,
+// the shape and the defaults are this feature's own.
+import { MementoStore, type MementoLike } from '../../../services/state/MementoStore';
+
 const KEY = 'askAi.state';
 
 export interface AskAiState {
@@ -18,22 +20,6 @@ export const DEFAULT_STATE: AskAiState = {
   allowOrgQueries: true,
 };
 
-interface MementoLike {
-  get<T>(key: string, defaultValue: T): T;
-  update(key: string, value: unknown): Thenable<void> | Promise<void>;
-}
-
-export class AskAiStateStore {
-  constructor(private readonly memento: MementoLike) {}
-
-  getState(): AskAiState {
-    const stored = this.memento.get<Partial<AskAiState>>(KEY, {});
-    return { ...DEFAULT_STATE, ...stored };
-  }
-
-  async save(patch: Partial<AskAiState>): Promise<AskAiState> {
-    const next = { ...this.getState(), ...patch };
-    await this.memento.update(KEY, next);
-    return next;
-  }
-}
+/** Binds the key and defaults; the get/merge/save mechanics are MementoStore's. */
+export const createAskAiStateStore = (memento: MementoLike): MementoStore<AskAiState> =>
+  new MementoStore(memento, KEY, DEFAULT_STATE);

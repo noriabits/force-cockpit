@@ -10,11 +10,12 @@
 // post reaches all four surfaces with no consumer-side changes.
 import * as vscode from 'vscode';
 import type { LmGateway } from './types';
+import type { HostMessage } from '../../shared/protocol';
 
 export interface ChatModelWatcherDeps {
   gateway: Pick<LmGateway, 'listModels'>;
   /** Delivers to the webview; a no-op when the panel is closed. */
-  post: (message: unknown) => void;
+  post: (message: HostMessage) => void;
   isPanelOpen: () => boolean;
   log?: (message: string) => void;
   /** Trailing debounce window. Copilot fires the event repeatedly as it registers. */

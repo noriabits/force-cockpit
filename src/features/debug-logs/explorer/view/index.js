@@ -155,7 +155,6 @@ import { createTraceFlagPanel } from './trace-flag-panel';
         case 'traceFlagStarted':
         case 'traceFlagExtended':
         case 'traceFlagStopped':
-        case 'traceFlagsLoaded':
           tracePanel.setTraceFlags(data.traceFlags ?? []);
           break;
         case 'traceFlagError':

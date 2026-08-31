@@ -33,7 +33,7 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('fs', () => ({ promises: { writeFile } }));
 
-import { MessageRouter } from './MessageRouter';
+import { MessageRouter, BUILT_IN_ROUTES } from './MessageRouter';
 import type { ConnectionManager } from '../salesforce/connection';
 import type { RestCallService } from '../services/rest/RestCallService';
 import type { RestCallStateStore } from '../services/rest/RestCallStateStore';
@@ -412,6 +412,82 @@ describe('MessageRouter feature routes', () => {
       },
     };
   }
+
+  it("a route's own return value wins over a same-named request field", async () => {
+    // `_dispatchFeatureRoute` echoes the WHOLE request onto the reply, which is
+    // load-bearing (the SOQL tab reads the request's `soql` back off
+    // `queryResult`). With the spread the other way round, a request field
+    // silently overwrote the reply: `saveMonitoringConfig` posts `{ config }`
+    // and returns `{ config: saved }`, so the webview got its own draft back
+    // instead of the persisted record.
+    const handler = vi.fn().mockResolvedValue({ config: 'saved' });
+    const { router, postMessage } = makeRouter({ features: [featureWith(handler)] });
+    await router.handle({ type: 'doThing', config: 'draft', opId: 'op1' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'thingDone',
+      data: expect.objectContaining({ config: 'saved', opId: 'op1' }),
+    });
+  });
+
+  it('refuses two features claiming the same route, naming both', () => {
+    // The one routing mistake the shared protocol cannot catch: both names are
+    // valid, so nothing upstream objects. Silently keeping the last
+    // registration leaves one feature's route dead with no symptom except a
+    // reply that never arrives — exactly what src/shared/protocol exists to
+    // eliminate. This map is the only place the collision is visible.
+    const a = featureWith(vi.fn());
+    const b = { ...featureWith(vi.fn()), id: 'other' };
+    expect(() => makeRouter({ features: [a, b] })).toThrow(
+      /Duplicate route "doThing".*"f".*"other"/,
+    );
+  });
+
+  it('refuses a feature claiming a BUILT-IN name, which handle answers first', () => {
+    // `handle`'s own switch returns on every built-in, so a feature route under
+    // one of those names is never reached — dead with no symptom but a reply
+    // that never arrives. Invisible to a check that only compares features to
+    // each other, which is why the owners map is seeded with them.
+    const shadowing = {
+      ...featureWith(vi.fn()),
+      id: 'greedy',
+      routes: { ready: { handler: vi.fn(), successType: 'x', errorType: 'y' } },
+    } as unknown as FeatureModule;
+    expect(() => makeRouter({ features: [shadowing] })).toThrow(
+      /Duplicate route "ready".*\(built-in\).*"greedy"/,
+    );
+  });
+
+  it('BUILT_IN_ROUTES lists exactly the names handle answers itself', async () => {
+    // The array and the switch are two statements of one fact. If they drift,
+    // the guard either misses a shadowed name or rejects a route that would
+    // have worked. Read the cases straight out of the source rather than
+    // restating them here, so this cannot pass by being updated in step.
+    // `importActual`, because this suite mocks `fs` for the routes under test.
+    const { readFileSync } = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const src = readFileSync(new URL('./MessageRouter.ts', import.meta.url), 'utf8');
+    // Bounded to `handle`'s OWN body — `_routeRestCall`, `_post`,
+    // `_dispatchFeatureRoute` and `_route` follow it. None has a switch today,
+    // which is the only reason slicing to end-of-file used to pass; the first
+    // one added below would fail this test claiming BUILT_IN_ROUTES had drifted.
+    const start = src.indexOf('async handle(');
+    const end = src.indexOf('\n  private ', start);
+    const body = src.slice(start, end === -1 ? undefined : end);
+    const cases = [...body.matchAll(/case '([a-zA-Z]+)':/g)].map((m) => m[1]);
+    expect([...BUILT_IN_ROUTES].sort()).toEqual([...new Set(cases)].sort());
+  });
+
+  it('does not mistake an explicitly-undefined route for a claim', () => {
+    // `routes` is a Partial, so `{ doThing: undefined }` type-checks. It must
+    // register nothing — and in particular must not reserve the name and make
+    // a real registration elsewhere look like a duplicate.
+    const ghost = {
+      ...featureWith(vi.fn()),
+      id: 'ghost',
+      routes: { doThing: undefined },
+    } as unknown as FeatureModule;
+    const handler = vi.fn().mockResolvedValue({ ok: true });
+    expect(() => makeRouter({ features: [ghost, featureWith(handler)] })).not.toThrow();
+  });
 
   it('dispatches to the matching feature route and echoes context (opId) on success', async () => {
     const handler = vi.fn().mockResolvedValue({ value: 42 });

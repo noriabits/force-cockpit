@@ -1,8 +1,9 @@
-// Remembers the panel's choices between sessions (workspaceState-backed, same
-// pattern as RestCallStateStore). Pure apart from the injected Memento, so it
-// is unit-testable with a plain object.
+// Remembers the panel's choices between sessions. The get/merge/save mechanics
+// live in the shared MementoStore; only the key, the shape and the defaults are
+// this feature's own.
 import type { CategoryLevels } from './types';
 import { RECOMMENDED_PRESET_ID } from './debugLevelPresets';
+import { MementoStore, type MementoLike } from '../../../services/state/MementoStore';
 
 const KEY = 'debugLogs.state';
 
@@ -31,22 +32,6 @@ export const DEFAULT_STATE: DebugLogsState = {
   liveTail: true,
 };
 
-interface MementoLike {
-  get<T>(key: string, defaultValue: T): T;
-  update(key: string, value: unknown): Thenable<void> | Promise<void>;
-}
-
-export class DebugLogsStateStore {
-  constructor(private readonly memento: MementoLike) {}
-
-  getState(): DebugLogsState {
-    const stored = this.memento.get<Partial<DebugLogsState>>(KEY, {});
-    return { ...DEFAULT_STATE, ...stored };
-  }
-
-  async save(patch: Partial<DebugLogsState>): Promise<DebugLogsState> {
-    const next = { ...this.getState(), ...patch };
-    await this.memento.update(KEY, next);
-    return next;
-  }
-}
+/** Binds the key and defaults; the get/merge/save mechanics are MementoStore's. */
+export const createDebugLogsStateStore = (memento: MementoLike): MementoStore<DebugLogsState> =>
+  new MementoStore(memento, KEY, DEFAULT_STATE);

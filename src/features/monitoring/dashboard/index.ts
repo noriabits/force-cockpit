@@ -1,7 +1,6 @@
 import * as path from 'path';
-import * as vscode from 'vscode';
-import type { ConnectionManager } from '../../../salesforce/connection';
 import type { FeatureModule, FeatureModuleFactory } from '../../FeatureModule';
+import type { FeatureContext } from '../../FeatureContext';
 import { MonitoringDashboardService } from './MonitoringDashboardService';
 import type { MonitoringConfig } from './types';
 import { BackgroundRefresher } from './BackgroundRefresher';
@@ -16,55 +15,40 @@ export interface MonitoringFeature {
   reloadConfigs: () => Promise<MonitoringConfig[]>;
 }
 
-export function createMonitoringDashboardFeature(opts: {
-  builtInPath: string;
-  userPath: string;
-  privatePath: string;
-  workspaceState: vscode.Memento;
-  /** When provided, the refresher and routes use this CM directly (eager construction). */
-  connectionManager?: ConnectionManager;
-  outputChannel?: vscode.OutputChannel;
-  /** Posts background-refresh results to the webview. No-op when MainPanel is closed. */
-  postToWebview?: (msg: unknown) => void;
-}): MonitoringFeature {
-  loadPersistedSnoozes(opts.workspaceState);
+export function createMonitoringDashboardFeature(ctx: FeatureContext): MonitoringFeature {
+  loadPersistedSnoozes(ctx.workspaceState);
 
+  // `ctx.paths` carries the cockpit BASE dirs; the `monitoring` sub-path is
+  // this feature's to add. Passing a base through raw is silently destructive —
+  // `loadYamlItems` walks `{category}/{sub-category}/*.yaml` from whatever it is
+  // given, so the base would make `scripts/` and `logs/` look like chart
+  // categories. Covered by paths.test.ts.
   const paths = {
-    builtInPath: opts.builtInPath,
-    userPath: opts.userPath,
-    privatePath: opts.privatePath,
+    builtInPath: path.join(ctx.paths.builtIn, 'monitoring'),
+    userPath: path.join(ctx.paths.user, 'monitoring'),
+    privatePath: path.join(ctx.paths.private, 'monitoring'),
   };
-  const postToWebview = opts.postToWebview ?? (() => {});
 
-  // Eagerly construct service + refresher when a CM is provided (production path).
-  // When no CM is provided (legacy test path), we lazily build them inside the factory
-  // using the CM that MainPanel passes in, and the refresher will be a no-op until then.
-  let service: MonitoringDashboardService | null = opts.connectionManager
-    ? new MonitoringDashboardService(opts.connectionManager, paths)
-    : null;
-  let refresher: BackgroundRefresher | null = opts.connectionManager
-    ? new BackgroundRefresher({
-        service: service!,
-        connectionManager: opts.connectionManager,
-        workspaceState: opts.workspaceState,
-        postToWebview,
-        outputChannel: opts.outputChannel,
-      })
-    : null;
+  // Construction is eager and unconditional: the FeatureContext exists from
+  // activation, so the refresher can poll notification-enabled dashboards
+  // before the panel is ever opened. (This used to be built lazily inside the
+  // factory when no ConnectionManager was supplied, which needed null-checks
+  // throughout plus a no-op proxy for extension.ts to hold — all of which the
+  // context makes unnecessary.)
+  const service = new MonitoringDashboardService(ctx.connectionManager, paths);
+  const refresher = new BackgroundRefresher({
+    service,
+    connectionManager: ctx.connectionManager,
+    workspaceState: ctx.workspaceState,
+    postToWebview: ctx.postToWebview,
+    outputChannel: ctx.outputChannel,
+  });
 
-  const factory: FeatureModuleFactory = (connectionManager: ConnectionManager): FeatureModule => {
-    if (!service) {
-      service = new MonitoringDashboardService(connectionManager, paths);
-    }
-    if (!refresher) {
-      refresher = new BackgroundRefresher({
-        service,
-        connectionManager,
-        workspaceState: opts.workspaceState,
-        postToWebview,
-        outputChannel: opts.outputChannel,
-      });
-    }
+  // Takes no argument on purpose: the service and refresher above already closed
+  // over the activation-time context, and there is only ever one of it. The
+  // `FeatureModuleFactory` annotation is kept so this still slots into
+  // `allFeatures`, but it is documentation here, not a dependency.
+  const factory: FeatureModuleFactory = (): FeatureModule => {
     const base = path.join('dist', 'features', 'monitoring', 'dashboard');
     return {
       id: 'monitoring-dashboard',
@@ -76,37 +60,15 @@ export function createMonitoringDashboardFeature(opts: {
       routes: buildMonitoringRoutes({
         service,
         refresher,
-        connectionManager,
-        workspaceState: opts.workspaceState,
-        outputChannel: opts.outputChannel,
+        connectionManager: ctx.connectionManager,
+        workspaceState: ctx.workspaceState,
+        outputChannel: ctx.outputChannel,
       }),
     };
   };
 
-  // Lazy proxy: extension.ts may interact with the refresher before MainPanel opens.
-  // When the factory has not yet been invoked, all methods are safe no-ops.
-  const refresherProxy: BackgroundRefresher = {
-    start(configs: MonitoringConfig[]) {
-      refresher?.start(configs);
-    },
-    stop() {
-      refresher?.stop();
-    },
-    restart(configs: MonitoringConfig[]) {
-      refresher?.restart(configs);
-    },
-    get running() {
-      return refresher?.running ?? false;
-    },
-    get scheduledIds() {
-      return refresher?.scheduledIds ?? [];
-    },
-  } as unknown as BackgroundRefresher;
+  const reloadConfigs = async (): Promise<MonitoringConfig[]> =>
+    service.loadConfigs(loadHiddenBuiltins(ctx.workspaceState));
 
-  const reloadConfigs = async (): Promise<MonitoringConfig[]> => {
-    if (!service) return [];
-    return service.loadConfigs(loadHiddenBuiltins(opts.workspaceState));
-  };
-
-  return { factory, refresher: refresherProxy, reloadConfigs };
+  return { factory, refresher, reloadConfigs };
 }

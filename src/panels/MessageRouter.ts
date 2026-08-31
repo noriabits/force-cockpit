@@ -21,10 +21,56 @@ import type {
 import type { DescribeService } from '../services/describe/DescribeService';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { NO_REPLY, RouteError } from '../features/FeatureModule';
+import type {
+  ErrorPayload,
+  HostMessage,
+  HostToWebviewType,
+  WebviewMessage,
+  WebviewToHostType,
+} from '../shared/protocol';
 import { buildRecordUrl } from '../utils/salesforceUrl';
 import type { OperationRegistry } from './OperationRegistry';
 
-type IncomingMessage = { type: string; [key: string]: unknown };
+// Narrowed to the shared contract: `handle`'s switch now only compiles against
+// names that actually exist in the protocol, and `default` falls through to the
+// feature route map keyed by the same union.
+type IncomingMessage = WebviewMessage;
+
+/** Owner label for a route the switch in `handle` answers itself. */
+export const BUILT_IN_OWNER = '(built-in)';
+
+/**
+ * The names `handle`'s own switch answers, before a feature route is ever
+ * consulted.
+ *
+ * Listed rather than left implicit in the switch because they are half of the
+ * duplicate check: `handle` `return`s on each of these, so a FEATURE that
+ * registered one would be shadowed with no symptom but a reply that never
+ * arrives — the same silent no-op `src/shared/protocol` exists to eliminate,
+ * and invisible to a check that only compares features to each other.
+ *
+ * Typed as `WebviewToHostType[]`, so deleting a name from the protocol breaks
+ * this too. Keep it in step with the switch; the pair is asserted in
+ * `MessageRouter.test.ts`.
+ */
+export const BUILT_IN_ROUTES: readonly WebviewToHostType[] = [
+  'ready',
+  'openRecord',
+  'openExternalUrl',
+  'restCall',
+  'loadRestCallState',
+  'saveRestCallTabs',
+  'addRestCallHistory',
+  'saveRestCallSavedRequests',
+  'describeGlobal',
+  'describeSObject',
+  'operationStarted',
+  'operationEnded',
+  'cancelOperation',
+  'openInBrowser',
+  'refreshOrg',
+  'confirmAction',
+];
 
 interface MessageRouterDeps {
   webview: vscode.Webview;
@@ -45,7 +91,12 @@ export class MessageRouter {
   private readonly describeService: DescribeService;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
-  private readonly _routeMap = new Map<string, RouteDescriptor>();
+  // Keyed by the protocol union, not `string`: `get()` then only accepts a name
+  // that exists in `WebviewToHostType`, so the guarantee the contract makes
+  // survives the last hop into dispatch.
+  private readonly _routeMap = new Map<WebviewToHostType, RouteDescriptor>();
+  /** Feature id per claimed route, so a duplicate can name both sides. */
+  private readonly _routeOwners = new Map<WebviewToHostType, string>();
 
   constructor(deps: MessageRouterDeps) {
     this.webview = deps.webview;
@@ -55,8 +106,34 @@ export class MessageRouter {
     this.describeService = deps.describeService;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
+    // Seeded FIRST, so a feature claiming a built-in name collides with it
+    // rather than registering a route `handle` will never reach.
+    for (const type of BUILT_IN_ROUTES) this._routeOwners.set(type, BUILT_IN_OWNER);
     for (const feature of deps.features) {
-      for (const [type, route] of Object.entries(feature.routes)) {
+      const routes = feature.routes;
+      // `Object.entries` widens the key back to `string` and, because `routes`
+      // is a Partial, silently drops the `| undefined` from the value — so a
+      // route explicitly set to undefined would be stored as one. Iterating the
+      // keys and indexing keeps the value honest; the cast is only on the key,
+      // which is where TS genuinely cannot preserve the literal union.
+      for (const type of Object.keys(routes) as WebviewToHostType[]) {
+        const route = routes[type];
+        if (!route) continue;
+        // Two claims on the same name is the one routing mistake the shared
+        // protocol cannot catch — every name involved is valid, and this map is
+        // the only place the collision is visible. Silently keeping one of them
+        // leaves the other route dead with no symptom except a reply that never
+        // arrives, which is exactly the failure mode `src/shared/protocol`
+        // exists to eliminate. Fail at construction, in front of whoever just
+        // added it. Covers both a second FEATURE and a built-in (seeded above),
+        // which `handle` answers before any feature route is consulted.
+        const owner = this._routeOwners.get(type);
+        if (owner) {
+          throw new Error(
+            `Duplicate route "${type}": registered by both "${owner}" and "${feature.id}".`,
+          );
+        }
+        this._routeOwners.set(type, feature.id);
         this._routeMap.set(type, route);
       }
     }
@@ -155,14 +232,14 @@ export class MessageRouter {
         try {
           await vscode.commands.executeCommand('forceCockpit.openInBrowser');
         } finally {
-          this.webview.postMessage({ type: 'openInBrowserDone' });
+          this._post({ type: 'openInBrowserDone' });
         }
         return;
       case 'refreshOrg':
         try {
           await vscode.commands.executeCommand('forceCockpit.refreshOrg');
         } finally {
-          this.webview.postMessage({ type: 'refreshOrgDone' });
+          this._post({ type: 'refreshOrgDone' });
         }
         return;
       case 'confirmAction': {
@@ -171,7 +248,7 @@ export class MessageRouter {
           { modal: true },
           'Execute',
         );
-        this.webview.postMessage({
+        this._post({
           type: 'confirmActionResult',
           data: { confirmed: answer === 'Execute', requestId: message.requestId },
         });
@@ -222,6 +299,16 @@ export class MessageRouter {
     if (opId) this.operations.endTerminalOp(opId);
   }
 
+  /**
+   * The ONE place this class talks to the webview, so every `type` is checked
+   * against `HostToWebviewType`. The built-in routes used to call
+   * `webview.postMessage` directly, which checks nothing at the call site.
+   */
+  private _post(message: HostMessage): void {
+    // eslint-disable-next-line no-restricted-syntax -- the chokepoint itself
+    this.webview.postMessage(message);
+  }
+
   private async _dispatchFeatureRoute(message: IncomingMessage): Promise<void> {
     const route = this._routeMap.get(message.type);
     if (!route) return;
@@ -230,8 +317,7 @@ export class MessageRouter {
     const ac = opId ? this.operations.createTerminalAbort(opId) : undefined;
 
     const postChunk = opId
-      ? (chunk: string) =>
-          this.webview.postMessage({ type: 'scriptLogChunk', data: { opId, chunk } })
+      ? (chunk: string) => this._post({ type: 'scriptLogChunk', data: { opId, chunk } })
       : undefined;
 
     await this._route(
@@ -251,24 +337,39 @@ export class MessageRouter {
    */
   private async _route<T>(
     action: () => Promise<T>,
-    successType: string,
-    errorType: string,
+    successType: HostToWebviewType,
+    errorType: HostToWebviewType,
     context: Record<string, unknown> = {},
   ): Promise<void> {
     try {
       const data = await action();
       if (data === NO_REPLY) return;
+      // `context` FIRST, so the route's own return value wins a name collision.
+      // `_dispatchFeatureRoute` passes the whole request message as context, and
+      // with the spread the other way round the request silently overwrote the
+      // reply: `saveMonitoringConfig` is posted as `{ config }` and returns
+      // `{ config: saved }`, so the webview received back its own unsaved draft
+      // instead of the persisted record — whose `id` the host re-slugs from
+      // folder + name, which is exactly the value the rename path cares about.
+      // The same hazard was already fixed for `restCall` by narrowing its
+      // context to `{ opId }`; that is not an option here, because the SOQL tab
+      // deliberately relies on the request's `soql` riding back on `queryResult`
+      // to feed the AI panel's "They ran:" block. Flipping the order keeps every
+      // such echo working and changes only the collision case. It also matches
+      // the error path below, which already spreads `context` first.
       const dataObj =
         typeof data === 'object' && data !== null
-          ? { ...(data as Record<string, unknown>), ...context }
-          : { result: data, ...context };
-      this.webview.postMessage({ type: successType, data: dataObj });
+          ? { ...context, ...(data as Record<string, unknown>) }
+          : { ...context, result: data };
+      this._post({ type: successType, data: dataObj });
     } catch (err) {
       const extra = err instanceof RouteError ? err.data : {};
-      this.webview.postMessage({
-        type: errorType,
-        data: { ...context, ...extra, message: (err as Error).message },
-      });
+      const data: ErrorPayload = {
+        ...context,
+        ...extra,
+        message: (err as Error).message,
+      };
+      this._post({ type: errorType, data });
     }
   }
 }

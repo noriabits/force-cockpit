@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeFeatureContext } from '../../__fixtures__/featureContext';
 
 const { showErrorMessage, showTextDocument, writeFile, workspaceFolders } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
@@ -46,10 +47,9 @@ vi.mock('./QueryStateStore', () => ({
   },
 }));
 
-import { createSoqlFeature } from './index';
+import { soqlFeature } from './index';
 import { MessageRouter } from '../../../panels/MessageRouter';
 import type { ConnectionManager } from '../../../salesforce/connection';
-import type { DescribeService } from '../../../services/describe/DescribeService';
 import type { OperationRegistry } from '../../../panels/OperationRegistry';
 
 /**
@@ -64,11 +64,7 @@ function makeRouter(opts: { operations?: Partial<OperationRegistry> } = {}) {
     off: vi.fn(),
     getCurrentOrg: () => null,
   } as unknown as ConnectionManager;
-  const feature = createSoqlFeature({
-    workspaceState: {} as never,
-    describeService: {} as DescribeService,
-    gateway: { listModels: async () => [], send: async function* () {} },
-  })(connectionManager);
+  const feature = soqlFeature(fakeFeatureContext({ connectionManager }));
   const operations = {
     startWebviewOp: vi.fn(),
     endWebviewOp: vi.fn(),

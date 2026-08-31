@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DebugLogsStateStore, DEFAULT_STATE } from './DebugLogsStateStore';
+import { createDebugLogsStateStore, DEFAULT_STATE } from './DebugLogsStateStore';
 
 function makeMemento() {
   const store = new Map<string, unknown>();
@@ -11,9 +11,9 @@ function makeMemento() {
   };
 }
 
-describe('DebugLogsStateStore', () => {
+describe('createDebugLogsStateStore', () => {
   it('starts from the defaults, with Balanced preselected', () => {
-    const state = new DebugLogsStateStore(makeMemento()).getState();
+    const state = createDebugLogsStateStore(makeMemento()).getState();
     expect(state).toEqual(DEFAULT_STATE);
     expect(state.presetId).toBe('balanced');
     expect(state.hideEmptyLogs).toBe(false);
@@ -21,9 +21,9 @@ describe('DebugLogsStateStore', () => {
 
   it('merges a partial patch and persists it', async () => {
     const memento = makeMemento();
-    const store = new DebugLogsStateStore(memento);
+    const store = createDebugLogsStateStore(memento);
     await store.save({ hideEmptyLogs: true, durationMs: 3600_000 });
-    const state = new DebugLogsStateStore(memento).getState();
+    const state = createDebugLogsStateStore(memento).getState();
     expect(state.hideEmptyLogs).toBe(true);
     expect(state.durationMs).toBe(3600_000);
     // Untouched keys keep their defaults.
@@ -33,7 +33,7 @@ describe('DebugLogsStateStore', () => {
   it('fills in keys added after the state was first written', () => {
     const memento = makeMemento();
     void memento.update('debugLogs.state', { presetId: 'deep-trace' });
-    const state = new DebugLogsStateStore(memento).getState();
+    const state = createDebugLogsStateStore(memento).getState();
     expect(state.presetId).toBe('deep-trace');
     expect(state.allowWorkspaceFiles).toBe(true);
   });

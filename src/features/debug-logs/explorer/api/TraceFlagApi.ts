@@ -10,29 +10,14 @@
 import type {
   CategoryLevels,
   DebugLevelPreset,
-  DebugLevelRecord,
   TraceEntity,
   TraceFlagInfo,
   TraceLogType,
 } from '../types';
-import { LOG_CATEGORIES, presetDeveloperName } from '../debugLevelPresets';
+import { presetDeveloperName } from '../debugLevelPresets';
 import { soqlEscape, ToolingRest } from './ToolingRest';
 
 export const MAX_TRACE_MS = 24 * 60 * 60 * 1000;
-
-interface RawDebugLevel extends Record<string, unknown> {
-  Id: string;
-  DeveloperName: string;
-  MasterLabel: string;
-  ApexCode: string;
-  ApexProfiling: string;
-  Callout: string;
-  Database: string;
-  System: string;
-  Validation: string;
-  Visualforce: string;
-  Workflow: string;
-}
 
 interface RawTraceFlag extends Record<string, unknown> {
   Id: string;
@@ -44,30 +29,10 @@ interface RawTraceFlag extends Record<string, unknown> {
   ExpirationDate: string;
 }
 
-function toDebugLevelRecord(raw: RawDebugLevel): DebugLevelRecord {
-  const levels = Object.fromEntries(
-    LOG_CATEGORIES.map((c) => [c, raw[c] as string]),
-  ) as CategoryLevels;
-  return {
-    id: raw.Id,
-    developerName: raw.DeveloperName,
-    masterLabel: raw.MasterLabel,
-    levels,
-  };
-}
-
 export class TraceFlagApi {
   constructor(private readonly rest: ToolingRest) {}
 
   // ── Debug levels ────────────────────────────────────────────────────────
-
-  async listDebugLevels(): Promise<DebugLevelRecord[]> {
-    const records = await this.rest.query<RawDebugLevel>(
-      'SELECT Id, DeveloperName, MasterLabel, ApexCode, ApexProfiling, Callout, Database, ' +
-        'System, Validation, Visualforce, Workflow FROM DebugLevel ORDER BY DeveloperName',
-    );
-    return records.map(toDebugLevelRecord);
-  }
 
   /** Create or update the `ForceCockpit_*` DebugLevel backing a preset; resolves with its id. */
   async upsertPresetDebugLevel(preset: DebugLevelPreset): Promise<string> {
