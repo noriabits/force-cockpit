@@ -261,7 +261,7 @@ export function createFieldsPanel(ctx) {
       // be confusing to read, so expansion state is simply set aside here.
       const matched = filterAndRankByMatch(obj.fields, searchQuery, (f) => f.name);
       for (const field of matched) {
-        listEl.appendChild(buildFieldRow(field, '', 0, showCheckbox, selected, false));
+        listEl.appendChild(buildFieldRow(field, '', 0, showCheckbox, selected, false, false));
       }
       // `X of Y`, the same counter shape the results table, the monitoring
       // table filter and the object picker below all use. This used to report
@@ -330,7 +330,15 @@ export function createFieldsPanel(ctx) {
     const rows = [];
     for (const field of obj.fields) {
       rows.push(
-        buildFieldRow(field, pathPrefix, depth, showCheckbox, selected, depth < MAX_EXPAND_DEPTH),
+        buildFieldRow(
+          field,
+          pathPrefix,
+          depth,
+          showCheckbox,
+          selected,
+          depth < MAX_EXPAND_DEPTH,
+          true,
+        ),
       );
 
       const { refKey, picklistKey } = fieldKeys(field, pathPrefix);
@@ -355,9 +363,18 @@ export function createFieldsPanel(ctx) {
 
   /**
    * @param {DescribeField} field @param {string} pathPrefix @param {number} depth
-   * @param {boolean} showCheckbox @param {Set<string>} selected @param {boolean} allowExpand
+   * @param {boolean} showCheckbox @param {Set<string>} selected
+   * @param {boolean} allowRefExpand @param {boolean} allowPicklistExpand
    */
-  function buildFieldRow(field, pathPrefix, depth, showCheckbox, selected, allowExpand) {
+  function buildFieldRow(
+    field,
+    pathPrefix,
+    depth,
+    showCheckbox,
+    selected,
+    allowRefExpand,
+    allowPicklistExpand,
+  ) {
     const { checkboxPath, refKey, picklistKey } = fieldKeys(field, pathPrefix);
 
     const row = document.createElement('div');
@@ -365,7 +382,9 @@ export function createFieldsPanel(ctx) {
     row.style.paddingLeft = depth * 14 + 'px';
     win.__setTooltip(row, `${field.label} · ${field.type}`);
 
-    row.appendChild(buildExpandSlot(field, refKey, picklistKey, allowExpand));
+    row.appendChild(
+      buildExpandSlot(field, refKey, picklistKey, allowRefExpand, allowPicklistExpand),
+    );
     if (showCheckbox) row.appendChild(buildCheckbox(field, checkboxPath, selected));
 
     const name = document.createElement('span');
@@ -382,15 +401,25 @@ export function createFieldsPanel(ctx) {
   }
 
   /**
+   * The two chevrons are gated SEPARATELY, and one flag for both was a bug in
+   * each direction. `allowRefExpand` carries SOQL's 5-level parent-traversal
+   * limit, which a picklist is not subject to — its values ride the describe
+   * projection already on screen and a chip inserts a literal at the caret, so
+   * neither walks a relationship — and sharing the flag hid the chevron on
+   * every picklist at the deepest level. `allowPicklistExpand` is what search
+   * mode turns off: that branch renders a flat list and never emits a values
+   * row, so a chevron there would toggle state, re-render, and visibly do
+   * nothing.
    * @param {DescribeField} field @param {string | null} refKey
-   * @param {string | null} picklistKey @param {boolean} allowExpand
+   * @param {string | null} picklistKey
+   * @param {boolean} allowRefExpand @param {boolean} allowPicklistExpand
    */
-  function buildExpandSlot(field, refKey, picklistKey, allowExpand) {
+  function buildExpandSlot(field, refKey, picklistKey, allowRefExpand, allowPicklistExpand) {
     const slot = document.createElement('span');
     slot.className = 'query-fields-expand-slot';
 
-    const canExpandRef = allowExpand && refKey && field.referenceTo[0];
-    const canExpandPicklist = allowExpand && picklistKey;
+    const canExpandRef = allowRefExpand && refKey && field.referenceTo[0];
+    const canExpandPicklist = allowPicklistExpand && picklistKey;
     if (!canExpandRef && !canExpandPicklist) return slot;
 
     const expandedSet = canExpandRef ? expandedRefs : expandedPicklists;

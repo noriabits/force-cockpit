@@ -540,6 +540,35 @@ describe('createFieldsPanel', () => {
       expect(h.applyEdit.mock.calls[0][0].text).toBe("'O\\'Neil'");
     });
 
+    it('is not subject to the relationship traversal limit', async () => {
+      // The 5-level cap is SOQL's parent-traversal limit. A picklist's values
+      // ride the describe projection already on screen and a chip inserts a
+      // literal at the caret, so neither walks a relationship — the chevron
+      // must still be offered on the deepest row.
+      const h = await mountOpen('SELECT Id FROM Node');
+      for (let d = 0; d < 5; d++) {
+        const parents = $$('.query-fields-name').filter((n) => n.textContent === 'ParentId');
+        const deepest = parents[parents.length - 1].parentElement as HTMLElement;
+        click(deepest.querySelector('.query-fields-expand')!);
+        await tick();
+      }
+
+      const stages = $$('.query-fields-name').filter((n) => n.textContent === 'Stage');
+      const deepest = stages[stages.length - 1].parentElement as HTMLElement;
+      expect(deepest.style.paddingLeft).toBe('70px');
+      const expander = deepest.querySelector('.query-fields-expand') as HTMLButtonElement;
+      expect(expander).not.toBeNull();
+
+      click(expander);
+      await tick();
+      expect(chips().map((c) => c.textContent)).toEqual(['A']);
+
+      h.textarea.selectionStart = 0;
+      h.textarea.selectionEnd = 0;
+      click(chips()[0]);
+      expect(h.applyEdit).toHaveBeenCalledWith({ start: 0, end: 0, text: "'A'" });
+    });
+
     it('says so when a picklist has no active values', async () => {
       await mountOpen();
       click(expanderFor('Rating')!);
@@ -576,6 +605,16 @@ describe('createFieldsPanel', () => {
       await tick();
       expect(names()).toEqual(['Name']);
       expect(status()).toBe('1 of 5 fields on Account');
+    });
+
+    it('offers no expansion at all in the flat search list', async () => {
+      // The search branch renders a flat list and never emits a values row, so
+      // a chevron here would toggle state, re-render, and visibly do nothing.
+      const h = await mountOpen();
+      type(h.searchInput, 'industry');
+      await tick();
+      expect(names()).toEqual(['Industry']);
+      expect(expanderFor('Industry')).toBeNull();
     });
 
     it('sets expansion aside rather than clearing it', async () => {
