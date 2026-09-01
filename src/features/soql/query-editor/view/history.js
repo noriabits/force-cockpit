@@ -38,10 +38,18 @@ export function createQueryHistory(ctx) {
   let saved = [];
   let open = false;
   let showSaveRow = false;
+  // The two section nodes currently in the panel, so a list change can replace
+  // just those — see refreshSections().
+  /** @type {HTMLElement | null} */
+  let savedSection = null;
+  /** @type {HTMLElement | null} */
+  let recentSection = null;
 
   function close() {
     open = false;
     showSaveRow = false;
+    savedSection = null;
+    recentSection = null;
     dropdownEl.style.display = 'none';
   }
 
@@ -63,8 +71,41 @@ export function createQueryHistory(ctx) {
 
     if (showSaveRow) dropdownEl.appendChild(buildSaveRow());
 
-    dropdownEl.appendChild(buildSection('Saved', saved, true));
-    dropdownEl.appendChild(buildSection('Recent', history, false));
+    savedSection = buildSection('Saved', saved, true);
+    recentSection = buildSection('Recent', history, false);
+    dropdownEl.appendChild(savedSection);
+    dropdownEl.appendChild(recentSection);
+  }
+
+  /**
+   * Repaint the two lists WITHOUT rebuilding the save row.
+   *
+   * A full render() destroys the save input, so re-rendering on a host push
+   * discarded whatever the user was typing and re-seeded the box from
+   * getDefaultName(). Reachable in one ordinary sequence: run a query, open
+   * ★ Save while it is still in flight, type — the result lands, recordRun
+   * posts addQueryHistory, the host echoes the updated list back, and the name
+   * is gone. So every "the list changed" path comes through here instead;
+   * toggle / ★ Save / commit / Escape still full-render, because each of those
+   * is itself a change to whether the save row should exist at all.
+   *
+   * Deliberately replaces the two sections in place rather than wrapping them
+   * in a container: `.query-history-section + .query-history-section`
+   * (media/main.css) is an adjacent-sibling rule, and a wrapper would break the
+   * divider between them.
+   */
+  function refreshSections() {
+    if (!open) return;
+    if (!savedSection || !recentSection) {
+      render();
+      return;
+    }
+    const nextSaved = buildSection('Saved', saved, true);
+    const nextRecent = buildSection('Recent', history, false);
+    savedSection.replaceWith(nextSaved);
+    recentSection.replaceWith(nextRecent);
+    savedSection = nextSaved;
+    recentSection = nextRecent;
   }
 
   function buildSaveRow() {
@@ -174,7 +215,7 @@ export function createQueryHistory(ctx) {
           e.stopPropagation();
           saved = saved.filter((s) => s !== item);
           vscode.postMessage({ type: 'saveSavedQueries', savedQueries: saved });
-          render();
+          refreshSections();
         });
         row.appendChild(remove);
       }
@@ -206,7 +247,7 @@ export function createQueryHistory(ctx) {
   function load(state) {
     history = Array.isArray(state.history) ? state.history : [];
     saved = Array.isArray(state.savedQueries) ? state.savedQueries : [];
-    if (open) render();
+    refreshSections();
   }
 
   /** @param {string} query @param {boolean} useToolingApi */
@@ -218,13 +259,13 @@ export function createQueryHistory(ctx) {
   /** @param {HistoryEntry[]} list */
   function onHistoryUpdated(list) {
     history = Array.isArray(list) ? list : [];
-    if (open) render();
+    refreshSections();
   }
 
   /** @param {SavedQuery[]} list */
   function onSavedUpdated(list) {
     saved = Array.isArray(list) ? list : [];
-    if (open) render();
+    refreshSections();
   }
 
   return { load, recordRun, onHistoryUpdated, onSavedUpdated };

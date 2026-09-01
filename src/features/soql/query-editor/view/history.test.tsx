@@ -283,6 +283,27 @@ describe('SOQL history dropdown', () => {
     expect(postsOf('saveSavedQueries')).toHaveLength(0);
   });
 
+  it('keeps a half-typed save name when the host pushes an updated list', () => {
+    const h = mountWithHistory();
+    h.defaultName.value = 'Account';
+    click(h.saveBtn);
+
+    const input = $<HTMLInputElement>('.query-history-save-input');
+    input.value = 'Half-typed name';
+
+    // Reachable in one ordinary sequence: run a query, open ★ Save while it is
+    // still in flight, start typing, and the result lands — recordRun posts
+    // addQueryHistory and the host echoes the updated list straight back.
+    act(() => h.history.onHistoryUpdated([RECENT, RECENT]));
+
+    // The same input element, still holding what the user typed — not a fresh
+    // one re-seeded from getDefaultName.
+    expect($('.query-history-save-input')).toBe(input);
+    expect(input.value).toBe('Half-typed name');
+    // ...and the pushed list did land.
+    expect($$('.query-history-section-title')[1].textContent).toBe('Recent (2)');
+  });
+
   it('removes a saved query without opening it', () => {
     const { buttonEl, onPick } = mountWithHistory();
     click(buttonEl);
