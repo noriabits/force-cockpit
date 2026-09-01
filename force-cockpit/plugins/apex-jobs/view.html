@@ -1,0 +1,34 @@
+<!--
+  A plugin's view.html is injected into its own sub-tab panel. It is a FRAGMENT:
+  no <html>, no <head>, and no inline <script> (the panel's CSP blocks those —
+  put your code in view.js, which is loaded with the nonce).
+
+  Ids are shared with the whole panel, so prefix them with your plugin id.
+-->
+<section class="card">
+  <h2 class="card-title">Apex Jobs</h2>
+  <p class="card-description">
+    Batch, queueable, future and scheduled Apex on the connected org. Click a job to open it
+    in Salesforce, or stop one that is stuck.
+  </p>
+
+  <div class="feature-actions">
+    <label class="form-label" for="apex-jobs-filter">Show</label>
+    <select class="text-input" id="apex-jobs-filter">
+      <option value="active" selected>In flight</option>
+      <option value="failed">Failed</option>
+      <option value="finished">Finished</option>
+      <option value="all">Everything</option>
+    </select>
+
+    <button class="btn btn-primary" id="apex-jobs-refresh" type="button">Refresh</button>
+
+    <label class="apex-jobs-auto">
+      <input type="checkbox" id="apex-jobs-auto" />
+      Auto-refresh
+    </label>
+  </div>
+
+  <div class="error-box" id="apex-jobs-error" style="display: none"></div>
+  <div id="apex-jobs-results"></div>
+</section>

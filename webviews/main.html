@@ -84,6 +84,15 @@
       >
         🐞 Debug Logs
       </button>
+      <button
+        class="tab"
+        data-tab="plugins"
+        role="tab"
+        aria-selected="false"
+        aria-controls="tab-plugins"
+      >
+        🧩 Plugins
+      </button>
     </nav>
 
     <!-- Production org warning -->
@@ -282,6 +291,31 @@
         </section>
 
         <!-- features:debug-logs -->
+      </div>
+
+      <!-- ═══════════════════ TAB: Plugins ═══════════════════ -->
+      <!--
+        User-authored plugins, discovered from force-cockpit/plugins/ and
+        rendered by WebviewAssets._collectPluginAssets. One sub-tab per plugin,
+        following the Scripts tab's sub-tab pattern rather than adding a
+        top-level tab each — the main bar does not wrap gracefully.
+
+        Both placeholders are filled with AUTHOR-WRITTEN markup, so they are
+        substituted through a replacer function; see `literal` in
+        WebviewAssets.ts. The empty state is hidden by plugin-api.js as soon as
+        any sub-tab exists.
+      -->
+      <div class="tab-content" id="tab-plugins" role="tabpanel">
+        <nav class="plugin-sub-tab-bar" id="plugin-sub-tab-bar">${pluginSubTabs}</nav>
+        <div id="plugins-empty-state" class="empty-state">
+          <h2>No plugins yet</h2>
+          <p>
+            Create <code>force-cockpit/plugins/&lt;name&gt;/</code> with a <code>plugin.yaml</code>,
+            a <code>view.html</code> and a <code>handlers.js</code>, then run
+            <strong>Force Cockpit: Reload Plugins</strong>.
+          </p>
+        </div>
+        ${pluginPanels}
       </div>
     </main>
 

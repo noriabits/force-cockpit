@@ -171,14 +171,18 @@ body {
   display: block;
 }
 
-/* Utils sub-tabs */
-.utils-sub-tab-bar {
+/* Utils sub-tabs — shared with the Plugins tab's per-plugin sub-tabs, which
+   render the same shape from WebviewAssets._collectPluginAssets. The selectors
+   are paired rather than the plugin bar getting its own copy of the rules. */
+.utils-sub-tab-bar,
+.plugin-sub-tab-bar {
   display: flex;
   border-bottom: 1px solid var(--vscode-panel-border);
   margin-bottom: 16px;
 }
 
-.utils-sub-tab {
+.utils-sub-tab,
+.plugin-sub-tab {
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 500;
@@ -194,21 +198,31 @@ body {
   white-space: nowrap;
 }
 
-.utils-sub-tab:hover {
+.utils-sub-tab:hover,
+.plugin-sub-tab:hover {
   color: var(--vscode-foreground);
 }
 
-.utils-sub-tab.active {
+.utils-sub-tab.active,
+.plugin-sub-tab.active {
   color: var(--vscode-foreground);
   border-bottom-color: var(--vscode-focusBorder);
 }
 
-.utils-sub-tab-panel {
+.utils-sub-tab-panel,
+.plugin-sub-tab-panel {
   display: none;
 }
 
-.utils-sub-tab-panel.active {
+.utils-sub-tab-panel.active,
+.plugin-sub-tab-panel.active {
   display: block;
+}
+
+/* An empty plugin bar would otherwise draw a stray 1px rule above the
+   empty state. */
+.plugin-sub-tab-bar:empty {
+  display: none;
 }
 
 /* Main layout */

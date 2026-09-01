@@ -1,5 +1,5 @@
 import type { ConnectionManager } from '../../../salesforce/connection';
-import { assertApexSuccess } from '../../apexUtils';
+import { assertApexSuccess } from '../../../services/apex/apexUtils';
 
 export interface UserSearchResult {
   Id: string;

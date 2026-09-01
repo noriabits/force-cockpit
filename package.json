@@ -55,6 +55,12 @@
         "icon": "$(layout-panel)"
       },
       {
+        "command": "forceCockpit.reloadPlugins",
+        "title": "Reload Plugins",
+        "category": "Force Cockpit",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "forceCockpit.openInBrowser",
         "title": "Open in Browser",
         "category": "Force Cockpit",

@@ -21,6 +21,8 @@ describe('ensureUserFolders', () => {
     expect(fs.existsSync(path.join(tmpDir, 'monitoring'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'private', 'scripts'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'private', 'monitoring'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'plugins'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'private', 'plugins'))).toBe(true);
     expect(fs.readFileSync(path.join(tmpDir, 'private', '.gitignore'), 'utf8')).toBe('*\n');
   });
 

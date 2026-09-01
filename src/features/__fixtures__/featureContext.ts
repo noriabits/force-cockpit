@@ -76,6 +76,7 @@ export function fakeFeatureContext(overrides: FakeContextOverrides = {}): Featur
       readFile: async () => ({ error: 'not available in tests' }),
     },
     skillsRepo: { listSkills: async () => [], readSkill: async () => null },
+    pluginRegistry: { list: () => [], resolve: () => null },
     outputChannel: { appendLine: noop },
     postToWebview: noop,
     getConfig: (): CockpitConfig => DEFAULT_CONFIG,

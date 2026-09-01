@@ -50,6 +50,7 @@ function makeRouter(
     restCallService?: Partial<RestCallService>;
     restCallStateStore?: Partial<RestCallStateStore>;
     describeService?: Partial<DescribeService>;
+    pluginHost?: { invoke?: ReturnType<typeof vi.fn> };
   } = {},
 ) {
   const postMessage = vi.fn();
@@ -80,6 +81,10 @@ function makeRouter(
     describeSObject: vi.fn().mockResolvedValue({ name: 'Account', fields: [] }),
     ...opts.describeService,
   } as unknown as DescribeService;
+  const pluginHost = {
+    invoke: vi.fn().mockResolvedValue({ ok: true }),
+    ...opts.pluginHost,
+  } as unknown as import('../services/plugins/PluginHost').PluginHost;
   const operations = {
     startWebviewOp: vi.fn(),
     endWebviewOp: vi.fn(),
@@ -96,6 +101,7 @@ function makeRouter(
     restCallService,
     restCallStateStore,
     describeService,
+    pluginHost,
     features: opts.features ?? [],
     operations,
     onReady,
@@ -108,6 +114,7 @@ function makeRouter(
     restCallService,
     restCallStateStore,
     describeService,
+    pluginHost,
   };
 }
 
@@ -218,6 +225,116 @@ describe('MessageRouter built-in routes', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'restCallError',
       data: { message: 'NOT_FOUND' },
+    });
+  });
+
+  // ── pluginInvoke ─────────────────────────────────────────────────────────
+  // A built-in route rather than a feature route: every plugin shares this one
+  // envelope, because a plugin cannot own a name in the protocol union.
+
+  it('pluginInvoke → posts pluginResult wrapping the handler return value', async () => {
+    const invoke = vi.fn().mockResolvedValue([{ Id: '001' }]);
+    const { router, postMessage } = makeRouter({ pluginHost: { invoke } });
+
+    await router.handle({
+      type: 'pluginInvoke',
+      pluginId: 'orders',
+      handler: 'search',
+      args: { status: 'New' },
+    });
+
+    expect(invoke).toHaveBeenCalledWith(
+      'orders',
+      'search',
+      { status: 'New' },
+      expect.objectContaining({ signal: undefined }),
+    );
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'pluginResult',
+      data: { result: [{ Id: '001' }] },
+    });
+  });
+
+  it('pluginInvoke → echoes opId and registers an abort so the handler can be cancelled', async () => {
+    const invoke = vi.fn().mockResolvedValue('ok');
+    const ac = new AbortController();
+    const createTerminalAbort = vi.fn(() => ac);
+    const endTerminalOp = vi.fn();
+    const { router, postMessage } = makeRouter({
+      pluginHost: { invoke },
+      operations: { createTerminalAbort, endTerminalOp },
+    });
+
+    await router.handle({
+      type: 'pluginInvoke',
+      pluginId: 'orders',
+      handler: 'search',
+      args: {},
+      opId: 'plugin-1',
+    });
+
+    expect(createTerminalAbort).toHaveBeenCalledWith('plugin-1');
+    expect(invoke.mock.calls[0][3].signal).toBe(ac.signal);
+    expect(endTerminalOp).toHaveBeenCalledWith('plugin-1');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'pluginResult',
+      data: { result: 'ok', opId: 'plugin-1' },
+    });
+  });
+
+  it('pluginInvoke failure → posts pluginError echoing opId', async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error('Unknown plugin "ghost".'));
+    const { router, postMessage } = makeRouter({ pluginHost: { invoke } });
+
+    await router.handle({ type: 'pluginInvoke', pluginId: 'ghost', handler: 'x', opId: 'p-2' });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'pluginError',
+      data: { message: 'Unknown plugin "ghost".', opId: 'p-2' },
+    });
+  });
+
+  it.each([
+    ['resolves', (r: () => void) => r()],
+    ['throws', (_r: () => void, j: (e: Error) => void) => j(new Error('boom'))],
+  ])('pluginInvoke → posts nothing once cancelled, even if the handler %s', async (_c, settle) => {
+    const ac = new AbortController();
+    const invoke = vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          ac.abort();
+          settle(
+            () => resolve('late'),
+            (e) => reject(e),
+          );
+        }),
+    );
+    const { router, postMessage } = makeRouter({
+      pluginHost: { invoke },
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+
+    await router.handle({ type: 'pluginInvoke', pluginId: 'p', handler: 'h', opId: 'c' });
+
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  // The webview streams a plugin's log() output over the existing channel
+  // rather than a name of its own.
+  it('pluginInvoke → streams handler log output as scriptLogChunk keyed by opId', async () => {
+    const invoke = vi.fn(
+      async (_id: string, _h: string, _a: unknown, opts: { onChunk?: (c: string) => void }) => {
+        opts.onChunk?.('working\n');
+        return 'done';
+      },
+    );
+    const { router, postMessage } = makeRouter({ pluginHost: { invoke } });
+
+    await router.handle({ type: 'pluginInvoke', pluginId: 'p', handler: 'h', opId: 'plugin-9' });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'scriptLogChunk',
+      data: { opId: 'plugin-9', chunk: 'working\n' },
     });
   });
 

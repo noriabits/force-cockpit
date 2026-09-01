@@ -17,6 +17,7 @@ import type { ConnectionManager } from '../salesforce/connection';
 import type { DescribeService } from '../services/describe/DescribeService';
 import type { LmGateway, WorkspaceSearch } from '../services/ai/types';
 import type { SkillsRepository } from '../services/skills/SkillsRepository';
+import type { PluginRegistry } from '../services/plugins/PluginRegistry';
 import type { CockpitConfig } from '../utils/config';
 import type { HostMessage } from '../shared/protocol';
 
@@ -56,6 +57,8 @@ export interface FeatureContext {
   gateway: LmGateway;
   workspaceSearch: WorkspaceSearch;
   skillsRepo: SkillsRepository;
+  /** User-authored plugins discovered under `{user}/plugins` and `{private}/plugins`. */
+  pluginRegistry: PluginRegistry;
   paths: CockpitPaths;
   outputChannel: OutputChannel;
   /** No-op while the panel is closed. */

@@ -24,6 +24,7 @@ import { registerChatModelWatcher } from './services/ai/ChatModelWatcher';
 import { VsCodeLmGateway } from './services/ai/LmGateway';
 import { VsCodeWorkspaceSearch } from './services/ai/WorkspaceSearch';
 import { SkillsRepository } from './services/skills/SkillsRepository';
+import { PluginRegistry } from './services/plugins/PluginRegistry';
 
 export function activate(context: vscode.ExtensionContext): void {
   // Prevent @salesforce/core from creating a pino worker-thread transport.
@@ -82,6 +83,13 @@ export function activate(context: vscode.ExtensionContext): void {
   // changed `skillsPaths` list until the window reloads.
   const skillsRepo = new SkillsRepository(workspaceRoot, cockpitConfig.skillsPaths);
 
+  // User-authored plugins. Discovery is re-run on every panel build (and by
+  // `forceCockpit.reloadPlugins`), so the registry itself holds no cache.
+  const pluginRegistry = new PluginRegistry(
+    path.join(userBasePath, 'plugins'),
+    path.join(userBasePath, 'private', 'plugins'),
+  );
+
   // Status bar item: shows Sandbox / Production indicator
   setupOrgTypeStatusBar(context, connectionManager, () => cockpitConfig);
 
@@ -122,6 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
     gateway: lmGateway,
     workspaceSearch,
     skillsRepo,
+    pluginRegistry,
     paths: {
       // Note: monitoring/scripts sub-paths are derived per-feature from these.
       builtIn: builtInPath,
@@ -236,6 +245,17 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('forceCockpit.openPanel', () => {
       MainPanel.createOrShow(context, featureCtx, allFeatures);
+    }),
+
+    vscode.commands.registerCommand('forceCockpit.reloadPlugins', async () => {
+      if (!MainPanel.currentPanel) {
+        MainPanel.createOrShow(context, featureCtx, allFeatures);
+        return;
+      }
+      // Rebuilding the webview discards in-flight work, so it goes through the
+      // same busy guard an org switch does.
+      if (!(await guardBusy('Reloading plugins will cancel it.'))) return;
+      await MainPanel.currentPanel.reloadPlugins();
     }),
 
     vscode.commands.registerCommand('forceCockpit.openInBrowser', async () => {

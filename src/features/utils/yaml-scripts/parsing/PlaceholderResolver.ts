@@ -1,5 +1,5 @@
 import type { RestSpec, ScriptInput, ScriptType, YamlScript } from '../types';
-import { escapeApexString } from '../execution/ApexHelper';
+import { escapeApexString } from '../../../../services/sandbox/ApexHelper';
 
 export function escapeForType(value: string, type: ScriptType): string {
   switch (type) {
