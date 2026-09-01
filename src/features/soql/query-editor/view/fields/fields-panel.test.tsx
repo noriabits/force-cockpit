@@ -82,7 +82,7 @@ const GLOBAL = {
   ],
 };
 
-const DESCRIBES: Record<string, unknown> = {
+const DESCRIBES: Record<string, { fields: Field[] }> = {
   account: ACCOUNT,
   user: USER,
   lead: LEAD,
@@ -108,7 +108,7 @@ function makeDescribeCache() {
   return {
     getGlobal: () => {
       globalCalls++;
-      return settle(GLOBAL as unknown);
+      return settle(GLOBAL);
     },
     getSObject: (name: string) => {
       sobjectCalls.push(name);
