@@ -181,7 +181,7 @@ export default [
     //
     //   max-lines-per-function  429 (tab-strip.js)      -> gate 430, target 120
     //   max-lines               455 (connection.ts)     -> gate 460, target 400
-    //   complexity               40 (debug-logs view)   -> gate  40, target  15
+    //   complexity               30 (ScriptParser.parse) -> gate 30, target 15
     //
     // `complexity` and `max-lines` are the honest signals here. Read
     // `max-lines-per-function` with suspicion: this codebase's module-factory
@@ -200,7 +200,7 @@ export default [
     rules: {
       'max-lines-per-function': ['error', { max: 430, skipBlankLines: true, skipComments: true }],
       'max-lines': ['error', { max: 460, skipBlankLines: true, skipComments: true }],
-      complexity: ['error', 40],
+      complexity: ['error', 30],
     },
   },
   prettier,

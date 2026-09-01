@@ -77,6 +77,80 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     vscode.postMessage({ type: 'listChatModels' });
   }
 
+  // ── Message handlers ────────────────────────────────────────────────────
+
+  /** Shared by the three trace-flag replies, which differ only in their name. */
+  function applyTraceFlags(/** @type {any} */ data) {
+    tracePanel.setTraceFlags(data.traceFlags ?? []);
+  }
+
+  /** @type {Record<string, (data: any) => void>} */
+  const messageHandlers = {
+    panelVisibilityChanged: (data) => {
+      visible = !!data.visible;
+    },
+
+    debugLogsSetupLoaded: (data) => {
+      setupLoaded = true;
+      tracePanel.applySetup(data);
+      logList.applyState(data.state ?? {});
+      aiPanel.applyState(data.state ?? {});
+    },
+    debugLogsSetupError: (data) => tracePanel.showError(data.message),
+
+    apexLogsLoaded: (data) => {
+      logs = data.logs ?? [];
+      logList.setLogs(logs);
+      // The setup call can fail on a slow connect — retry it with the list.
+      if (!setupLoaded && connected) vscode.postMessage({ type: 'loadDebugLogsSetup' });
+    },
+    apexLogsError: (data) => logList.showError(data.message),
+    apexLogsClassified: (data) => logList.setClassification(data.results ?? []),
+    apexLogsClassifyError: () => logList.setClassification([]),
+    apexLogsDeleted: (data) => {
+      if (!data.confirmed) return;
+      logList.clearSelection();
+      logViewer.hide();
+      aiPanel.hide();
+      vscode.postMessage({ type: 'loadApexLogs' });
+    },
+    apexLogsDeleteError: (data) => logList.showError(data.message),
+
+    apexLogOpened: (data) => {
+      const row = logs.find((log) => log.id === data.logId) ?? null;
+      // An analysis belongs to the log it was run on — drop it when a
+      // different log is opened (and cancel a run still streaming).
+      aiPanel.resetFor(data.logId);
+      logViewer.show(data, row);
+      logList.setOpenLog(data.logId);
+    },
+    apexLogOpenError: (data) => logViewer.showError(data.message),
+
+    traceFlagStarted: applyTraceFlags,
+    traceFlagExtended: applyTraceFlags,
+    traceFlagStopped: applyTraceFlags,
+    traceFlagError: (data) => tracePanel.showError(data.message),
+    traceEntitiesFound: (data) => tracePanel.showEntities(data.entities ?? []),
+    traceEntitiesError: (data) => tracePanel.showError(data.message),
+
+    listChatModelsResult: (data) => aiPanel.setModels(data.models ?? []),
+    listChatModelsError: () => aiPanel.setModels([]),
+
+    scriptLogChunk: (data) => {
+      // Shared streaming channel — only take the chunks for our own run.
+      if (data.opId && data.opId === aiPanel.getOpId()) aiPanel.appendChunk(data.chunk);
+    },
+    // Both echo back the logId they were requested for, so a result that
+    // arrives after the user moved on is dropped instead of being shown
+    // under the wrong log.
+    apexLogAnalyzed: (data) => {
+      if (data.logId === aiPanel.getAnalyzedLogId()) aiPanel.finish(data);
+    },
+    apexLogAnalyzeError: (data) => {
+      if (data.logId === aiPanel.getAnalyzedLogId()) aiPanel.showError(data.message);
+    },
+  };
+
   win.__registerFeature('debug-logs', {
     onOrgConnected(/** @type {any} */ data) {
       connected = true;
@@ -96,98 +170,8 @@ import { createTraceFlagPanel } from './trace-flag-panel';
       aiPanel.hide();
     },
     onMessage(/** @type {{ type: string, data: any }} */ message) {
-      const data = message.data ?? {};
-      switch (message.type) {
-        case 'panelVisibilityChanged':
-          visible = !!data.visible;
-          break;
-
-        case 'debugLogsSetupLoaded':
-          setupLoaded = true;
-          tracePanel.applySetup(data);
-          logList.applyState(data.state ?? {});
-          aiPanel.applyState(data.state ?? {});
-          break;
-        case 'debugLogsSetupError':
-          tracePanel.showError(data.message);
-          break;
-
-        case 'apexLogsLoaded':
-          logs = data.logs ?? [];
-          logList.setLogs(logs);
-          // The setup call can fail on a slow connect — retry it with the list.
-          if (!setupLoaded && connected) vscode.postMessage({ type: 'loadDebugLogsSetup' });
-          break;
-        case 'apexLogsError':
-          logList.showError(data.message);
-          break;
-        case 'apexLogsClassified':
-          logList.setClassification(data.results ?? []);
-          break;
-        case 'apexLogsClassifyError':
-          logList.setClassification([]);
-          break;
-        case 'apexLogsDeleted':
-          if (data.confirmed) {
-            logList.clearSelection();
-            logViewer.hide();
-            aiPanel.hide();
-            vscode.postMessage({ type: 'loadApexLogs' });
-          }
-          break;
-        case 'apexLogsDeleteError':
-          logList.showError(data.message);
-          break;
-
-        case 'apexLogOpened': {
-          const row = logs.find((log) => log.id === data.logId) ?? null;
-          // An analysis belongs to the log it was run on — drop it when a
-          // different log is opened (and cancel a run still streaming).
-          aiPanel.resetFor(data.logId);
-          logViewer.show(data, row);
-          logList.setOpenLog(data.logId);
-          break;
-        }
-        case 'apexLogOpenError':
-          logViewer.showError(data.message);
-          break;
-
-        case 'traceFlagStarted':
-        case 'traceFlagExtended':
-        case 'traceFlagStopped':
-          tracePanel.setTraceFlags(data.traceFlags ?? []);
-          break;
-        case 'traceFlagError':
-          tracePanel.showError(data.message);
-          break;
-        case 'traceEntitiesFound':
-          tracePanel.showEntities(data.entities ?? []);
-          break;
-        case 'traceEntitiesError':
-          tracePanel.showError(data.message);
-          break;
-
-        case 'listChatModelsResult':
-          aiPanel.setModels(data.models ?? []);
-          break;
-        case 'listChatModelsError':
-          aiPanel.setModels([]);
-          break;
-
-        case 'scriptLogChunk':
-          // Shared streaming channel — only take the chunks for our own run.
-          if (data.opId && data.opId === aiPanel.getOpId()) aiPanel.appendChunk(data.chunk);
-          break;
-        // Both echo back the logId they were requested for, so a result that
-        // arrives after the user moved on is dropped instead of being shown
-        // under the wrong log.
-        case 'apexLogAnalyzed':
-          if (data.logId === aiPanel.getAnalyzedLogId()) aiPanel.finish(data);
-          break;
-        case 'apexLogAnalyzeError':
-          if (data.logId === aiPanel.getAnalyzedLogId()) aiPanel.showError(data.message);
-          break;
-      }
+      const handler = messageHandlers[message.type];
+      if (handler) handler(message.data ?? {});
     },
   });
 
