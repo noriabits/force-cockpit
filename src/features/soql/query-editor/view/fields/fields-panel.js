@@ -259,19 +259,27 @@ export function createFieldsPanel(ctx) {
       // Search collapses to a flat, unexpanded list of the browsed object's
       // own fields — filtering across an already-expanded nested tree would
       // be confusing to read, so expansion state is simply set aside here.
-      for (const field of filterAndRankByMatch(obj.fields, searchQuery, (f) => f.name)) {
+      const matched = filterAndRankByMatch(obj.fields, searchQuery, (f) => f.name);
+      for (const field of matched) {
         listEl.appendChild(buildFieldRow(field, '', 0, showCheckbox, selected, false));
       }
-      setStatus(
-        `${obj.fields.length} field${obj.fields.length === 1 ? '' : 's'} on ${browseObject}`,
-      );
+      // `X of Y`, the same counter shape the results table, the monitoring
+      // table filter and the object picker below all use. This used to report
+      // the object's total field count while the list showed a filtered
+      // handful, so the number named nothing on screen.
+      setStatus(`${matched.length} of ${fieldCount(obj)} on ${browseObject}`);
       return;
     }
 
     const rows = await buildTreeRows(obj, '', 0, showCheckbox, selected, seq);
     if (seq !== renderSeq) return;
     for (const row of rows) listEl.appendChild(row);
-    setStatus(`${obj.fields.length} field${obj.fields.length === 1 ? '' : 's'} on ${browseObject}`);
+    setStatus(`${fieldCount(obj)} on ${browseObject}`);
+  }
+
+  /** @param {{ fields: unknown[] }} obj */
+  function fieldCount(obj) {
+    return `${obj.fields.length} field${obj.fields.length === 1 ? '' : 's'}`;
   }
 
   function buildForeignBanner() {

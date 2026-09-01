@@ -570,6 +570,14 @@ describe('createFieldsPanel', () => {
       expect(names()).toEqual(['Name']);
     });
 
+    it('counts what is on screen, not the object total', async () => {
+      const h = await mountOpen();
+      type(h.searchInput, 'nam');
+      await tick();
+      expect(names()).toEqual(['Name']);
+      expect(status()).toBe('1 of 5 fields on Account');
+    });
+
     it('sets expansion aside rather than clearing it', async () => {
       const h = await mountOpen();
       click(expanderFor('OwnerId')!);
