@@ -168,7 +168,7 @@ function Row({
 
   return (
     <div class="query-history-item">
-      <span class="query-history-tooling-badge">{item.method}</span>
+      <span class="query-history-badge">{item.method}</span>
       <span
         ref={labelRef}
         class="query-history-item-label"

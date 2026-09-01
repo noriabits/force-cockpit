@@ -200,7 +200,7 @@ export function createQueryHistory(ctx) {
 
       if (item.useToolingApi) {
         const badge = document.createElement('span');
-        badge.className = 'query-history-tooling-badge';
+        badge.className = 'query-history-badge';
         badge.textContent = 'Tooling';
         row.appendChild(badge);
       }

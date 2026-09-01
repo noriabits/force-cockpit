@@ -777,7 +777,8 @@ body {
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
-.query-history-tooling-badge {
+/* Row badge: "Tooling" on a SOQL row, the HTTP method on a REST one. */
+.query-history-badge {
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
