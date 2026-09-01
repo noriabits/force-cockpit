@@ -6,25 +6,30 @@
 // knowing what to type into autocomplete. Reuses the same describeCache the
 // autocomplete module uses (already coalesced/cached, already cleared on org
 // change) — this panel adds no new host round-trips.
+//
+// WHAT GOES WHERE: `field-rows.ts` owns what the list should contain, purely,
+// from state plus already-resolved describes. This file owns the DOM, the
+// events, and fetching whatever that model says it still needs. The render
+// pass is therefore synchronous: it used to be `async` all the way down and
+// `await` a describe in the middle of a recursive walk, which needed a
+// hand-incremented `renderSeq` compared after every await to spot a pass that
+// had outlived its own state.
 import { queryObjectName } from '../tab-name';
 import { filterAndRankByMatch } from '../autocomplete/match-rank';
 import { addFieldEdit, removeFieldEdit, selectedFieldSet } from './select-clause';
+import { buildRowModel } from './field-rows';
 
 const win = /** @type {any} */ (window);
 
-/** SOQL supports up to 5 levels of parent-relationship traversal. */
-const MAX_EXPAND_DEPTH = 5;
 /** A render pass over the full object list is capped — some orgs have thousands. */
 const MAX_OBJECT_ROWS = 200;
+/** One nesting level's indent, in px. */
+const INDENT_PX = 14;
 
 /**
- * @typedef {Object} DescribeField
- * @property {string} name
- * @property {string} label
- * @property {string} type
- * @property {string | null} relationshipName
- * @property {string[]} referenceTo
- * @property {string[]} picklistValues
+ * @typedef {import('./field-rows').DescribeField} DescribeField
+ * @typedef {import('./field-rows').DescribeObject} DescribeObject
+ * @typedef {import('./field-rows').Row} Row
  */
 
 /**
@@ -61,8 +66,44 @@ export function createFieldsPanel(ctx) {
   const expandedRefs = new Set();
   /** @type {Set<string>} lowercased dotted field paths whose picklist values are shown */
   const expandedPicklists = new Set();
-  /** Stale-async guard for the describe round-trips a render pass may need. */
-  let renderSeq = 0;
+
+  // ── Resolved describes ────────────────────────────────────────────────────
+  // Keyed lowercased. A `null` value means "described, came back with nothing"
+  // and is deliberately distinct from an absent key: `buildRowModel` must not
+  // re-request an object the host has already answered with nothing, or an
+  // expanded lookup onto an undescribable object would fetch forever.
+  /** @type {Map<string, DescribeObject | null>} */
+  const describes = new Map();
+  /** Names already asked for, so a re-render mid-flight does not ask again. */
+  const requested = new Set();
+  /** @type {any} the describeGlobal projection, once resolved */
+  let globalDescribe = null;
+  let globalRequested = false;
+
+  /** @param {string} name */
+  const describeOf = (name) => describes.get(name.toLowerCase());
+
+  /**
+   * Fetch each name we do not have yet, then re-render. Every reply is stored
+   * (null included), so a name can never come back round as pending — which is
+   * what makes this terminate.
+   *
+   * A reply for an object the state no longer names is written to the map and
+   * simply never read by the next render. That is the whole stale-reply story:
+   * there is no counter to compare, because a late write cannot paint.
+   * @param {string[]} names
+   */
+  function fetchDescribes(names) {
+    for (const name of names) {
+      const key = name.toLowerCase();
+      if (requested.has(key)) continue;
+      requested.add(key);
+      describeCache.getSObject(name).then((obj) => {
+        describes.set(key, obj ?? null);
+        render();
+      });
+    }
+  }
 
   // ── Visibility ────────────────────────────────────────────────────────────
   function isOpen() {
@@ -183,19 +224,24 @@ export function createFieldsPanel(ctx) {
   }
 
   // ── Object picker ────────────────────────────────────────────────────────
-  async function renderObjectPicker() {
-    setStatus('Loading objects…');
-    const seq = ++renderSeq;
-    const global = await describeCache.getGlobal();
-    if (seq !== renderSeq) return;
-    if (!global) {
-      setStatus('Could not load the list of objects.');
+  function renderObjectPicker() {
+    if (!globalDescribe) {
+      setStatus('Loading objects…');
       clearList();
+      if (!globalRequested) {
+        globalRequested = true;
+        describeCache.getGlobal().then((data) => {
+          globalDescribe = data;
+          // A failed describeGlobal releases the guard so a later open retries.
+          if (!data) globalRequested = false;
+          render();
+        });
+      }
       return;
     }
 
     const matched = filterAndRankByMatch(
-      global.sobjects,
+      globalDescribe.sobjects,
       searchQuery,
       (/** @type {any} */ s) => s.name,
     );
@@ -232,54 +278,49 @@ export function createFieldsPanel(ctx) {
   }
 
   // ── Field browser ────────────────────────────────────────────────────────
-  async function renderFieldBrowser() {
+  function renderFieldBrowser() {
     if (!browseObject) {
       setStatus('Type FROM <Object>, or pick an object above.');
       clearList();
       return;
     }
 
-    const seq = ++renderSeq;
-    setStatus('Loading…');
-    const obj = await describeCache.getSObject(browseObject);
-    if (seq !== renderSeq) return;
-    if (!obj) {
+    const obj = describeOf(browseObject);
+    if (obj === undefined) {
+      setStatus('Loading…');
+      clearList();
+      fetchDescribes([browseObject]);
+      return;
+    }
+    if (obj === null) {
       setStatus(`Could not describe ${browseObject}.`);
       clearList();
       return;
     }
 
+    const showCheckbox = !isForeignBrowse();
+    const { rows, pending } = buildRowModel({
+      object: obj,
+      describeOf,
+      expandedRefs,
+      expandedPicklists,
+      selected: selectedFieldSet(textarea.value),
+      showCheckbox,
+      search: searchQuery,
+    });
+
     clearList();
     if (isForeignBrowse()) listEl.appendChild(buildForeignBanner());
+    for (const row of rows) listEl.appendChild(buildRow(row, showCheckbox));
 
-    const showCheckbox = !isForeignBrowse();
-    const selected = selectedFieldSet(textarea.value);
+    const total = `${obj.fields.length} field${obj.fields.length === 1 ? '' : 's'}`;
+    // `X of Y` while filtered — the counter shape the results table, the
+    // monitoring table filter and the object picker above all use.
+    setStatus(
+      searchQuery ? `${rows.length} of ${total} on ${browseObject}` : `${total} on ${browseObject}`,
+    );
 
-    if (searchQuery) {
-      // Search collapses to a flat, unexpanded list of the browsed object's
-      // own fields — filtering across an already-expanded nested tree would
-      // be confusing to read, so expansion state is simply set aside here.
-      const matched = filterAndRankByMatch(obj.fields, searchQuery, (f) => f.name);
-      for (const field of matched) {
-        listEl.appendChild(buildFieldRow(field, '', 0, showCheckbox, selected, false, false));
-      }
-      // `X of Y`, the same counter shape the results table, the monitoring
-      // table filter and the object picker below all use. This used to report
-      // the object's total field count while the list showed a filtered
-      // handful, so the number named nothing on screen.
-      setStatus(`${matched.length} of ${fieldCount(obj)} on ${browseObject}`);
-      return;
-    }
-
-    const rows = await buildTreeRows(obj, '', 0, showCheckbox, selected, seq);
-    if (seq !== renderSeq) return;
-    for (const row of rows) listEl.appendChild(row);
-    setStatus(`${fieldCount(obj)} on ${browseObject}`);
-  }
-
-  /** @param {{ fields: unknown[] }} obj */
-  function fieldCount(obj) {
-    return `${obj.fields.length} field${obj.fields.length === 1 ? '' : 's'}`;
+    if (pending.length) fetchDescribes(pending);
   }
 
   function buildForeignBanner() {
@@ -300,156 +341,72 @@ export function createFieldsPanel(ctx) {
     return banner;
   }
 
-  // ── Field tree ───────────────────────────────────────────────────────────
-  /**
-   * The three identities a field can be addressed by, relative to `pathPrefix`
-   * (the dotted chain of relationshipNames leading to this object).
-   * @param {DescribeField} field @param {string} pathPrefix
-   */
-  function fieldKeys(field, pathPrefix) {
-    const checkboxPath = pathPrefix ? `${pathPrefix}.${field.name}` : field.name;
-    const refKey = field.relationshipName
-      ? (pathPrefix
-          ? `${pathPrefix}.${field.relationshipName}`
-          : field.relationshipName
-        ).toLowerCase()
-      : null;
-    const picklistKey = field.type === 'picklist' ? checkboxPath.toLowerCase() : null;
-    return { checkboxPath, refKey, picklistKey };
+  // ── Rows ─────────────────────────────────────────────────────────────────
+  /** @param {Row} row @param {boolean} showCheckbox */
+  function buildRow(row, showCheckbox) {
+    return row.kind === 'picklistValues'
+      ? buildPicklistValuesRow(row.field, row.depth)
+      : buildFieldRow(row, showCheckbox);
   }
 
-  /**
-   * Recursively builds rows for `obj`'s fields, expanding any relationship or
-   * picklist the user has toggled open. One describe round-trip per expanded
-   * relationship (cached by describeCache, so re-renders after the first are free).
-   * @param {any} obj @param {string} pathPrefix @param {number} depth
-   * @param {boolean} showCheckbox @param {Set<string>} selected @param {number} seq
-   * @returns {Promise<HTMLElement[]>}
-   */
-  async function buildTreeRows(obj, pathPrefix, depth, showCheckbox, selected, seq) {
-    const rows = [];
-    for (const field of obj.fields) {
-      rows.push(
-        buildFieldRow(
-          field,
-          pathPrefix,
-          depth,
-          showCheckbox,
-          selected,
-          depth < MAX_EXPAND_DEPTH,
-          true,
-        ),
-      );
+  /** @param {Row & { kind: 'field' }} row @param {boolean} showCheckbox */
+  function buildFieldRow(row, showCheckbox) {
+    const { field } = row;
 
-      const { refKey, picklistKey } = fieldKeys(field, pathPrefix);
-      if (refKey && expandedRefs.has(refKey) && field.referenceTo[0] && depth < MAX_EXPAND_DEPTH) {
-        const child = await describeCache.getSObject(field.referenceTo[0]);
-        if (seq !== renderSeq) return rows;
-        if (child) {
-          const childPrefix = pathPrefix
-            ? `${pathPrefix}.${field.relationshipName}`
-            : field.relationshipName;
-          rows.push(
-            ...(await buildTreeRows(child, childPrefix, depth + 1, showCheckbox, selected, seq)),
-          );
-        }
-      }
-      if (picklistKey && expandedPicklists.has(picklistKey)) {
-        rows.push(buildPicklistValuesRow(field, depth));
-      }
-    }
-    return rows;
-  }
+    const el = document.createElement('div');
+    el.className = 'query-fields-row';
+    el.style.paddingLeft = row.depth * INDENT_PX + 'px';
+    win.__setTooltip(el, `${field.label} · ${field.type}`);
 
-  /**
-   * @param {DescribeField} field @param {string} pathPrefix @param {number} depth
-   * @param {boolean} showCheckbox @param {Set<string>} selected
-   * @param {boolean} allowRefExpand @param {boolean} allowPicklistExpand
-   */
-  function buildFieldRow(
-    field,
-    pathPrefix,
-    depth,
-    showCheckbox,
-    selected,
-    allowRefExpand,
-    allowPicklistExpand,
-  ) {
-    const { checkboxPath, refKey, picklistKey } = fieldKeys(field, pathPrefix);
-
-    const row = document.createElement('div');
-    row.className = 'query-fields-row';
-    row.style.paddingLeft = depth * 14 + 'px';
-    win.__setTooltip(row, `${field.label} · ${field.type}`);
-
-    row.appendChild(
-      buildExpandSlot(field, refKey, picklistKey, allowRefExpand, allowPicklistExpand),
-    );
-    if (showCheckbox) row.appendChild(buildCheckbox(field, checkboxPath, selected));
+    el.appendChild(buildExpandSlot(row));
+    if (showCheckbox) el.appendChild(buildCheckbox(row));
 
     const name = document.createElement('span');
     name.className = 'query-fields-name';
     name.textContent = field.name;
-    row.appendChild(name);
+    el.appendChild(name);
 
     const type = document.createElement('span');
     type.className = 'query-fields-type';
     type.textContent = field.type;
-    row.appendChild(type);
+    el.appendChild(type);
 
-    return row;
+    return el;
   }
 
-  /**
-   * The two chevrons are gated SEPARATELY, and one flag for both was a bug in
-   * each direction. `allowRefExpand` carries SOQL's 5-level parent-traversal
-   * limit, which a picklist is not subject to — its values ride the describe
-   * projection already on screen and a chip inserts a literal at the caret, so
-   * neither walks a relationship — and sharing the flag hid the chevron on
-   * every picklist at the deepest level. `allowPicklistExpand` is what search
-   * mode turns off: that branch renders a flat list and never emits a values
-   * row, so a chevron there would toggle state, re-render, and visibly do
-   * nothing.
-   * @param {DescribeField} field @param {string | null} refKey
-   * @param {string | null} picklistKey
-   * @param {boolean} allowRefExpand @param {boolean} allowPicklistExpand
-   */
-  function buildExpandSlot(field, refKey, picklistKey, allowRefExpand, allowPicklistExpand) {
+  /** @param {Row & { kind: 'field' }} row */
+  function buildExpandSlot(row) {
     const slot = document.createElement('span');
     slot.className = 'query-fields-expand-slot';
+    if (!row.expansion) return slot;
 
-    const canExpandRef = allowRefExpand && refKey && field.referenceTo[0];
-    const canExpandPicklist = allowPicklistExpand && picklistKey;
-    if (!canExpandRef && !canExpandPicklist) return slot;
-
-    const expandedSet = canExpandRef ? expandedRefs : expandedPicklists;
-    const key = /** @type {string} */ (canExpandRef ? refKey : picklistKey);
+    const { set, key, expanded } = row.expansion;
+    const target = set === 'ref' ? expandedRefs : expandedPicklists;
 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'query-fields-expand';
-    const expanded = expandedSet.has(key);
     btn.textContent = expanded ? '⌄' : '›';
     btn.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
     btn.addEventListener('click', () => {
-      if (expandedSet.has(key)) expandedSet.delete(key);
-      else expandedSet.add(key);
+      if (target.has(key)) target.delete(key);
+      else target.add(key);
       render();
     });
     slot.appendChild(btn);
     return slot;
   }
 
-  /** @param {DescribeField} field @param {string} checkboxPath @param {Set<string>} selected */
-  function buildCheckbox(field, checkboxPath, selected) {
+  /** @param {Row & { kind: 'field' }} row */
+  function buildCheckbox(row) {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'query-fields-checkbox';
-    checkbox.checked = selected.has(checkboxPath.toLowerCase());
+    checkbox.checked = row.checked;
     checkbox.addEventListener('change', () => {
       const edit = checkbox.checked
-        ? addFieldEdit(textarea.value, checkboxPath)
-        : removeFieldEdit(textarea.value, checkboxPath);
+        ? addFieldEdit(textarea.value, row.checkboxPath)
+        : removeFieldEdit(textarea.value, row.checkboxPath);
       applyEdit(edit);
     });
     return checkbox;
@@ -459,7 +416,7 @@ export function createFieldsPanel(ctx) {
   function buildPicklistValuesRow(field, depth) {
     const wrap = document.createElement('div');
     wrap.className = 'query-fields-picklist-values';
-    wrap.style.paddingLeft = (depth + 1) * 14 + 'px';
+    wrap.style.paddingLeft = (depth + 1) * INDENT_PX + 'px';
 
     if (field.picklistValues.length === 0) {
       const empty = document.createElement('span');
@@ -492,7 +449,7 @@ export function createFieldsPanel(ctx) {
    * search) and re-derive the browsed object from the query text — never null
    * it out. The object named in a query's FROM clause isn't org-specific, so
    * there's nothing stale to discard there; the org-specific part (schema) is
-   * `describeCache`'s own job and already gets cleared elsewhere on disconnect.
+   * dropped here and in `describeCache` itself.
    *
    * Nulling here instead of re-deriving was the actual bug behind a fields
    * panel that "loses" the object on a fresh window load: `orgConnected` and
@@ -505,6 +462,10 @@ export function createFieldsPanel(ctx) {
     resetExpansions();
     searchInput.value = '';
     searchQuery = '';
+    describes.clear();
+    requested.clear();
+    globalDescribe = null;
+    globalRequested = false;
     queryObject = queryObjectName(textarea.value);
     browseObject = queryObject;
     if (isOpen()) render();
