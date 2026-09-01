@@ -183,6 +183,16 @@ export function createQueryHistory(ctx) {
       const row = document.createElement('div');
       row.className = 'query-history-item';
 
+      // The badge LEADS the row, as it does on the REST tab: the label is the
+      // only elastic part of the row, so a trailing badge sat at a different
+      // x-offset on every line and could not be scanned down the list.
+      if (item.useToolingApi) {
+        const badge = document.createElement('span');
+        badge.className = 'query-history-badge';
+        badge.textContent = 'Tooling';
+        row.appendChild(badge);
+      }
+
       const label = document.createElement('span');
       label.className = 'query-history-item-label';
       const safeItem = /** @type {SavedQuery} */ (item);
@@ -197,13 +207,6 @@ export function createQueryHistory(ctx) {
         close();
       });
       row.appendChild(label);
-
-      if (item.useToolingApi) {
-        const badge = document.createElement('span');
-        badge.className = 'query-history-badge';
-        badge.textContent = 'Tooling';
-        row.appendChild(badge);
-      }
 
       if (isSaved) {
         const remove = document.createElement('button');

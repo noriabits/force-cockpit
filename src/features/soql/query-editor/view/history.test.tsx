@@ -161,6 +161,11 @@ describe('SOQL history dropdown', () => {
     // The badge is conditional here, unlike REST's method badge: only the
     // Tooling-API entry carries one, and SAVED does not.
     expect($$('.query-history-badge').map((e) => e.textContent)).toEqual(['Tooling']);
+    // ...and it LEADS the row, as the REST tab's method badge does.
+    expect(Array.from(rows()[1].children).map((c) => c.className)).toEqual([
+      'query-history-badge',
+      'query-history-item-label',
+    ]);
     // Saved rows show their own label; Recent rows show the query text.
     expect(labels().map((e) => e.textContent)).toEqual([SAVED.name, RECENT.query]);
     // The row text is elided; the tooltip carries the whole query.
