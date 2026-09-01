@@ -86,6 +86,9 @@ let inbound: Map<string, (msg: any) => void>;
 let featureHandlers: Record<string, any>;
 /** Callbacks stashed by the __confirmIfSensitive stub instead of being invoked. */
 let pendingConfirms: Array<() => void>;
+/** What __setTooltip was called with — the tooltip IS the label on several of
+ *  these controls, and a port that drops it breaks nothing a DOM query can see. */
+let tooltips: Map<Element, string>;
 
 const w = window as unknown as Record<string, any>;
 
@@ -108,7 +111,8 @@ function installGlobals() {
 
   w.__vscode = { postMessage: (msg: Post) => posts.push(msg) };
   w.__escapeHtml = escapeHtml;
-  w.__setTooltip = () => {};
+  tooltips = new Map();
+  w.__setTooltip = (el: Element, text: string) => tooltips.set(el, text);
   w.__onMessage = (type: string, handler: (msg: any) => void) => inbound.set(type, handler);
   w.__registerFeature = (id: string, handlers: any) => {
     featureHandlers[id] = handlers;
@@ -418,6 +422,184 @@ describe('REST tab flow', () => {
       click(sendBtn());
     }
     expect(pendingConfirms).toHaveLength(4);
+  });
+});
+
+// ── History dropdown ───────────────────────────────────────────────────────────
+describe('REST history dropdown', () => {
+  beforeEach(installGlobals);
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const SAVED = {
+    name: 'Nightly sync',
+    method: 'POST',
+    endpoint: '/services/apexrest/Sync',
+    body: '{"n":1}',
+    headers: [{ key: 'X-A', value: '1' }],
+  };
+  const RECENT = { method: 'GET', endpoint: '/services/data/v65.0/limits', body: '', headers: [] };
+
+  const openHistory = () => click(btnByText('History'));
+  const rows = () => $$('.query-history-item') as HTMLElement[];
+  const labels = () => $$('.query-history-item-label') as HTMLElement[];
+
+  async function mountWithHistory() {
+    await mountRestTab();
+    deliver('restCallStateLoaded', {
+      tabs: [],
+      activeTab: 0,
+      history: [RECENT],
+      savedRequests: [SAVED],
+    });
+  }
+
+  it('toggles open and closed, and closes on an outside click', async () => {
+    await mountWithHistory();
+    const dropdown = $<HTMLElement>('.query-history-dropdown');
+
+    openHistory();
+    expect(dropdown.style.display).not.toBe('none');
+    openHistory();
+    expect(dropdown.style.display).toBe('none');
+
+    openHistory();
+    click(document.body);
+    expect(dropdown.style.display).toBe('none');
+  });
+
+  it('renders both sections with counts, the method badge and the full-request tooltip', async () => {
+    await mountWithHistory();
+    openHistory();
+
+    const titles = $$('.query-history-section-title').map((e) => e.textContent);
+    expect(titles).toEqual(['Saved (1)', 'Recent (1)']);
+    expect($$('.query-history-tooling-badge').map((e) => e.textContent)).toEqual(['POST', 'GET']);
+    // Saved rows show their own label; Recent rows show the endpoint.
+    expect(labels().map((e) => e.textContent)).toEqual([SAVED.name, RECENT.endpoint]);
+    // The row text is elided; the tooltip carries the whole request.
+    expect(labels().map((e) => tooltips.get(e))).toEqual([
+      `${SAVED.method} ${SAVED.endpoint}`,
+      `${RECENT.method} ${RECENT.endpoint}`,
+    ]);
+    expect(tooltips.get($('.query-history-remove'))).toBe('Remove saved request');
+  });
+
+  it('shows the empty copy for each section independently', async () => {
+    await mountRestTab();
+    deliver('restCallStateLoaded', { tabs: [], activeTab: 0, history: [], savedRequests: [] });
+    openHistory();
+    expect($$('.query-history-empty').map((e) => e.textContent)).toEqual([
+      'No saved requests.',
+      'No recent requests.',
+    ]);
+  });
+
+  it('opens a Recent pick in its own tab, auto-named, without a Saved label', async () => {
+    await mountWithHistory();
+    setValue(endpointEl(), '/occupied'); // active tab is no longer pristine
+    openHistory();
+    click(labels()[1]);
+
+    expect(pills()).toHaveLength(2);
+    expect(endpointEl().value).toBe(RECENT.endpoint);
+    // Auto-named from the endpoint's last segment, not from any saved label.
+    expect(pills()[1].textContent).toContain('limits');
+    expect($<HTMLElement>('.query-history-dropdown').style.display).toBe('none');
+  });
+
+  it('adopts a Saved pick label onto the tab it opens', async () => {
+    await mountWithHistory();
+    setValue(endpointEl(), '/occupied');
+    openHistory();
+    click(labels()[0]);
+
+    expect(endpointEl().value).toBe(SAVED.endpoint);
+    expect(methodEl().value).toBe('POST');
+    expect(bodyEl().value).toBe(SAVED.body);
+    expect($$('.rest-header-row')).toHaveLength(1);
+    expect(pills()[1].textContent).toContain(SAVED.name);
+  });
+
+  it('pre-fills and pre-selects the save input with the active tab name', async () => {
+    await mountWithHistory();
+    setValue(endpointEl(), '/services/data/v65.0/sobjects/Account');
+
+    click(btnByText('★ Save'));
+    const input = $<HTMLInputElement>('.query-history-save-input');
+    expect(input.value).toBe('Account'); // the tab's own auto-derived title
+
+    // Focus + select is deferred, so the whole value is replaceable by typing.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  });
+
+  it('saves under a typed name, relabels the open tab, and closes the save row', async () => {
+    await mountWithHistory();
+    setValue(endpointEl(), '/services/data/v65.0/limits');
+
+    click(btnByText('★ Save'));
+    const input = $<HTMLInputElement>('.query-history-save-input');
+    input.value = 'Org limits';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    const posted = lastPost('saveRestCallSavedRequests');
+    expect(posted!.savedRequests[0]).toMatchObject({
+      name: 'Org limits',
+      endpoint: '/services/data/v65.0/limits',
+    });
+    // The tab the user was looking at takes the name they just typed.
+    expect(pills()[0].textContent).toContain('Org limits');
+    expect($('.query-history-save-input')).toBeNull();
+  });
+
+  it('refuses to save a blank name or an empty endpoint', async () => {
+    await mountWithHistory();
+    click(btnByText('★ Save'));
+    const input = $<HTMLInputElement>('.query-history-save-input');
+
+    input.value = '   ';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
+
+    input.value = 'Named'; // endpoint is still empty
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
+  });
+
+  it('abandons the save row on Escape', async () => {
+    await mountWithHistory();
+    click(btnByText('★ Save'));
+    $<HTMLInputElement>('.query-history-save-input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect($('.query-history-save-input')).toBeNull();
+    expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
+  });
+
+  it('removes a saved request without opening it', async () => {
+    await mountWithHistory();
+    openHistory();
+    click($('.query-history-remove'));
+
+    expect(lastPost('saveRestCallSavedRequests')!.savedRequests).toEqual([]);
+    expect(pills()).toHaveLength(1); // the click never reached the row's own handler
+    expect($$('.query-history-item')).toHaveLength(1); // only Recent left
+  });
+
+  it('re-renders in place when the host pushes updated lists', async () => {
+    await mountWithHistory();
+    openHistory();
+
+    deliver('restCallHistoryUpdated', { history: [RECENT, RECENT] });
+    expect($$('.query-history-section-title')[1].textContent).toBe('Recent (2)');
+
+    deliver('restCallSavedRequestsUpdated', { savedRequests: [] });
+    expect($$('.query-history-section-title')[0].textContent).toBe('Saved (0)');
+    expect(rows()).toHaveLength(2);
   });
 });
 
