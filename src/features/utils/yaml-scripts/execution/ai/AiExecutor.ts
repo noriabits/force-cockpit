@@ -23,7 +23,7 @@ import {
   createReadSkillTool,
 } from '../../../../../services/ai/tools/skillTools';
 import type { ChatMessage, LmGateway, WorkspaceSearch } from '../../../../../services/ai/types';
-import { assertApexSuccess, filterUserDebugLines } from '../../../../apexUtils';
+import { assertApexSuccess, filterUserDebugLines } from '../../../../../services/apex/apexUtils';
 import { DEFAULT_APEX_LOG_LEVELS } from '../defaultApexLogLevels';
 import type { SkillInfo, SkillsRepository } from '../../../../../services/skills/SkillsRepository';
 import type { ExecuteScriptResult, GatherSpec, YamlScript } from '../../types';

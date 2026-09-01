@@ -1,5 +1,5 @@
 import type { ConnectionManager } from '../../../../salesforce/connection';
-import { assertApexSuccess, filterUserDebugLines } from '../../../apexUtils';
+import { assertApexSuccess, filterUserDebugLines } from '../../../../services/apex/apexUtils';
 import type { ExecuteScriptResult, YamlScript } from '../types';
 import { DEFAULT_APEX_LOG_LEVELS } from './defaultApexLogLevels';
 

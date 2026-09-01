@@ -60,6 +60,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with request tabs, custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                      |
 | **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
+| **Plugins**    | Your own panels. Drop a folder into `force-cockpit/plugins/` with some HTML and JavaScript and it becomes a tab of its own, with the org connection already wired up                                                                                    |
 
 ---
 
@@ -706,6 +707,208 @@ Use **Open as markdown** for a rendered view, **Save analysis** to write it into
 
 > [!NOTE]
 > Trace flags and debug logs consume org resources, and logs are retained for 24 hours (or 7 days for logs collected via a trace flag on another user). Delete logs you no longer need with the **Delete** / **Delete all** buttons.
+
+---
+
+## Plugins Tab
+
+The other tabs cover what most people need most of the time. A plugin covers the
+rest: a screen of your own, doing the thing your team does over and over.
+
+A plugin is a folder. Drop it into `force-cockpit/plugins/`, and it shows up as
+a sub-tab with your markup, your styles, your JavaScript — and the org
+connection already wired up. There is no build step, no `npm install`, no
+packaging, and nothing to publish.
+
+```
+force-cockpit/plugins/apex-jobs/
+  plugin.yaml    # required — name, description, icon
+  view.html      # required — your markup
+  view.js        # your webview code
+  view.css       # your styles (optional)
+  handlers.js    # your Salesforce logic, running in the extension
+```
+
+The folder name is the plugin id. Put a plugin in
+`force-cockpit/private/plugins/` instead to keep it out of git (see
+[Private scripts](#private-scripts) — the same `.gitignore` covers it).
+
+### `plugin.yaml`
+
+```yaml
+name: Apex Jobs # required — the sub-tab label
+description: Watch batch Apex, and stop one that has gone wrong. # sub-tab tooltip
+icon: '⚙️' # optional emoji, prefixed to the label
+```
+
+### `handlers.js` — your Salesforce logic
+
+Runs in the extension host, not the browser, so it has the org connection. Each
+handler is a function assigned onto `exports`:
+
+```js
+exports.list = async ({ filter }) => {
+  const result = await query(
+    `SELECT Id, Status, ApexClass.Name FROM AsyncApexJob ${whereFor(filter)} LIMIT 50`,
+  );
+  log(`${result.records.length} job(s).`); // streams to your panel live
+  return result.records; // whatever you return lands in view.js
+};
+```
+
+Available as globals — no imports:
+
+| Global                                        | What it does                                         |
+| --------------------------------------------- | ---------------------------------------------------- |
+| `query(soql)`                                 | Run SOQL                                             |
+| `executeApex(apex)`                           | Run anonymous Apex, with the debug log               |
+| `restCall(method, endpoint, body?, headers?)` | Any REST/Apex REST endpoint, with status and headers |
+| `connection`, `org`                           | The raw jsforce connection and the current org       |
+| `run(cmd)`                                    | A shell command in the workspace root                |
+| `log(...)`, `error(...)`, `console`           | Stream output to your panel                          |
+| `fs`, `os`, `path`, `yaml`                    | Node modules                                         |
+| `require(path)`                               | Your own helper files (see below)                    |
+| `pluginDir`, `pluginId`, `workspaceRoot`      | Where you are                                        |
+
+Anything you `throw` reaches `view.js` as a rejected promise with your message.
+
+**`handlers.js` is re-read every time a handler runs**, so editing it takes
+effect on your next click — no reload. Changes to `view.html`, `view.js`,
+`view.css` or `plugin.yaml` need **Force Cockpit: Reload Plugins** from the
+command palette.
+
+### Splitting `handlers.js` up
+
+One file is right for a small plugin. But handlers are cheap to add and each one
+drags in guards and formatting, so a plugin that started at 30 lines can reach
+400 — with the CSV escaping sitting next to the Id validator next to the SOQL
+field list, all in one scope, none of it testable on its own.
+
+So `require` works, for your own files:
+
+```
+force-cockpit/plugins/apex-jobs/
+  handlers.js        ← the handlers, and little else
+  lib/jobs.js        ← the query and row projection
+  lib/validate.js    ← the guards
+```
+
+```js
+// handlers.js
+const { listJobs } = require('./lib/jobs.js');
+const { assertJobId } = require('./lib/validate.js');
+
+exports.list = async ({ filter }) => listJobs(filter);
+
+exports.abort = async ({ jobId }) => {
+  assertJobId(jobId);
+  await executeApex(`System.abortJob('${jobId}');`);
+  return { aborted: jobId };
+};
+```
+
+```js
+// lib/jobs.js — the sandbox globals are here too, nothing to pass down
+exports.listJobs = async (filter) => {
+  const r = await query(`SELECT Id, Status FROM AsyncApexJob ${whereFor(filter)}`);
+  log(`${r.records.length} job(s).`);
+  return r.records;
+};
+```
+
+It is CommonJS `require`, with the differences you would expect from a plugin:
+
+- **Your own files only.** Relative paths, inside your plugin folder — `../` out
+  of it is refused. `require('fs')`, `require('os')`, `require('path')` and
+  `require('js-yaml')` also work, returning the same objects as the globals.
+  **npm packages are not available**, and `require('lodash')` says so.
+- **`./lib/jobs`, `./lib/jobs.js` and `./lib/` (an `index.js`) all resolve**, as
+  in Node.
+- **Cached per click, not forever.** Two files sharing a helper load it once; an
+  edit to any of them is still live on your next click.
+- Circular requires behave as Node's do rather than hanging.
+
+### `view.js` — your panel
+
+Loaded as an ES module, so you can split it with `import` the same way. Talk to
+your handlers through `window.__fcPlugin`:
+
+```js
+const fc = window.__fcPlugin('apex-jobs');
+
+refreshBtn.addEventListener('click', async () => {
+  // Passing the button gives you a spinner and a ✕ Cancel for free.
+  // Leave it out — as a background poll should — and nothing is disabled.
+  const jobs = await fc.invoke('list', { filter: 'active' }, { button: refreshBtn });
+  render(jobs);
+});
+```
+
+`fc` gives you `invoke(handler, args, { button, onChunk })`, `connected`, `org`,
+`onOrg({ onConnected, onDisconnected })`, `openRecord(id)`, `confirm(prompt)`,
+`escapeHtml(s)` and `setTooltip(el, text)`.
+
+`view.html` is a fragment — no `<html>`, no `<head>`, and no inline `<script>`
+(the panel's security policy blocks those; put your code in `view.js`). Ids are
+shared with the whole panel, so prefix them with your plugin id. All the
+extension's own CSS classes (`card`, `btn`, `text-input`, `error-box`) and
+VS Code theme variables are available.
+
+### Production safety
+
+You do not have to write a confirmation prompt. Against a production org — or a
+sandbox listed in `protectedSandboxes` — Force Cockpit raises a native "are you
+sure" modal by itself the moment a handler reaches `executeApex`, a
+`POST`/`PUT`/`PATCH`/`DELETE` `restCall`, or `run`. Reads (`query`, a `GET`)
+never prompt. Confirming once covers the rest of that handler run, so a loop of
+a hundred updates asks once.
+
+In the bundled example this is the whole story of its `abort` handler: it stops
+a running batch job with one line of anonymous Apex and contains no
+confirmation code at all, yet you still get a modal before anything is killed on
+production.
+
+If the user declines, your handler stops with `Operation cancelled` — the same
+thing you get from ✕ Cancel, so you can treat them alike.
+
+> [!IMPORTANT]
+> Plugins run with the same trust as your YAML scripts: a plugin can read and
+> write files, run shell commands, and change data in your org. Only install
+> plugins you have read or trust, exactly as you would a script.
+
+### A worked example
+
+This repo ships **Apex Jobs** at
+[`force-cockpit/plugins/apex-jobs/`](force-cockpit/plugins/apex-jobs/) — a real
+tool, not a toy. It lists batch, queueable, future and scheduled Apex on the
+connected org, filters by state, colour-codes the status, shows progress and
+error counts, opens any job in Salesforce, optionally polls every 10 seconds,
+and lets you stop one that has hung.
+
+It is about 200 lines across the three files, and it demonstrates each thing you
+are likely to want:
+
+| In the example                    | What to copy it for                                |
+| --------------------------------- | -------------------------------------------------- |
+| `list` handler                    | Querying the org and reshaping rows for the UI     |
+| `abort` handler                   | A mutating action, gated automatically             |
+| Filter dropdown → a key, not SOQL | Keeping user input out of your query               |
+| The record-Id regex               | Keeping user input out of an Apex literal          |
+| `{ button: refreshBtn }`          | Spinner + ✕ Cancel on an action the user asked for |
+| Auto-refresh with no `button`     | A background poll that disables nothing            |
+| `fc.openRecord(job.id)`           | Opening a record in Salesforce                     |
+| `fc.onOrg({ ... })`               | Reacting to org connect / disconnect               |
+
+Copy the folder into your own `force-cockpit/plugins/`, rename it, and start
+editing.
+
+### Known limits
+
+- Images must be files in your plugin folder; inline `data:` URIs are blocked.
+- Neither `view.js` nor `handlers.js` can use npm packages or import from the
+  extension's own source — only your own files.
+- A plugin with a broken `plugin.yaml`, or without a `view.html`, still gets a
+  sub-tab — showing the error, so you can see what to fix.
 
 ---
 

@@ -1,0 +1,81 @@
+/* Feature-specific styles only — main.css is already loaded, so `card`, `btn`,
+   `text-input`, `error-box` and friends are available. Always use the VSCode
+   CSS variables so the plugin follows the user's theme. */
+
+.apex-jobs-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.apex-jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.apex-jobs-table th,
+.apex-jobs-table td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  white-space: nowrap;
+}
+
+.apex-jobs-table th {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 600;
+}
+
+.apex-jobs-link {
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.apex-jobs-errors {
+  color: var(--vscode-errorForeground);
+  font-weight: 600;
+}
+
+.apex-jobs-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  border: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+}
+
+.apex-jobs-badge--processing,
+.apex-jobs-badge--preparing {
+  color: var(--vscode-charts-blue);
+  border-color: var(--vscode-charts-blue);
+}
+
+.apex-jobs-badge--queued,
+.apex-jobs-badge--holding {
+  color: var(--vscode-charts-yellow);
+  border-color: var(--vscode-charts-yellow);
+}
+
+.apex-jobs-badge--completed {
+  color: var(--vscode-charts-green);
+  border-color: var(--vscode-charts-green);
+}
+
+.apex-jobs-badge--failed,
+.apex-jobs-badge--aborted {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+/* The ⏹ sits in a narrow trailing column, so trim the shared button padding. */
+.apex-jobs-abort {
+  padding: 0 6px;
+  line-height: 1.6;
+}

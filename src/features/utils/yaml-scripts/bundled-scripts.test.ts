@@ -1,8 +1,8 @@
 /**
- * Guards the scripts bundled with the extension (`force-cockpit/scripts/**`),
- * which ship in the .vsix and show up in every user's Scripts tab. A typo in one
- * of them surfaces as an error card rather than a build failure, so it is worth
- * parsing them for real here.
+ * Guards the example scripts under `force-cockpit/scripts/**`. They do NOT ship
+ * in the .vsix — `.vscodeignore` excludes `force-cockpit/**`, so they reach
+ * users by cloning this repo. A typo in one surfaces as an error card rather
+ * than a build failure, so it is worth parsing them for real here.
  */
 import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';

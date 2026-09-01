@@ -19,6 +19,7 @@ import type {
   SavedRestCall,
 } from '../services/rest/RestCallStateStore';
 import type { DescribeService } from '../services/describe/DescribeService';
+import type { PluginHost } from '../services/plugins/PluginHost';
 import type { FeatureModule, RouteDescriptor } from '../features/FeatureModule';
 import { NO_REPLY, RouteError } from '../features/FeatureModule';
 import type {
@@ -58,6 +59,7 @@ export const BUILT_IN_ROUTES: readonly WebviewToHostType[] = [
   'openRecord',
   'openExternalUrl',
   'restCall',
+  'pluginInvoke',
   'loadRestCallState',
   'saveRestCallTabs',
   'addRestCallHistory',
@@ -78,6 +80,7 @@ interface MessageRouterDeps {
   restCallService: RestCallService;
   restCallStateStore: RestCallStateStore;
   describeService: DescribeService;
+  pluginHost: PluginHost;
   features: FeatureModule[];
   operations: OperationRegistry;
   onReady: () => Promise<void>;
@@ -89,6 +92,7 @@ export class MessageRouter {
   private readonly restCallService: RestCallService;
   private readonly restCallStateStore: RestCallStateStore;
   private readonly describeService: DescribeService;
+  private readonly pluginHost: PluginHost;
   private readonly operations: OperationRegistry;
   private readonly onReady: () => Promise<void>;
   // Keyed by the protocol union, not `string`: `get()` then only accepts a name
@@ -104,6 +108,7 @@ export class MessageRouter {
     this.restCallService = deps.restCallService;
     this.restCallStateStore = deps.restCallStateStore;
     this.describeService = deps.describeService;
+    this.pluginHost = deps.pluginHost;
     this.operations = deps.operations;
     this.onReady = deps.onReady;
     // Seeded FIRST, so a feature claiming a built-in name collides with it
@@ -146,6 +151,9 @@ export class MessageRouter {
         return;
       case 'restCall':
         await this._routeRestCall(message);
+        return;
+      case 'pluginInvoke':
+        await this._routePluginInvoke(message);
         return;
       case 'loadRestCallState':
         await this._route(
@@ -293,6 +301,51 @@ export class MessageRouter {
       },
       'restCallResult',
       'restCallError',
+      opId ? { opId } : {},
+    );
+
+    if (opId) this.operations.endTerminalOp(opId);
+  }
+
+  /**
+   * Run one plugin handler, tracked under the webview's `opId`.
+   *
+   * A built-in route rather than a feature route: this is infrastructure, and
+   * `restCall` above is the precedent — a built-in name backed by a service.
+   * It has to be, because a plugin cannot own a name in the protocol union: ALL
+   * plugins share this one envelope and the `pluginId` inside it.
+   *
+   * Registers the abort exactly as `_routeRestCall` does, streams `log()` output
+   * over the existing `scriptLogChunk` channel, and echoes ONLY `opId` as
+   * context — `_route` merges context *over* the result, so the request's own
+   * `args` would clobber the reply.
+   */
+  private async _routePluginInvoke(message: IncomingMessage): Promise<void> {
+    const opId = message.opId as string | undefined;
+    const ac = opId ? this.operations.createTerminalAbort(opId) : undefined;
+    const onChunk = opId
+      ? (chunk: string) => this._post({ type: 'scriptLogChunk', data: { opId, chunk } })
+      : undefined;
+
+    await this._route(
+      async () => {
+        try {
+          const result = await this.pluginHost.invoke(
+            message.pluginId as string,
+            message.handler as string,
+            message.args,
+            { signal: ac?.signal, onChunk },
+          );
+          // A cancelled invoke has no result the panel still wants; staying
+          // silent also spares the webview from recognising an abort error.
+          return ac?.signal.aborted ? NO_REPLY : { result };
+        } catch (err) {
+          if (ac?.signal.aborted) return NO_REPLY;
+          throw err;
+        }
+      },
+      'pluginResult',
+      'pluginError',
       opId ? { opId } : {},
     );
 
