@@ -276,7 +276,7 @@ describe('REST tab flow', () => {
     deliver('restCallResult', okResult(opId));
 
     expect(postsOf('addRestCallHistory')).toHaveLength(0);
-    expect($<HTMLElement>('#rest-response').style.display).toBe('none');
+    expect($('.rest-response-body')).toBeNull();
     // Ending the op happens in ownerOf BEFORE the drop, and is the easiest part
     // of this path to lose in a rewrite — without it the host stays "busy".
     expect(postsOf('operationEnded').some((p) => p.opId === opId)).toBe(true);
@@ -695,7 +695,7 @@ describe('REST response rendering', () => {
     const opId = sendGet('/E1');
     deliver('restCallError', { opId, message: 'socket hang up' });
 
-    expect($<HTMLElement>('#rest-response').style.display).toBe('none');
+    expect($('.rest-response-body')).toBeNull();
     expect($<HTMLElement>('.error-box').textContent).toBe('socket hang up');
   });
 });
