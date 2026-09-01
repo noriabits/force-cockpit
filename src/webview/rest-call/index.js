@@ -24,20 +24,6 @@ const bodyEl = /** @type {HTMLTextAreaElement} */ (document.getElementById('rest
 const btnSend = /** @type {HTMLButtonElement} */ (document.getElementById('btn-rest-send'));
 const btnClone = /** @type {HTMLButtonElement} */ (document.getElementById('btn-rest-clone'));
 const responseEl = /** @type {HTMLElement} */ (document.getElementById('rest-response'));
-const responseMetaEl = /** @type {HTMLElement} */ (document.getElementById('rest-response-meta'));
-const responseBodyEl = /** @type {HTMLElement} */ (document.getElementById('rest-response-body'));
-const responseHeadersListEl = /** @type {HTMLElement} */ (
-  document.getElementById('rest-response-headers-list')
-);
-const btnHeadersToggle = /** @type {HTMLButtonElement} */ (
-  document.getElementById('btn-rest-headers-toggle')
-);
-const btnOpenEditor = /** @type {HTMLButtonElement} */ (
-  document.getElementById('btn-rest-open-editor')
-);
-const btnCopyOutput = /** @type {HTMLButtonElement} */ (
-  document.getElementById('btn-rest-copy-output')
-);
 const errorEl = /** @type {HTMLElement} */ (document.getElementById('rest-error'));
 
 const headersListEl = /** @type {HTMLElement} */ (document.getElementById('rest-headers-list'));
@@ -58,18 +44,9 @@ const headersEditor = createHeadersEditor({
   onChange: () => tabs.onActiveEdited(),
 });
 
-const responseView = createResponseView({
-  responseEl,
-  errorEl,
-  metaEl: responseMetaEl,
-  bodyEl: responseBodyEl,
-  headersToggleBtn: btnHeadersToggle,
-  headersListEl: responseHeadersListEl,
-  openEditorBtn: btnOpenEditor,
-  copyBtn: btnCopyOutput,
-  vscode,
-  escapeHtml: win.__escapeHtml,
-});
+// The status badge, headers list, body and action buttons are rendered by
+// Preact into responseEl; only the two containers are passed in now.
+const responseView = createResponseView({ responseEl, errorEl, vscode });
 
 /** @returns {{ method: string, endpoint: string, body: string, headers: {key: string, value: string}[] }} */
 function getCurrent() {

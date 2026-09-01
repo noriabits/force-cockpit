@@ -62,19 +62,7 @@ const REST_MARKUP = `
             aria-label="Save current request">&#9733; Save</button>
   </div>
 
-  <div id="rest-response" style="display: none">
-    <div class="query-results-toolbar">
-      <span class="results-meta rest-response-status" id="rest-response-meta">Response</span>
-      <span class="query-toolbar-spacer"></span>
-      <button type="button" class="btn btn-ghost" id="btn-rest-headers-toggle">Headers &#9662;</button>
-    </div>
-    <div class="rest-response-headers" id="rest-response-headers-list" style="display: none"></div>
-    <pre class="rest-response-body" id="rest-response-body"></pre>
-    <div class="feature-actions" style="margin-top: 6px">
-      <button type="button" class="btn btn-ghost" id="btn-rest-open-editor">Open in editor</button>
-      <button type="button" class="btn btn-ghost" id="btn-rest-copy-output">Copy to clipboard</button>
-    </div>
-  </div>
+  <div id="rest-response" style="display: none"></div>
 
   <div id="rest-error" class="error-box" style="display: none"></div>
 </section>`;
