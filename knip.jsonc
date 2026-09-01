@@ -11,7 +11,7 @@
     "src/features/utils/yaml-scripts/view/index.js",
     "src/features/monitoring/dashboard/view/index.js",
     "src/features/soql/query-editor/view/index.js",
-    "src/webview/rest-call/index.js",
+    "src/webview/rest-call/index.tsx",
     "src/features/debug-logs/explorer/view/index.js",
     "src/features/overview/ask-ai/view/index.js",
 
@@ -29,7 +29,7 @@
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
 
-    "scripts/*.{js,mjs}"
+    "scripts/*.{js,mjs}",
   ],
 
   "project": ["src/**/*.{ts,tsx,js}", "media/**/*.js", "scripts/**/*.{js,mjs}"],
@@ -51,5 +51,5 @@
 
   // Served as a vendor file from dist/vendor/ by scripts/copy-vendor-assets.js
   // and loaded by its own <script> tag, so nothing ever imports it.
-  "ignoreDependencies": ["chart.js"]
+  "ignoreDependencies": ["chart.js"],
 }

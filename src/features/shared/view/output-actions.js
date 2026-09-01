@@ -6,13 +6,25 @@
  */
 
 /**
+ * Open `content` in a native plaintext editor tab. Split out of
+ * `wireOpenInEditorButton` so a component that renders its own button
+ * declaratively has something to call, rather than repeating the route name —
+ * `openScriptResult` is a built-in MessageRouter route and works from any tab.
+ * @param {string} content
+ * @param {{ postMessage: (msg: any) => void }} vscode
+ */
+export function openContentInEditor(content, vscode) {
+  vscode.postMessage({ type: 'openScriptResult', content });
+}
+
+/**
  * @param {HTMLButtonElement} button
  * @param {() => string} getContent
  * @param {{ postMessage: (msg: any) => void }} vscode
  */
 export function wireOpenInEditorButton(button, getContent, vscode) {
   button.addEventListener('click', () => {
-    vscode.postMessage({ type: 'openScriptResult', content: getContent() });
+    openContentInEditor(getContent(), vscode);
   });
 }
 

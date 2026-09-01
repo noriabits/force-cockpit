@@ -603,10 +603,6 @@ textarea.yaml-code-textarea {
   font-size: var(--vscode-editor-font-size, 12px);
 }
 
-.input-with-paste--textarea {
-  align-items: flex-start;
-}
-
 /* ── File link in accordion subtitle ── */
 .yaml-file-link {
   background: none;
