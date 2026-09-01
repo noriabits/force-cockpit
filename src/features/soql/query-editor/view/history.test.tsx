@@ -103,7 +103,10 @@ function mountHistory(): Harness {
     buttonEl,
     dropdownEl: dropdownEl(),
     saveBtn,
-    vscode: { postMessage: (msg: Post) => posts.push(msg) },
+    // Contextually typed, with the cast at the push: the ctx now declares
+    // `(msg: unknown) => void` (a real interface, not the old JSDoc `any`), and
+    // under strictFunctionTypes a `(msg: Post)` stub is not assignable to it.
+    vscode: { postMessage: (msg) => posts.push(msg as Post) },
     getCurrent: () => ({ ...current }),
     getDefaultName: () => defaultName.value,
     onPick,

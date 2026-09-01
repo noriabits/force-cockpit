@@ -32,6 +32,15 @@
           </label>
           <div class="query-history-wrap">
             <button class="btn btn-ghost" id="btn-query-history">History ▾</button>
+            <!--
+              The shared history dropdown's mount CONTAINER. Three things here
+              are load-bearing: it must stay EMPTY (Preact's first render
+              appends, so a placeholder would sit above the panel), it must keep
+              its id (view/index.js resolves it by id), and it must keep
+              `display: none` — redundant on every toggle once the bundle has
+              run, but the only thing preventing a flash of an empty bordered
+              box between HTML parse and the deferred bundle's first effect.
+            -->
             <div
               class="query-history-dropdown"
               id="query-history-dropdown"
