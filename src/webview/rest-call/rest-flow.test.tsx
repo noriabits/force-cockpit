@@ -499,7 +499,7 @@ describe('REST history dropdown', () => {
 
     const titles = $$('.query-history-section-title').map((e) => e.textContent);
     expect(titles).toEqual(['Saved (1)', 'Recent (1)']);
-    expect($$('.query-history-tooling-badge').map((e) => e.textContent)).toEqual(['POST', 'GET']);
+    expect($$('.query-history-badge').map((e) => e.textContent)).toEqual(['POST', 'GET']);
     // Saved rows show their own label; Recent rows show the endpoint.
     expect(labels().map((e) => e.textContent)).toEqual([SAVED.name, RECENT.endpoint]);
     // The row text is elided; the tooltip carries the whole request.
