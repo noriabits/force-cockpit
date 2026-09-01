@@ -7,7 +7,8 @@
  *
  * @param {HTMLInputElement | HTMLTextAreaElement} inputEl
  * @param {{ textarea?: boolean }} [opts] - `textarea: true` adds the
- *   `--textarea` modifier (block + relative positioning for the absolute btn).
+ *   `--textarea` modifier, which top-aligns the button rather than centring it
+ *   on a control that may be many times its height.
  * @returns {HTMLDivElement} the wrapper containing the input + paste button.
  */
 export function wrapWithPasteButton(inputEl, opts = {}) {

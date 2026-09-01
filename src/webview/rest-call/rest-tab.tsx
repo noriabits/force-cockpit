@@ -101,8 +101,9 @@ export function RestTab({ state, controller }: { state: RestState; controller: C
           <button
             type="button"
             class="paste-btn"
+            tabIndex={-1}
             data-tooltip="Paste from clipboard"
-            aria-label="Paste from clipboard"
+            aria-label="Paste endpoint from clipboard"
           >
             📋
           </button>
@@ -117,20 +118,35 @@ export function RestTab({ state, controller }: { state: RestState; controller: C
         </button>
       </div>
 
-      <textarea
-        class="rest-body-textarea"
-        spellcheck={false}
-        placeholder="{ }"
-        rows={6}
-        value={state.body.value}
-        onInput={(e) => edit<string>((v) => (state.body.value = v))(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            controller.send();
-          }
-        }}
-      />
+      {/* Same wrapper + adjacency contract as the endpoint above; the --textarea
+          modifier top-aligns the button beside a control many times its height.
+          A pasted body arrives as an external `value` write plus a synthetic
+          `input` event, which is why the signal below stays in step with it. */}
+      <div class="input-with-paste input-with-paste--textarea">
+        <textarea
+          class="rest-body-textarea"
+          spellcheck={false}
+          placeholder="{ }"
+          rows={6}
+          value={state.body.value}
+          onInput={(e) => edit<string>((v) => (state.body.value = v))(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              controller.send();
+            }
+          }}
+        />
+        <button
+          type="button"
+          class="paste-btn"
+          tabIndex={-1}
+          data-tooltip="Paste from clipboard"
+          aria-label="Paste request body from clipboard"
+        >
+          📋
+        </button>
+      </div>
 
       <div class="query-toolbar">
         <button

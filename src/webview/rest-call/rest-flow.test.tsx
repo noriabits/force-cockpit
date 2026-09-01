@@ -362,6 +362,60 @@ describe('REST tab flow', () => {
     expect(lastPost('restCall')!.headers).toEqual([{ key: 'X-Custom', value: 'yes' }]);
   });
 
+  // ── Paste buttons ────────────────────────────────────────────────────────────
+  // paste-buttons.js resolves its target as `btn.previousElementSibling`, so the
+  // adjacency IS the contract — a wrapper element or a stray node between them
+  // breaks pasting with no error anywhere.
+  it('puts a paste button immediately after both the endpoint and the body', async () => {
+    await mountRestTab();
+
+    const buttons = $$('.paste-btn');
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((b) => b.previousElementSibling?.className)).toEqual([
+      'text-input rest-endpoint',
+      'rest-body-textarea',
+    ]);
+    // Kept out of the tab order, so Tab runs field → field → Send.
+    expect(buttons.map((b) => (b as HTMLButtonElement).tabIndex)).toEqual([-1, -1]);
+  });
+
+  // What media/modules/paste-buttons.js does to its resolved target, mirrored
+  // here rather than imported: that file is a classic <script> IIFE with no
+  // exports, so `tsc` rejects importing it (TS2306) even though Vitest would run
+  // it. The adjacency test above is what pins the coupling to it; this pins the
+  // half that is genuinely ours — a CONTROLLED textarea whose value is written
+  // from outside must still be what the signal, and so the request, holds.
+  function simulatePaste(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
+    act(() => {
+      el.value = text.trim(); // paste-buttons.js trims
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  it('sends a body that was pasted rather than typed', async () => {
+    await mountRestTab();
+    loadEmptyState();
+
+    simulatePaste(bodyEl(), '  {"pasted":true}  ');
+    expect(bodyEl().value).toBe('{"pasted":true}');
+
+    setValue(endpointEl(), '/E1');
+    click(sendBtn());
+    expect(lastPost('restCall')!.body).toBe('{"pasted":true}');
+  });
+
+  it('keeps a pasted body when switching tabs away and back', async () => {
+    await mountRestTab();
+    loadEmptyState();
+
+    simulatePaste(bodyEl(), '{"pasted":true}');
+    click(btnByText('+'));
+    expect(bodyEl().value).toBe('');
+    click(pills()[0].querySelector('.query-tab-label')!);
+    expect(bodyEl().value).toBe('{"pasted":true}');
+  });
+
   // ── Guards on send ───────────────────────────────────────────────────────────
   it('refuses to send with no endpoint, and with no org', async () => {
     await mountRestTab();

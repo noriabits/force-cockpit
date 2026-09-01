@@ -1165,9 +1165,18 @@ body {
   gap: 4px;
 }
 
-.input-with-paste .text-input {
+.input-with-paste .text-input,
+.input-with-paste textarea {
   flex: 1;
   min-width: 0;
+}
+
+/* Beside a multi-line control the button top-aligns instead of centring on a
+   textarea that may be several times its height. Lives here, not in a feature
+   stylesheet, because it modifies a global class — yaml-scripts' execution
+   inputs and the REST tab's request body both use it. */
+.input-with-paste--textarea {
+  align-items: flex-start;
 }
 
 .paste-btn {
