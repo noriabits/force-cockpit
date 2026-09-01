@@ -213,6 +213,9 @@ function ResponsePanel({ state, ctx }: { state: PanelState; ctx: ResponseViewCtx
 
 export function createResponseView(ctx: ResponseViewCtx) {
   const state: PanelState = { response: signal(null), headersOpen: signal(false) };
+  // The container carried `style="display: none"` in main.html; now that a
+  // component renders it as an empty leaf, its starting state is set here.
+  ctx.responseEl.style.display = 'none';
   render(<ResponsePanel state={state} ctx={ctx} />, ctx.responseEl);
 
   return {

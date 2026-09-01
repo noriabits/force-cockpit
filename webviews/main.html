@@ -264,85 +264,9 @@
           </p>
         </section>
 
-        <section class="card" id="restcall-card">
-          <div class="query-tab-bar" id="rest-tab-bar"></div>
-          <div class="rest-request-row">
-            <select id="rest-method" class="text-input rest-method" aria-label="HTTP method">
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
-              <option value="PATCH">PATCH</option>
-              <option value="DELETE">DELETE</option>
-            </select>
-            <div class="input-with-paste" style="width: 100%">
-              <input
-                type="text"
-                id="rest-endpoint"
-                class="text-input rest-endpoint"
-                spellcheck="false"
-                placeholder="/services/data/v65.0/sobjects/Account"
-                aria-label="Endpoint path"
-              />
-              <button
-                type="button"
-                class="paste-btn"
-                data-tooltip="Paste from clipboard"
-                aria-label="Paste from clipboard"
-              >
-                📋
-              </button>
-            </div>
-          </div>
-
-          <div class="rest-headers-section">
-            <div class="rest-headers-section-title">Headers</div>
-            <div class="rest-headers-list" id="rest-headers-list"></div>
-            <button type="button" class="btn btn-ghost" id="btn-rest-add-header">
-              + Add header
-            </button>
-          </div>
-
-          <textarea
-            id="rest-body"
-            class="rest-body-textarea"
-            spellcheck="false"
-            placeholder="{ }"
-            rows="6"
-          ></textarea>
-
-          <div class="query-toolbar">
-            <button class="btn btn-primary" id="btn-rest-send">Send</button>
-            <button
-              class="btn btn-ghost"
-              id="btn-rest-clone"
-              data-tooltip="Clone the current tab into a new tab"
-              aria-label="Clone the current request tab"
-            >
-              ⧉ Clone
-            </button>
-            <div class="query-history-wrap">
-              <button class="btn btn-ghost" id="btn-rest-history">History ▾</button>
-              <div
-                class="query-history-dropdown"
-                id="rest-history-dropdown"
-                style="display: none"
-              ></div>
-            </div>
-            <button
-              class="btn btn-ghost"
-              id="btn-rest-save-request"
-              data-tooltip="Save current request"
-              aria-label="Save current request"
-            >
-              ★ Save
-            </button>
-          </div>
-
-          <!-- Rendered by src/webview/rest-call/response-view.tsx -->
-          <div id="rest-response" style="display: none"></div>
-
-          <div id="rest-error" class="error-box" style="display: none"></div>
-        </section>
+        <!-- Rendered by src/webview/rest-call/ (see index.tsx). This element is
+             the mount point; everything inside it is Preact-owned. -->
+        <section class="card" id="restcall-card"></section>
       </div>
       <!-- ═══════════════════ TAB: Debug Logs ═══════════════════ -->
       <div class="tab-content" id="tab-debug-logs" role="tabpanel">

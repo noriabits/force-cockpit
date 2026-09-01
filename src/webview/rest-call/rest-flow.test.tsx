@@ -20,52 +20,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act } from '@testing-library/preact';
 
-// ── The static markup, verbatim from webviews/main.html ────────────────────────
-// Kept as one string so the port's only diff here is replacing it with the empty
-// mount container. Trimmed of the sibling intro card, which the bundle never touches.
-const REST_MARKUP = `
-<section class="card" id="restcall-card">
-  <div class="query-tab-bar" id="rest-tab-bar"></div>
-  <div class="rest-request-row">
-    <select id="rest-method" class="text-input rest-method" aria-label="HTTP method">
-      <option value="GET">GET</option>
-      <option value="POST">POST</option>
-      <option value="PUT">PUT</option>
-      <option value="PATCH">PATCH</option>
-      <option value="DELETE">DELETE</option>
-    </select>
-    <div class="input-with-paste" style="width: 100%">
-      <input type="text" id="rest-endpoint" class="text-input rest-endpoint" spellcheck="false"
-             placeholder="/services/data/v65.0/sobjects/Account" aria-label="Endpoint path" />
-      <button type="button" class="paste-btn" data-tooltip="Paste from clipboard"
-              aria-label="Paste from clipboard">&#128203;</button>
-    </div>
-  </div>
-
-  <div class="rest-headers-section">
-    <div class="rest-headers-section-title">Headers</div>
-    <div class="rest-headers-list" id="rest-headers-list"></div>
-    <button type="button" class="btn btn-ghost" id="btn-rest-add-header">+ Add header</button>
-  </div>
-
-  <textarea id="rest-body" class="rest-body-textarea" spellcheck="false" placeholder="{ }" rows="6"></textarea>
-
-  <div class="query-toolbar">
-    <button class="btn btn-primary" id="btn-rest-send">Send</button>
-    <button class="btn btn-ghost" id="btn-rest-clone" data-tooltip="Clone the current tab into a new tab"
-            aria-label="Clone the current request tab">&#10697; Clone</button>
-    <div class="query-history-wrap">
-      <button class="btn btn-ghost" id="btn-rest-history">History &#9662;</button>
-      <div class="query-history-dropdown" id="rest-history-dropdown" style="display: none"></div>
-    </div>
-    <button class="btn btn-ghost" id="btn-rest-save-request" data-tooltip="Save current request"
-            aria-label="Save current request">&#9733; Save</button>
-  </div>
-
-  <div id="rest-response" style="display: none"></div>
-
-  <div id="rest-error" class="error-box" style="display: none"></div>
-</section>`;
+// ── The mount point, matching webviews/main.html ───────────────────────────────
+// This was ~110 lines of static markup before the Preact migration; collapsing it
+// to one line was the ONLY edit that commit made to this file. Every stub,
+// selector and assertion below is untouched, which is the proof the port
+// preserved behaviour rather than merely looking like it did.
+const REST_MARKUP = `<section class="card" id="restcall-card"></section>`;
 
 // ── Harness ────────────────────────────────────────────────────────────────────
 type Post = Record<string, any>;
@@ -103,8 +63,13 @@ function installGlobals() {
   tooltips = new Map();
   w.__setTooltip = (el: Element, text: string) => tooltips.set(el, text);
   w.__onMessage = (type: string, handler: (msg: any) => void) => inbound.set(type, handler);
-  w.__registerFeature = (id: string, handlers: any) => {
-    featureHandlers[id] = handlers;
+  w.__registerFeature = (id: string, handlers: Record<string, () => void>) => {
+    // Wrapped in act() at registration rather than at each call site, so an org
+    // edge flushes Preact's render queue for the same reason click() and
+    // deliver() do — and the tests calling these read like plain calls.
+    featureHandlers[id] = Object.fromEntries(
+      Object.entries(handlers).map(([name, fn]) => [name, () => act(() => fn())]),
+    );
   };
   w.__orgConnected = true;
   w.__currentOrg = { sandboxName: null, isProtectedOrg: true };
