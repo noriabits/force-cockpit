@@ -271,6 +271,17 @@ describe('plugin require', () => {
       await expect(run()).rejects.toThrow(/\.\/lib\/jobs\.js/);
     });
 
+    // `BUILTINS` used to be an object literal, so require('constructor')
+    // resolved to Object via the prototype chain — truthy — and silently
+    // returned undefined instead of the npm-packages error.
+    it.each(['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__'])(
+      'treats require("%s") as an unavailable package, not a builtin',
+      async (spec) => {
+        write('handlers.js', `exports.go = async () => require('${spec}');`);
+        await expect(run()).rejects.toThrow(/npm packages are not available/);
+      },
+    );
+
     it('refuses to escape the plugin folder', async () => {
       fs.writeFileSync(path.join(tmp, 'secret.js'), `exports.v = 'leaked';`, 'utf8');
       write('handlers.js', `exports.go = async () => require('../../secret.js').v;`);

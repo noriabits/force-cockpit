@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { compareByName } from '../../utils/compareNames';
 
 /** Where a plugin was discovered. `private` shadows `user` on an id collision. */
 export type PluginSource = 'user' | 'private';
@@ -72,6 +73,20 @@ export class PluginRegistry {
     ];
   }
 
+  /**
+   * The directories scanned, private first.
+   *
+   * Exposed so `MainPanel` can turn them into webview `localResourceRoots`
+   * instead of re-deriving `{user}/plugins` and `{user}/private/plugins` from
+   * the paths a second time. Two derivations of one fact drift, and this one
+   * drifts SILENTLY: the plugin is still discovered and its sub-tab still
+   * renders, but `asWebviewUri` refuses its view.js/view.css and the panel is
+   * simply dead with no error anywhere.
+   */
+  get roots(): string[] {
+    return this.scanDirs.map(({ dir }) => dir);
+  }
+
   /** Every plugin across both dirs, deduped by id, sorted by display name. */
   list(): PluginInfo[] {
     const byId = new Map<string, PluginInfo>();
@@ -80,9 +95,12 @@ export class PluginRegistry {
         if (!byId.has(info.id)) byId.set(info.id, info);
       }
     }
-    return Array.from(byId.values()).sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
-    );
+    // THE shared comparator, not a hand-rolled localeCompare: a plugin name is a
+    // display name like a script's or a monitoring config's, and emoji-prefixed
+    // ones are common — plain collation sorts those by codepoint, which reads as
+    // random and makes an "A "/"0 " prefix meant to pin a plugin to the top do
+    // nothing. See src/utils/compareNames.ts.
+    return Array.from(byId.values()).sort(compareByName);
   }
 
   /**

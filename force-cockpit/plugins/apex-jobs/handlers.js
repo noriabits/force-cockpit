@@ -20,12 +20,18 @@ const IN_FLIGHT = ['Holding', 'Queued', 'Preparing', 'Processing'];
  * thing that turns one into a WHERE clause. Anything unrecognised falls through
  * to no filter rather than reaching the query — the same "validate against a
  * known set" rule that keeps a record Id out of a string literal below.
+ *
+ * **A Map, not an object literal**, and worth copying as a habit: on a literal,
+ * `FILTERS['__proto__']` returns Object.prototype and `FILTERS['constructor']`
+ * returns Object — both truthy, so an unknown key would sail past the `statuses`
+ * check below and blow up on `.join`. A Map has no prototype chain, so anything
+ * you did not put in it is simply `undefined`.
  */
-const FILTERS = {
-  active: IN_FLIGHT,
-  failed: ['Failed'],
-  finished: ['Completed', 'Aborted'],
-};
+const FILTERS = new Map([
+  ['active', IN_FLIGHT],
+  ['failed', ['Failed']],
+  ['finished', ['Completed', 'Aborted']],
+]);
 
 const JOB_FIELDS = `
   Id, Status, JobType, MethodName, ApexClass.Name, CreatedBy.Name,
@@ -34,7 +40,7 @@ const JOB_FIELDS = `
 `;
 
 exports.list = async ({ filter } = {}) => {
-  const statuses = FILTERS[filter];
+  const statuses = FILTERS.get(filter);
   const where = statuses ? `WHERE Status IN ('${statuses.join("', '")}')` : '';
 
   const result = await query(

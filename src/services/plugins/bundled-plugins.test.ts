@@ -119,6 +119,9 @@ describe('bundled example plugins', () => {
       expect(query.mock.calls[0][0]).toContain(expected);
     });
 
+    // The injection-shaped key is not on Object.prototype, so it always fell
+    // through correctly — this case passed even while the prototype-shaped keys
+    // below were breaking the handler.
     it('ignores a filter key it does not recognise instead of interpolating it', async () => {
       const query = vi.fn().mockResolvedValue({ totalSize: 0, records: [] });
       const { host } = makeHost({ query });
@@ -129,6 +132,21 @@ describe('bundled example plugins', () => {
       expect(soql).not.toContain('OR (Id != null');
       expect(soql).not.toContain('WHERE');
     });
+
+    // On an object literal these resolve through the prototype chain to a
+    // truthy value, so they passed the `statuses` check and then threw
+    // `statuses.join is not a function`. An unknown key must mean no filter,
+    // whatever its name.
+    it.each(['__proto__', 'constructor', 'toString', 'valueOf'])(
+      'treats the inherited key %s as no filter at all',
+      async (filter) => {
+        const query = vi.fn().mockResolvedValue({ totalSize: 0, records: [] });
+        const { host } = makeHost({ query });
+
+        await expect(host.invoke('apex-jobs', 'list', { filter })).resolves.toEqual([]);
+        expect(query.mock.calls[0][0]).not.toContain('WHERE');
+      },
+    );
 
     it('aborts a job through anonymous Apex', async () => {
       const executeAnonymousWithDebugLog = vi.fn().mockResolvedValue({ success: true });

@@ -119,6 +119,27 @@ describe('PluginHost', () => {
     );
   });
 
+  // `exports` is a plain object, so `toString`, `constructor` and `valueOf` are
+  // all inherited FUNCTIONS. A bare `exports[name]` lookup passes the typeof
+  // guard and calls a method the plugin never wrote. These are ordinary
+  // identifiers, so HANDLER_NAME_RE cannot reject them — the lookup has to.
+  it.each(['toString', 'constructor', 'valueOf', 'hasOwnProperty'])(
+    'refuses the inherited %s rather than calling it',
+    async (handler) => {
+      writePlugin('orders', `exports.ping = async () => 1;`);
+      const { host } = makeHost();
+      await expect(host.invoke('orders', handler, {})).rejects.toThrow(
+        `Plugin handler "${handler}" is not defined.`,
+      );
+    },
+  );
+
+  it('still finds a handler the plugin deliberately named toString', async () => {
+    writePlugin('orders', `exports.toString = async () => 'mine';`);
+    const { host } = makeHost();
+    await expect(host.invoke('orders', 'toString', {})).resolves.toBe('mine');
+  });
+
   it('reports a plugin with no handlers.js', async () => {
     writePlugin('orders', null);
     const { host } = makeHost();

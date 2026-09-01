@@ -166,7 +166,7 @@ refreshBtn.addEventListener('click', async () => {
 ### `invoke` options
 
 - **`{ button: someButton }`** — disables the button, shows a spinner, injects a **✕ Cancel**, and counts the call as busy work so switching orgs mid-run warns the user. Use it for an action the user just clicked.
-- **No `button`** — silent. Use it for a background poll, so a timer never disables a control or flashes a Cancel every few seconds.
+- **No `button`** — silent, in both senses: nothing is disabled, and the call is not counted as work in flight, so switching orgs mid-poll does not stop to ask about a request the user never made. Use it for a background poll.
 - **`{ onChunk: (text) => … }`** — receives whatever the handler `log()`s, live, while it runs.
 
 ### Cancellation
@@ -264,12 +264,32 @@ The org's data and the user's input are both untrusted. These are not optional.
 
 2. **Send keys from the panel, not query fragments.** The webview should send `'active'` and the handler should look it up in a fixed map. Never let `view.js` send SOQL, a WHERE clause, or a field list.
 
+3. **Look those keys up in a `Map`, not an object literal.** This one is easy to
+   get wrong and the failure is invisible in testing: on an object literal,
+   `LOOKUP['__proto__']` returns `Object.prototype` and `LOOKUP['constructor']`
+   returns `Object` — both **truthy** — so an unknown key sails past a
+   `if (found)` check and then throws something unrelated further down.
+   `toString`, `valueOf` and `hasOwnProperty` behave the same way. A `Map` has no
+   prototype chain, so a key you did not put in it is simply `undefined`.
+
    ```js
+   // ✓ unknown key → undefined, whatever it is called
+   const FILTERS = new Map([
+     ['active', ['Queued', 'Processing']],
+     ['failed', ['Failed']],
+   ]);
+   const statuses = FILTERS.get(filter);
+
+   // ✗ FILTERS['__proto__'] is truthy and is not an array
    const FILTERS = { active: ['Queued', 'Processing'], failed: ['Failed'] };
-   const statuses = FILTERS[filter]; // unknown key → undefined → no filter, not injection
+   const statuses = FILTERS[filter];
    ```
 
-3. **Build DOM nodes, never `innerHTML`, for anything from the org.** A record name can contain markup.
+   The same applies to any lookup keyed by something the panel sent. If you must
+   use an object literal, guard it with
+   `Object.prototype.hasOwnProperty.call(obj, key)`.
+
+4. **Build DOM nodes, never `innerHTML`, for anything from the org.** A record name can contain markup.
 
    ```js
    const cell = row.insertCell();
@@ -277,7 +297,7 @@ The org's data and the user's input are both untrusted. These are not optional.
    // cell.innerHTML = job.name; ✗ never
    ```
 
-4. **Never log or return the session token.** `org.accessToken` must not cross into the webview.
+5. **Never log or return the session token.** `org.accessToken` must not cross into the webview.
 
 ## Common mistakes to avoid
 
@@ -288,6 +308,7 @@ The org's data and the user's input are both untrusted. These are not optional.
 - Passing `{ button }` to a background poll — it disables the control and flashes a ✕ Cancel every tick.
 - Rendering `'Operation cancelled'` as an error — it is a cancel or a declined prompt, not a failure.
 - Adding your own confirm around `executeApex` — the gate already does it, so the user sees two modals.
+- Looking a panel-supplied key up in an object literal — `LOOKUP['__proto__']` and `LOOKUP['constructor']` are truthy and are not your data. Use a `Map`.
 - Un-prefixed ids in `view.html` (`id="results"`) — they collide with the rest of the panel.
 - Inline `<script>` or `onclick=` in `view.html` — silently blocked by the CSP; nothing runs and nothing warns.
 - Hardcoded colours in `view.css` — unreadable in the other theme. Use the `--vscode-*` variables.

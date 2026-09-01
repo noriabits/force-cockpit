@@ -895,12 +895,20 @@ are likely to want:
 | Filter dropdown → a key, not SOQL | Keeping user input out of your query               |
 | The record-Id regex               | Keeping user input out of an Apex literal          |
 | `{ button: refreshBtn }`          | Spinner + ✕ Cancel on an action the user asked for |
-| Auto-refresh with no `button`     | A background poll that disables nothing            |
+| Auto-refresh with no `button`     | A background poll that stays out of the way        |
 | `fc.openRecord(job.id)`           | Opening a record in Salesforce                     |
 | `fc.onOrg({ ... })`               | Reacting to org connect / disconnect               |
 
 Copy the folder into your own `force-cockpit/plugins/`, rename it, and start
 editing.
+
+> **Writing a plugin with an AI assistant?** This repo ships an
+> [Agent Skill](force-cockpit/skills/force-cockpit-plugins/SKILL.md) documenting the whole
+> surface — the two realms and what may not cross between them, the `handlers.js` globals and
+> `require`, the `window.__fcPlugin` API, the CSP rules `view.html` has to live inside, and
+> the automatic production gate. Copy the `force-cockpit-plugins/` folder into your
+> workspace's `.claude/skills/` (or `.github/skills/`) and your assistant will write a valid
+> plugin first time instead of guessing at the boundary.
 
 ### Known limits
 

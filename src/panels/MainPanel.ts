@@ -112,16 +112,18 @@ export class MainPanel {
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'vendor')),
           vscode.Uri.file(path.join(context.extensionPath, 'dist', 'webview')),
           // Plugin assets live in the user's workspace, outside the extension
-          // install dir — without these two roots `asWebviewUri` refuses to
-          // serve a plugin's view.js/view.css and the sub-tab renders blank.
-          // Guarded on an absolute path for the no-workspace case, the same
-          // check `ensureUserFolders` makes.
-          ...(path.isAbsolute(featureCtx.paths.user)
-            ? [
-                vscode.Uri.file(path.join(featureCtx.paths.user, 'plugins')),
-                vscode.Uri.file(path.join(featureCtx.paths.private, 'plugins')),
-              ]
-            : []),
+          // install dir — without these roots `asWebviewUri` refuses to serve a
+          // plugin's view.js/view.css and the sub-tab renders blank.
+          //
+          // Taken from the registry's OWN scan dirs rather than re-derived from
+          // `paths` here: the same two directories decided in two places would
+          // drift silently, since a mismatch still discovers the plugin and
+          // still renders its sub-tab — only the assets go missing, with no
+          // error to follow. Absolute-path filter for the no-workspace case,
+          // the same check `ensureUserFolders` makes.
+          ...featureCtx.pluginRegistry.roots
+            .filter((dir) => path.isAbsolute(dir))
+            .map((dir) => vscode.Uri.file(dir)),
         ],
       },
     );
@@ -150,16 +152,19 @@ export class MainPanel {
     this._pluginRegistry = featureCtx.pluginRegistry;
     this._plugins = this._pluginRegistry.list();
     this._assets = new WebviewAssets(context, panel.webview, this._features, this._plugins);
+    // One instance, two consumers: the REST tab's route and a plugin's
+    // `restCall()` global are the same request path against the same org.
+    const restCallService = new RestCallService(connectionManager);
     this._router = new MessageRouter({
       webview: panel.webview,
       connectionManager,
-      restCallService: new RestCallService(connectionManager),
+      restCallService,
       restCallStateStore: new RestCallStateStore(context.workspaceState),
       describeService,
       pluginHost: new PluginHost({
         connectionManager,
         workspaceRoot: featureCtx.paths.workspaceRoot,
-        restCallService: new RestCallService(connectionManager),
+        restCallService,
         registry: featureCtx.pluginRegistry,
         // Mutations from a plugin are confirmed by the HOST at the mutation
         // site, not by the plugin author remembering to ask. See

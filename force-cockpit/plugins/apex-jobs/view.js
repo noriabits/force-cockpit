@@ -40,7 +40,7 @@ function progressText(job) {
   return `${job.processed}/${job.total}`;
 }
 
-function abortButton(job, onDone) {
+function abortButton(job) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn btn-ghost apex-jobs-abort';
@@ -63,7 +63,6 @@ function abortButton(job, onDone) {
       if (err.message !== 'Operation cancelled') showError(err.message);
       btn.disabled = false;
     }
-    onDone?.();
   });
 
   return btn;
@@ -133,7 +132,8 @@ async function load(options = {}) {
     // `button` buys the spinner, the ✕ Cancel and the busy accounting that
     // makes an org switch warn — right for a refresh the user asked for.
     // The auto-refresh below deliberately passes none, so a background poll
-    // never disables the button or flashes a Cancel every ten seconds.
+    // disables nothing, flashes no Cancel, and does not make an org switch stop
+    // to ask about a request the user never made.
     const jobs = await fc.invoke('list', { filter: filterSelect.value }, options);
     render(jobs);
   } catch (err) {

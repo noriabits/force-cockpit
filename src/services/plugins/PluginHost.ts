@@ -94,11 +94,18 @@ export class PluginHost {
     // The handler is looked up by key off `exports`, so the name never reaches
     // the source text — a name like `x; process.exit()` cannot be injected even
     // if it slipped past HANDLER_NAME_RE.
+    //
+    // OWN properties only. `exports` is a plain object, so `exports.toString`,
+    // `.constructor` and `.valueOf` are all inherited functions — a bare lookup
+    // would pass the typeof guard and CALL a method the plugin never wrote,
+    // returning `[object Object]` instead of saying the handler does not exist.
+    // HANDLER_NAME_RE cannot catch these: they are ordinary identifiers.
     const wrapped = [
       '(async () => {',
       code,
       ';',
-      'const __fn = exports[__handlerName] ?? module.exports[__handlerName];',
+      'const __own = (o, k) => (Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);',
+      'const __fn = __own(exports, __handlerName) ?? __own(module.exports, __handlerName);',
       `if (typeof __fn !== 'function') throw new Error('Plugin handler "' + __handlerName + '" is not defined.');`,
       'return await __fn(args);',
       '})()',
@@ -110,7 +117,12 @@ export class PluginHost {
 
     if (!signal) return execution;
     // Races rather than kills: the vm script cannot be force-stopped, so the
-    // cancel stops the *wait*, exactly as JsExecutor does.
+    // cancel stops the *wait*, exactly as JsExecutor does. Which means the
+    // script is still running after the race is lost — and if it then rejects,
+    // nothing is left listening. Claim it here: an unhandled rejection in the
+    // extension host is a process-level warning (a crash under a strict
+    // runtime) for a failure the user already cancelled.
+    void execution.catch(() => {});
     const abortPromise = new Promise<never>((_, reject) =>
       signal.addEventListener('abort', () => reject(new Error('Operation cancelled')), {
         once: true,

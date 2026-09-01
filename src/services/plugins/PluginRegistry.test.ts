@@ -34,6 +34,7 @@ describe('PluginRegistry', () => {
   }
 
   const registry = () => new PluginRegistry(userDir, privateDir);
+  const names = (list: { name: string }[]) => list.map((p) => p.name);
 
   it('discovers plugins with the folder name as the id, sorted by display name', () => {
     writePlugin(userDir, 'zeta', 'name: Zeta\ndescription: last\nicon: "🅩"');
@@ -57,6 +58,33 @@ describe('PluginRegistry', () => {
         source: 'user',
       },
     ]);
+  });
+
+  it('sorts a symbol-prefixed name by its word, not by the leading symbol', () => {
+    // The whole reason this goes through the shared `compareByName` rather than
+    // a plain localeCompare: default collation puts symbols and emoji AHEAD of
+    // every letter, so "⚙️ Zebra" sorts before "Apex" — an order that reads as
+    // random once a few plugins carry an icon in their name. Comparison starts
+    // at the first alphanumeric character instead.
+    writePlugin(userDir, 'zebra', 'name: "⚙️ Zebra"');
+    writePlugin(userDir, 'apex', 'name: Apex Jobs');
+    writePlugin(userDir, 'monitor', 'name: "🔥 Monitor"');
+
+    expect(names(registry().list())).toEqual(['Apex Jobs', '🔥 Monitor', '⚙️ Zebra']);
+  });
+
+  it('lets a "0 " prefix pin a plugin to the top even against an emoji-prefixed one', () => {
+    // The other half of the same defect: under plain collation every emoji still
+    // sorts ahead of the digit, so the prefix a user reaches for to pin
+    // something to the top does nothing at all.
+    writePlugin(userDir, 'pinned', 'name: "0 Pinned"');
+    writePlugin(userDir, 'apex', 'name: "⚙️ Apex"');
+
+    expect(names(registry().list())).toEqual(['0 Pinned', '⚙️ Apex']);
+  });
+
+  it('exposes its scan roots, private first, so the panel need not re-derive them', () => {
+    expect(registry().roots).toEqual([privateDir, userDir]);
   });
 
   it('skips a folder with no plugin.yaml — it is not a plugin, not a broken one', () => {

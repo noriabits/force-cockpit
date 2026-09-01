@@ -63,6 +63,10 @@ export class JsExecutor {
       const execution = vmScript.runInContext(vmContext, { breakOnSigint: true }) as Promise<void>;
 
       if (signal) {
+        // The vm script outlives a lost race (see PluginHost, which mirrors
+        // this): claim its rejection so a cancelled run cannot surface as an
+        // unhandled rejection in the extension host.
+        void execution.catch(() => {});
         const abortPromise = new Promise<never>((_, reject) =>
           signal.addEventListener('abort', () => reject(new Error('Operation cancelled')), {
             once: true,

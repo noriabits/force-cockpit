@@ -101,7 +101,11 @@
        *
        * Pass `button` to get the spinner, the ✕ Cancel button and the
        * operationStarted/Ended accounting that makes an org switch warn — all
-       * of it from the same __startAction every built-in feature uses.
+       * of it from the same __startAction every built-in feature uses. Leave it
+       * out and the call is silent in both senses: no control is touched, and
+       * it is not counted as work in flight — which is what a background poll
+       * wants, since neither its spinner nor its "cancel this?" modal would be
+       * about anything the user did.
        *
        * @param {string} handler
        * @param {unknown} [args]
@@ -119,8 +123,19 @@
               settle(opId, (e) => e.reject(new Error('Operation cancelled')));
             });
           } else {
+            // No operationStarted/Ended here, deliberately: that pair is what
+            // makes an org switch stop and ask "operations in flight — cancel
+            // them?", and this branch exists for a background poll the user
+            // never started. Counting a 10s tick as busy work meant a switch
+            // landing inside the request window raised a modal about a request
+            // nobody asked for. The silence IS the branch.
+            //
+            // Nothing is lost by not registering: `cancelAllOperations` still
+            // rejects every pending entry (that subscription is this module's
+            // own, below), and the host still aborts the invoke through
+            // OperationRegistry.cancelAll() — `_routePluginInvoke` registers a
+            // terminal abort under this opId whatever the webview announced.
             opId = 'plugin-' + ++seq;
-            vscode.postMessage({ type: 'operationStarted', opId });
           }
 
           pending.set(opId, {
@@ -174,8 +189,9 @@
     };
   };
 
+  // Mirrors the start above: only a button-backed call was ever announced, so
+  // only a button-backed call has anything to end.
   function finish(/** @type {string} */ opId, /** @type {HTMLButtonElement | undefined} */ button) {
     if (button) win.__endAction(opId);
-    else vscode.postMessage({ type: 'operationEnded', opId });
   }
 })();

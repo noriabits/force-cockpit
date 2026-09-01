@@ -11,13 +11,20 @@ import type { SandboxContext } from '../sandbox/buildSandboxContext';
  *
  * The list is deliberately short: these are the only globals whose npm name a
  * plugin author is likely to reach for out of habit.
+ *
+ * **A Map, not an object literal.** `BUILTINS['constructor']` on a literal walks
+ * the prototype chain and returns `Object` — truthy — so the lookup below would
+ * "find" a builtin and hand back `globals[Object]`, i.e. `undefined`, instead of
+ * raising the npm-packages error. Same for `toString`, `valueOf`,
+ * `hasOwnProperty` and `__proto__`. A Map has no prototype chain, so an unknown
+ * key is simply absent.
  */
-const BUILTINS: Readonly<Record<string, string>> = {
-  fs: 'fs',
-  os: 'os',
-  path: 'path',
-  'js-yaml': 'yaml',
-};
+const BUILTINS = new Map<string, string>([
+  ['fs', 'fs'],
+  ['os', 'os'],
+  ['path', 'path'],
+  ['js-yaml', 'yaml'],
+]);
 
 export interface PluginRequireOptions {
   /** Absolute plugin folder — nothing outside it can be required. */
@@ -56,13 +63,13 @@ export function createPluginRequire(options: PluginRequireOptions): (spec: unkno
     return (spec: unknown) => {
       const request = String(spec ?? '');
 
-      const builtin = BUILTINS[request];
+      const builtin = BUILTINS.get(request);
       if (builtin) return options.globals[builtin];
 
       if (!request.startsWith('./') && !request.startsWith('../')) {
         throw new Error(
           `require("${request}"): a plugin can only require its own files — use a relative ` +
-            `path like "./lib/jobs.js" — or one of: ${Object.keys(BUILTINS).join(', ')}. ` +
+            `path like "./lib/jobs.js" — or one of: ${[...BUILTINS.keys()].join(', ')}. ` +
             `npm packages are not available.`,
         );
       }
