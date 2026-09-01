@@ -2,17 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { YamlSource } from '../../../../utils/yaml-loader';
-import type {
-  GatherSpec,
-  RestSpec,
-  ScriptInput,
-  ScriptThenStep,
-  ScriptType,
-  YamlScript,
-} from '../types';
+import type { GatherSpec, RestSpec, ScriptInput, ScriptType, YamlScript } from '../types';
 import { resolveWorkspaceFile } from './workspaceFile';
 import { hasRestKey, parseRestSpec, restBody, restBodyFile, type ParsedRest } from './restSpec';
-import { validateWhenExpression } from '../execution/thenCondition';
+import { parseThenSteps } from './thenSpec';
+import { buildYamlScript } from './buildScript';
 
 type ParsedGather = {
   apex?: string;
@@ -108,87 +102,35 @@ export class ScriptParser {
       gather = gatherOutcome.gather;
     }
 
-    const thenOutcome = this.parseThen(doc.then);
+    const thenOutcome = parseThenSteps(doc.then);
     if ('error' in thenOutcome) {
       return this.invalidCard(doc, id, folder, source, type, parsedInputs, thenOutcome.error);
     }
 
-    return {
+    return buildYamlScript({
       id,
       folder,
       name: doc.name!,
-      description: doc.description ?? '',
+      description: doc.description,
       type,
-      script: resolved.content,
-      ...(scriptFile ? { scriptFile } : {}),
       source,
-      ...(parsedInputs.length ? { inputs: parsedInputs } : {}),
-      ...(thenOutcome.steps.length ? { then: thenOutcome.steps } : {}),
-      ...(type === 'apex' && doc['filter-user-debug'] ? { filterUserDebug: true } : {}),
-      ...(type === 'apex' && doc['format-json'] ? { formatJson: true } : {}),
-      ...(type === 'ai' && typeof doc.model === 'string' && doc.model.trim()
-        ? { model: doc.model.trim() }
-        : {}),
-      ...(gather ? { gather } : {}),
-      ...(type === 'ai' && doc['allow-followup-queries'] ? { allowFollowupQueries: true } : {}),
-      ...(type === 'ai' && doc['allow-read-workspace-files']
-        ? { allowReadWorkspaceFiles: true }
-        : {}),
-      ...(type === 'ai' && this.parseSkills(doc.skills).length
-        ? { skills: this.parseSkills(doc.skills) }
-        : {}),
-      ...(rest ? { rest } : {}),
-    };
-  }
-
-  /**
-   * Normalise the `then:` field — the scripts to run after this one's body.
-   * Returns a message instead of throwing, so a malformed block surfaces as an
-   * invalid-script card rather than dropping the file.
-   */
-  private parseThen(raw: unknown): { steps: ScriptThenStep[] } | { error: string } {
-    if (raw == null) return { steps: [] };
-    if (!Array.isArray(raw)) {
-      return { error: "'then' must be a list of steps, each with a 'script' id" };
-    }
-
-    const steps: ScriptThenStep[] = [];
-    for (const entry of raw) {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-        return { error: "Each 'then' step must be an object with a 'script' id" };
-      }
-      const row = entry as Record<string, unknown>;
-      const id = typeof row.script === 'string' ? row.script.trim() : '';
-      if (!id) {
-        return { error: "Each 'then' step needs a non-empty 'script' id" };
-      }
-
-      const step: ScriptThenStep = { script: id };
-      if (row.when != null) {
-        if (typeof row.when !== 'string') {
-          return { error: `'when' on 'then' step "${id}" must be a string condition` };
-        }
-        const whenError = validateWhenExpression(row.when);
-        if (whenError) return { error: whenError };
-        if (row.when.trim()) step.when = row.when.trim();
-      }
-      if (row.with != null) {
-        if (typeof row.with !== 'object' || Array.isArray(row.with)) {
-          return {
-            error: `'with' on 'then' step "${id}" must map input names to values`,
-          };
-        }
-        const values: Record<string, string> = {};
-        for (const [key, value] of Object.entries(row.with as Record<string, unknown>)) {
-          // Inputs are always strings; YAML would otherwise hand us `true`/`12`
-          // for an unquoted checkbox or number value.
-          values[key] = value == null ? '' : String(value);
-        }
-        step.with = values;
-      }
-      steps.push(step);
-    }
-    return { steps };
+      script: resolved.content,
+      scriptFile,
+      inputs: parsedInputs,
+      then: thenOutcome.steps,
+      apex: {
+        filterUserDebug: doc['filter-user-debug'],
+        formatJson: doc['format-json'],
+      },
+      ai: {
+        model: doc.model,
+        gather,
+        allowFollowupQueries: doc['allow-followup-queries'],
+        allowReadWorkspaceFiles: doc['allow-read-workspace-files'],
+        skills: this.parseSkills(doc.skills),
+      },
+      rest,
+    });
   }
 
   /** Normalise the `skills:` field to a list of non-empty string ids. */
