@@ -354,6 +354,24 @@ describe('createFieldsPanel', () => {
       expect(h.objectBtn.textContent).toBe('Lead ▾');
     });
 
+    it('keeps following while the object picker is open', async () => {
+      // The picker being open is not a deliberate browse — nothing is picked
+      // yet. Suppressing the snap here used to land the user on the
+      // foreign-browse banner with no checkboxes the moment they closed it.
+      const h = await mountOpen();
+      click(h.objectBtn);
+      await tick();
+
+      await setQuery(h, 'SELECT Id FROM Lead');
+      expect(h.objectBtn.textContent).toBe('Lead ▾');
+
+      click(h.objectBtn); // back to the field list
+      await tick();
+      expect(names()).toEqual(['Id', 'Company']);
+      expect(banner()).toBeNull();
+      expect(checkboxes().length).toBeGreaterThan(0);
+    });
+
     it('stays put when the query changes but the object does not', async () => {
       const h = await mountOpen();
       click(expanderFor('OwnerId')!);

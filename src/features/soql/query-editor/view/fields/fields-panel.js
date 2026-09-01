@@ -90,12 +90,24 @@ export function createFieldsPanel(ctx) {
    * back to it (auto-follow) — the same reasoning as the AI panel's "what is
    * on screen" context: the browser should track what the user is actually
    * querying, not a stale pick from a previous tab or an earlier edit.
+   *
+   * The snap deliberately does NOT check `mode`. It used to only fire in
+   * 'fields' mode, on the reasoning that an open object picker means a
+   * deliberate browse that auto-follow must not override — but at that moment
+   * nothing has been picked yet, so there is no browse to protect, and the list
+   * on screen is objects rather than this object's fields. All the guard
+   * achieved was suppressing auto-follow in the one window where it costs
+   * something: editing the FROM clause with the picker open left `browseObject`
+   * on the old object, so closing the picker landed on the foreign-browse
+   * banner with every checkbox gone, and the user had to click "↩ back to X"
+   * to undo a divergence they never asked for. A real pick still wins — it
+   * comes through `pickObject`, after this.
    */
   function syncFromQuery() {
     const next = queryObjectName(textarea.value);
     const changed = (next ?? '').toLowerCase() !== (queryObject ?? '').toLowerCase();
     queryObject = next;
-    if (changed && mode === 'fields') {
+    if (changed) {
       browseObject = queryObject;
       resetExpansions();
     }
