@@ -18,6 +18,7 @@
 // the 19 ids the static markup carries today.
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { act } from '@testing-library/preact';
 
 // ── The static markup, verbatim from webviews/main.html ────────────────────────
 // Kept as one string so the port's only diff here is replacing it with the empty
@@ -150,20 +151,36 @@ const sendBtn = () => btnByText('Send');
 const pills = () => $$('.query-tab') as HTMLElement[];
 const responsePre = () => $<HTMLElement>('.rest-response-body');
 
+// Every interaction is wrapped in act() so Preact's render queue is flushed
+// before the assertion reads the DOM. Preact batches signal-driven re-renders
+// into a microtask — invisible in the webview, where the browser paints after
+// microtasks, but visible to a test that clicks and reads synchronously. This is
+// the harness adapting to the framework; no assertion below depends on it, and
+// the helpers behave identically against imperative DOM code.
 function setValue(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
-  el.value = value;
-  el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+  act(() => {
+    el.value = value;
+    el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+  });
 }
 
 function click(el: Element) {
-  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  act(() => {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
+
+function keydown(el: Element, key: string) {
+  act(() => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
 }
 
 /** Deliver a host reply through the same registry media/main.js dispatches into. */
 function deliver(type: string, data: unknown) {
   const handler = inbound.get(type);
   if (!handler) throw new Error(`No handler registered for "${type}"`);
-  handler({ type, data });
+  act(() => handler({ type, data }));
 }
 
 const postsOf = (type: string) => posts.filter((p) => p.type === type);
@@ -544,7 +561,7 @@ describe('REST history dropdown', () => {
     click(btnByText('★ Save'));
     const input = $<HTMLInputElement>('.query-history-save-input');
     input.value = 'Org limits';
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    keydown(input, 'Enter');
 
     const posted = lastPost('saveRestCallSavedRequests');
     expect(posted!.savedRequests[0]).toMatchObject({
@@ -562,20 +579,18 @@ describe('REST history dropdown', () => {
     const input = $<HTMLInputElement>('.query-history-save-input');
 
     input.value = '   ';
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    keydown(input, 'Enter');
     expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
 
     input.value = 'Named'; // endpoint is still empty
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    keydown(input, 'Enter');
     expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
   });
 
   it('abandons the save row on Escape', async () => {
     await mountWithHistory();
     click(btnByText('★ Save'));
-    $<HTMLInputElement>('.query-history-save-input').dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
+    keydown($<HTMLInputElement>('.query-history-save-input'), 'Escape');
     expect($('.query-history-save-input')).toBeNull();
     expect(postsOf('saveRestCallSavedRequests')).toHaveLength(0);
   });
