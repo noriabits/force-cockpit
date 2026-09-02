@@ -76,6 +76,14 @@ export interface PendingReply {
   fail: (msg: string) => void;
   /** A terminal reply that is not a failure: stop waiting, release the button. */
   settle: () => void;
+  /** The id this form was opened on — `null` for a brand-new card. */
+  configId: string | null;
+  /**
+   * A save succeeded: tear this form down and put the PERSISTED record on
+   * screen in its place, instead of reloading the whole grid. See `applySaved`
+   * in edit-form.tsx for why the id never has to be tracked webview-side.
+   */
+  applySaved: (saved: MonitoringConfigPayload) => void;
 }
 
 /**

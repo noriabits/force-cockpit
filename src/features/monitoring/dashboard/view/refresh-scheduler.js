@@ -25,7 +25,15 @@ export function createRefreshScheduler(ctx) {
   /** @type {Map<string, ReturnType<typeof setInterval>>} configId → auto-refresh interval */
   const refreshTimers = new Map();
 
-  /** @param {string} configId */
+  /**
+   * Stop the timer for one config. Exposed because a save now updates the card
+   * IN PLACE instead of reloading the grid: a rename lands the record under a
+   * new id, and without this the old id's interval would keep firing
+   * `triggerQuery` for a config that no longer exists. `clearAllRefreshTimers`
+   * used to cover that only because every save wiped the whole grid.
+   *
+   * @param {string} configId
+   */
   function clearAutoRefresh(configId) {
     const id = refreshTimers.get(configId);
     if (id) {
@@ -54,5 +62,5 @@ export function createRefreshScheduler(ctx) {
     refreshTimers.clear();
   }
 
-  return { setupAutoRefresh, clearAllRefreshTimers };
+  return { setupAutoRefresh, clearAutoRefresh, clearAllRefreshTimers };
 }

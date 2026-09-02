@@ -189,6 +189,8 @@ function EditForm(props: {
         setError(msg);
       },
       settle: done,
+      configId,
+      applySaved,
     });
     return id;
   }
@@ -396,6 +398,30 @@ function EditForm(props: {
     const original = ctx.getConfigs().find((c) => c.id === configId) || cfg;
     card.replaceWith(ctx.buildViewCard(original));
     ctx.triggerQuery(original);
+  }
+
+  /**
+   * A save came back: put the PERSISTED record on screen in this form's place.
+   *
+   * Mirrors `onCancel`'s revert, with the two differences that are the whole
+   * point. The record is the HOST's — re-slugged id and all — not the local
+   * draft; and this replaces a `loadConfigs()` that rebuilt the entire grid
+   * from disk, tearing out every OTHER open edit form with it, unsaved edits
+   * included and with no warning.
+   *
+   * Reloading was not paranoia: the in-place swap this restores was removed
+   * once because it maintained the card's id BY HAND, so after a rename the
+   * webview held a stale id, the next rename sent that dead id, the host could
+   * not delete the real old file, and YAML files piled up. Taking the id from
+   * the reply instead is what makes it safe — it is never tracked here at all.
+   */
+  function applySaved(saved: MonitoringConfigPayload): void {
+    runCleanups();
+    // buildViewCard builds an empty shell (the chart instance was destroyed on
+    // entering edit mode), so re-run the query or the card stays blank until
+    // the user hits Refresh — same reason as onCancel above.
+    card.replaceWith(ctx.buildViewCard(saved));
+    ctx.triggerQuery(saved);
   }
 
   function onDelete(): void {

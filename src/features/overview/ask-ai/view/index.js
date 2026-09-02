@@ -195,6 +195,78 @@ function endRun() {
   setBusy(false);
 }
 
+/**
+ * Host -> webview dispatch, one entry per message name.
+ *
+ * @type {Record<string, (data: any) => void>}
+ */
+const messageHandlers = {
+  askAiStateLoaded: (data) => applyState(data.state ?? {}),
+  listChatModelsResult: (data) => setModels(data.models ?? []),
+  listChatModelsError: () => setModels([]),
+
+  // Shared streaming channel — only take chunks for our own run.
+  scriptLogChunk: (data) => {
+    if (data.opId && data.opId === opId) appendChunk(data.chunk);
+  },
+
+  askAiAnswer: (data) => {
+    if (data.opId !== opId) return; // stale — belongs to a cancelled/superseded run
+    endRun();
+    if (!receivedChunk && data.answer) {
+      transcript += data.answer;
+    }
+    if (data.cancelled) {
+      transcript += `\n${labels.cancelledNote}\n`;
+    } else {
+      lockToggles();
+      // The host just saved/updated this conversation's History entry —
+      // refresh so the dropdown shows it (and its bumped timestamp)
+      // whenever it's next opened, without waiting for a reconnect.
+      history.refresh();
+    }
+    paint();
+  },
+  askAiError: (data) => {
+    if (data.opId !== opId) return;
+    endRun();
+    // textContent renders this verbatim — no HTML escaping needed (that's
+    // only for innerHTML sinks elsewhere in the codebase).
+    transcript += `\n_${labels.askFailed}: ${data.message}_\n`;
+    paint();
+  },
+
+  askAiChatReset: () => resetChat(),
+
+  askAiHistoryLoaded: (data) => history.onHistoryUpdated(data.conversations ?? []),
+
+  askAiConversationLoaded: (data) => {
+    transcript = data.transcript ?? '';
+    outputEl.textContent = transcript;
+    pendingModelId = data.modelId ?? '';
+    if (pendingModelId && [...modelSel.options].some((o) => o.value === pendingModelId)) {
+      modelSel.value = pendingModelId;
+    }
+    // The restored thread's tool access is already committed host-side —
+    // reflect that immediately rather than waiting for a new turn to lock it.
+    lockToggles();
+    if (data.messagesTruncated) {
+      transcript += `\n\n_${labels.historyTruncatedNote}_\n`;
+      outputEl.textContent = transcript;
+    }
+  },
+  askAiConversationLoadedError: (data) => {
+    // Don't touch whatever is already on screen — there's nothing wrong with
+    // the current transcript, only the load attempt failed.
+    console.error('Failed to load conversation:', data.message);
+  },
+
+  // Deliberate no-op: history.js already removed the row locally on click.
+  askAiConversationDeleted: () => {},
+  // Resync — the optimistic local removal may have been wrong.
+  askAiConversationDeleteError: () => history.refresh(),
+};
+
 win.__registerFeature('ask-ai', {
   onOrgConnected() {
     // A direct org-to-org switch never fires onOrgDisconnected, so a run left
@@ -222,83 +294,7 @@ win.__registerFeature('ask-ai', {
     resetChat();
   },
   onMessage(/** @type {{ type: string, data: any }} */ message) {
-    const data = message.data ?? {};
-    switch (message.type) {
-      case 'askAiStateLoaded':
-        applyState(data.state ?? {});
-        break;
-      case 'listChatModelsResult':
-        setModels(data.models ?? []);
-        break;
-      case 'listChatModelsError':
-        setModels([]);
-        break;
-
-      // Shared streaming channel — only take chunks for our own run.
-      case 'scriptLogChunk':
-        if (data.opId && data.opId === opId) appendChunk(data.chunk);
-        break;
-
-      case 'askAiAnswer':
-        if (data.opId !== opId) return; // stale — belongs to a cancelled/superseded run
-        endRun();
-        if (!receivedChunk && data.answer) {
-          transcript += data.answer;
-        }
-        if (data.cancelled) {
-          transcript += `\n${labels.cancelledNote}\n`;
-        } else {
-          lockToggles();
-          // The host just saved/updated this conversation's History entry —
-          // refresh so the dropdown shows it (and its bumped timestamp)
-          // whenever it's next opened, without waiting for a reconnect.
-          history.refresh();
-        }
-        paint();
-        break;
-      case 'askAiError':
-        if (data.opId !== opId) return;
-        endRun();
-        // textContent renders this verbatim — no HTML escaping needed (that's
-        // only for innerHTML sinks elsewhere in the codebase).
-        transcript += `\n_${labels.askFailed}: ${data.message}_\n`;
-        paint();
-        break;
-
-      case 'askAiChatReset':
-        resetChat();
-        break;
-
-      case 'askAiHistoryLoaded':
-        history.onHistoryUpdated(data.conversations ?? []);
-        break;
-
-      case 'askAiConversationLoaded':
-        transcript = data.transcript ?? '';
-        outputEl.textContent = transcript;
-        pendingModelId = data.modelId ?? '';
-        if (pendingModelId && [...modelSel.options].some((o) => o.value === pendingModelId)) {
-          modelSel.value = pendingModelId;
-        }
-        // The restored thread's tool access is already committed host-side —
-        // reflect that immediately rather than waiting for a new turn to lock it.
-        lockToggles();
-        if (data.messagesTruncated) {
-          transcript += `\n\n_${labels.historyTruncatedNote}_\n`;
-          outputEl.textContent = transcript;
-        }
-        break;
-      case 'askAiConversationLoadedError':
-        // Don't touch whatever is already on screen — there's nothing wrong
-        // with the current transcript, only the load attempt failed.
-        console.error('Failed to load conversation:', data.message);
-        break;
-
-      case 'askAiConversationDeleted':
-        break; // history.js already removed it locally on click
-      case 'askAiConversationDeleteError':
-        history.refresh(); // resync — the optimistic local removal may be wrong
-        break;
-    }
+    const handler = messageHandlers[message.type];
+    if (handler) handler(message.data ?? {});
   },
 });

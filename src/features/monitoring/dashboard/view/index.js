@@ -87,7 +87,7 @@ import { hasNotifications } from '../notification-config';
     getIsVisible: () => isVisible,
     triggerQuery,
   });
-  const { setupAutoRefresh, clearAllRefreshTimers } = refreshScheduler;
+  const { setupAutoRefresh, clearAutoRefresh, clearAllRefreshTimers } = refreshScheduler;
   const cardBuilder = createCardBuilder({
     labels: L,
     getConnected: () => connected,
@@ -160,6 +160,59 @@ import { hasNotifications } from '../notification-config';
   );
   panelObserver.observe(monitoringPanel);
 
+  /**
+   * Host -> webview dispatch, one entry per message name.
+   *
+   * Converted from a 13-arm `switch` that measured a complexity of 25, matching
+   * `yaml-scripts/view/index.js`, `debug-logs/explorer/view/index.js` and
+   * `overview/ask-ai/view/index.js`. Handlers take `message.data` verbatim —
+   * NOT `?? {}` — because several arms read a field straight off it and a
+   * silent `{}` would turn a malformed reply into an undefined payload rather
+   * than a visible throw.
+   *
+   * @type {Record<string, (data: any) => void>}
+   */
+  const messageHandlers = {
+    loadMonitoringConfigsResult: (data) => onConfigsLoaded(data.configs, data.hiddenCount || 0),
+    // Touches no form. A reload failing is not the same event as "the reload my
+    // save asked for failed" — `loadConfigs()` is also called by a confirmed
+    // delete, the restore-hidden-built-ins reply and an org reconnect. Every
+    // submit is settled by its OWN correlated reply.
+    loadMonitoringConfigsError: (data) => showLoadError(data.message),
+
+    runMonitoringQueryResult: (data) => queryRunner.onQueryResult(data),
+    runMonitoringQueryError: (data) => queryRunner.onQueryError(data),
+    runMonitoringTableQueryResult: (data) => queryRunner.onTableQueryResult(data),
+    runMonitoringTableQueryError: (data) => queryRunner.onQueryError(data),
+
+    saveMonitoringConfigResult: (data) => onSaveResult(data),
+    saveMonitoringConfigError: (data) => onSaveError(data),
+    deleteMonitoringConfigResult: (data) => onDeleteResult(data),
+    deleteMonitoringConfigError: (data) => onDeleteError(data),
+    restoreHiddenBuiltinsResult: () => loadConfigs(),
+
+    monitoringBackgroundRefreshResult: (data) => {
+      const { configId, chartType, result, rowCountIncreased } = data || {};
+      if (!configId || !result) return;
+      const payload = { ...result, configId, rowCountIncreased };
+      // Mirror the manual-refresh paths so the same render code runs
+      if (chartType === 'table') queryRunner.onTableQueryResult(payload);
+      else queryRunner.onQueryResult(payload);
+    },
+
+    panelVisibilityChanged: (data) => {
+      isVisible = data.visible || false;
+      // If panel became visible, resume refresh timers by re-triggering queries.
+      // Skip notification-enabled configs — the host's BackgroundRefresher keeps
+      // those fresh, so re-querying here would just double-fire notifications.
+      if (!isVisible || !connected) return;
+      for (const cfg of configs) {
+        if (cfg.refreshInterval > 0 && !hasNotifications(cfg)) {
+          triggerQuery(cfg);
+        }
+      }
+    },
+  };
   // ── Feature registration ───────────────────────────────────────────────────
   win.__registerFeature('monitoring-dashboard', {
     onOrgConnected: function (/** @type {any} */ org) {
@@ -185,67 +238,8 @@ import { hasNotifications } from '../notification-config';
       setAllButtonsDisabled(true);
     },
     onMessage: function (/** @type {any} */ message) {
-      switch (message.type) {
-        case 'loadMonitoringConfigsResult':
-          onConfigsLoaded(message.data.configs, message.data.hiddenCount || 0);
-          break;
-        case 'loadMonitoringConfigsError':
-          // Touches no form. A reload failing is not the same event as "the
-          // reload my save asked for failed" — `loadConfigs()` is also called
-          // by a confirmed delete, the restore-hidden-built-ins reply and an
-          // org reconnect. Every submit is settled by its OWN correlated reply.
-          showLoadError(message.data.message);
-          break;
-        case 'runMonitoringQueryResult':
-          queryRunner.onQueryResult(message.data);
-          break;
-        case 'runMonitoringQueryError':
-          queryRunner.onQueryError(message.data);
-          break;
-        case 'runMonitoringTableQueryResult':
-          queryRunner.onTableQueryResult(message.data);
-          break;
-        case 'runMonitoringTableQueryError':
-          queryRunner.onQueryError(message.data);
-          break;
-        case 'saveMonitoringConfigResult':
-          onSaveResult(message.data);
-          break;
-        case 'saveMonitoringConfigError':
-          onSaveError(message.data);
-          break;
-        case 'deleteMonitoringConfigResult':
-          onDeleteResult(message.data);
-          break;
-        case 'deleteMonitoringConfigError':
-          onDeleteError(message.data);
-          break;
-        case 'restoreHiddenBuiltinsResult':
-          loadConfigs();
-          break;
-        case 'monitoringBackgroundRefreshResult': {
-          const { configId, chartType, result, rowCountIncreased } = message.data || {};
-          if (!configId || !result) break;
-          const payload = { ...result, configId, rowCountIncreased };
-          // Mirror the manual-refresh paths so the same render code runs
-          if (chartType === 'table') queryRunner.onTableQueryResult(payload);
-          else queryRunner.onQueryResult(payload);
-          break;
-        }
-        case 'panelVisibilityChanged':
-          isVisible = message.data.visible || false;
-          // If panel became visible, resume refresh timers by re-triggering queries.
-          // Skip notification-enabled configs — the host's BackgroundRefresher keeps
-          // those fresh, so re-querying here would just double-fire notifications.
-          if (isVisible && connected) {
-            for (const cfg of configs) {
-              if (cfg.refreshInterval > 0 && !hasNotifications(cfg)) {
-                triggerQuery(cfg);
-              }
-            }
-          }
-          break;
-      }
+      const handler = messageHandlers[message.type];
+      if (handler) handler(message.data);
     },
   });
 
@@ -379,25 +373,69 @@ import { hasNotifications } from '../notification-config';
    *   minted — echoed by `MessageRouter._dispatchFeatureRoute`.
    */
   function onSaveResult(data) {
-    // Mirror onDeleteResult: re-sync the whole grid from disk after a save.
-    // The previous in-place card swap maintained the card's id by hand, so any
-    // drift (e.g. after a rename) left the webview holding a STALE old id; the
-    // next rename then sent that dead id and the host couldn't delete the real
-    // old file — files piled up. A full reload makes the rebuilt card carry the
-    // persisted id, so every subsequent rename sends the correct old id.
-    // The edit forms are drained by config-loader's onConfigsLoaded, when the
-    // reply that actually rebuilds the grid arrives — draining here, on the
-    // request, would strand every open form if that reply turned out to be an
-    // error. See the note in onConfigsLoaded.
-    //
+    const reply = resolveReply(grid, data && data.requestId);
+    const saved = data && data.config;
+
     // THIS save is settled here — its own terminal reply — so the button comes
     // off "Saving…" and the form stops waiting. Matched by requestId, so a
     // second form saving at the same moment is untouched: "the first card still
     // waiting" disarmed an arbitrary one, and that form's real error then
-    // reached nothing. Settling is not draining: the form keeps its listeners,
-    // because the rebuild below may fail and leave it on screen.
-    resolveReply(grid, data && data.requestId)?.settle();
-    loadConfigs();
+    // reached nothing.
+    reply?.settle();
+
+    // Nothing waiting on this id (the form was cancelled or rebuilt away), or a
+    // reply carrying no record: fall back to the reload, so the grid still
+    // reflects what was written rather than silently diverging from disk.
+    if (!reply || !saved) {
+      loadConfigs();
+      return;
+    }
+
+    // Otherwise update this ONE card in place. Reloading the whole grid — which
+    // is what this used to do — rebuilt every card from disk and tore out every
+    // OTHER open edit form, unsaved edits included, with no warning.
+    //
+    // The reload existed for a real reason: the in-place swap before it kept
+    // the card's id BY HAND, so a rename left a stale id behind, the next
+    // rename sent that dead id, the host could not delete the real old file,
+    // and YAML files piled up. What makes this safe is that the id now comes
+    // from the reply — `saveMonitoringConfig` returns the persisted record, and
+    // `MessageRouter._route` spreads the route's return value OVER the echoed
+    // request precisely so the host's version wins — and is never tracked here.
+    const previousId = reply.configId;
+    // A rename lands the record under a new id, so the old id's auto-refresh
+    // interval has to go with it; `clearAllRefreshTimers` only covered this
+    // because every save used to wipe the grid.
+    if (previousId && previousId !== saved.id) clearAutoRefresh(previousId);
+    upsertConfig(previousId, saved);
+    reply.applySaved(saved);
+    // A new folder only becomes a category pill when the bar is rebuilt, and a
+    // renamed one can leave the old pill behind. `render()` never fires
+    // onChange, so the user's current filter selection survives.
+    filterBar.render();
+    applyFilters();
+  }
+
+  /**
+   * Fold the persisted record into `configs`, which stays the single source the
+   * filter bar, drag-order and Cancel all read.
+   *
+   * Keyed on the id the form was OPENED with, not on `saved.id`: the host
+   * re-slugs the id from folder + name, so a rename arrives under a different
+   * one and matching on the new id would leave the old entry orphaned next to
+   * its replacement.
+   *
+   * A brand-new card (`previousId === null`) is appended, so `configs` order
+   * and DOM order diverge until the next full reload — harmless, because the
+   * only consumer of order is `renderAll`, which re-sorts from disk anyway.
+   *
+   * @param {string | null} previousId
+   * @param {any} saved
+   */
+  function upsertConfig(previousId, saved) {
+    const idx = previousId === null ? -1 : configs.findIndex((c) => c.id === previousId);
+    if (idx === -1) configs.push(saved);
+    else configs[idx] = saved;
   }
 
   /** @param {any} data */

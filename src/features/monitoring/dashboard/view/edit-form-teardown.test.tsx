@@ -75,7 +75,13 @@ type HookedCard = HTMLElement & {
 const lastRequestId = () =>
   (posted[posted.length - 1] as unknown as { requestId?: string }).requestId!;
 
-function mountForm(into?: HTMLElement, configId = 'ops/chart') {
+function mountForm(
+  into?: HTMLElement,
+  configId: string | null = 'ops/chart',
+  // Spied only by the applySaved cases below; every other test takes the inert
+  // defaults it always had, so none of them changed when these were added.
+  hooks: { buildViewCard?: (c: unknown) => HTMLElement; triggerQuery?: (c: unknown) => void } = {},
+) {
   (window as unknown as { __setTooltip: () => void }).__setTooltip = () => {};
   const card = document.createElement('div');
   card.className = 'card';
@@ -85,8 +91,8 @@ function mountForm(into?: HTMLElement, configId = 'ops/chart') {
     chartInstances: new Map(),
     getConfigs: () => [cfg],
     nextAvailablePosition: () => 0,
-    buildViewCard: () => document.createElement('div'),
-    triggerQuery: () => {},
+    buildViewCard: hooks.buildViewCard ?? (() => document.createElement('div')),
+    triggerQuery: hooks.triggerQuery ?? (() => {}),
   } as never).buildEditForm({ ...cfg, id: configId } as never, card as never, configId);
   card.appendChild(form);
   return { card: card as HookedCard, form };
@@ -329,5 +335,104 @@ describe('edit form correlated replies', () => {
     mountForm(grid);
     expect(resolveReply(grid, 'mreq-does-not-exist')).toBeUndefined();
     expect(resolveReply(grid, undefined)).toBeUndefined();
+  });
+
+  // ── applySaved: a save updates ONE card, not the whole grid ────────────────
+  //
+  // `onSaveResult` used to settle the reply and then call `loadConfigs()`, and
+  // `onConfigsLoaded` rebuilt the grid from disk — tearing out every OTHER open
+  // edit form, unsaved edits included, with no warning. These pin the
+  // replacement: the form puts the PERSISTED record on screen in its own place
+  // and leaves every other form alone.
+
+  /** The persisted record as the host returns it — note the RE-SLUGGED id. */
+  const saved = { ...cfg, id: 'ops/renamed', name: 'Renamed' };
+
+  it('applySaved replaces the card using the persisted record, not the local draft', () => {
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const built: unknown[] = [];
+    const { card, form } = mountForm(grid, 'ops/chart', {
+      buildViewCard: (c) => {
+        built.push(c);
+        const view = document.createElement('div');
+        view.className = 'card view-card';
+        return view;
+      },
+    });
+
+    clickBtn(form, 'Save');
+    act(() => resolveReply(grid, lastRequestId())!.applySaved(saved as never));
+
+    // Built from the host's record — the id is the one the host re-slugged, so
+    // nothing webview-side had to track it. That hand-maintained id is the bug
+    // the full reload was introduced to paper over.
+    expect(built).toEqual([saved]);
+    expect(grid.querySelector('.view-card')).not.toBeNull();
+    expect(card.isConnected).toBe(false); // the form's card is gone from the grid
+  });
+
+  it('applySaved re-runs the query, or the new card renders blank', () => {
+    // buildViewCard only builds a shell: the chart instance was destroyed on
+    // entering edit mode, so without this the card sits empty until Refresh.
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const triggerQuery = vi.fn();
+    const { form } = mountForm(grid, 'ops/chart', { triggerQuery });
+
+    clickBtn(form, 'Save');
+    act(() => resolveReply(grid, lastRequestId())!.applySaved(saved as never));
+
+    expect(triggerQuery).toHaveBeenCalledWith(saved);
+  });
+
+  it('applySaved drains — unlike settle, this form really is gone', () => {
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const { form } = mountForm(grid);
+
+    clickBtn(form, 'Save');
+    act(() => resolveReply(grid, lastRequestId())!.applySaved(saved as never));
+
+    // The card was replaced, so the folder combobox's document-level listener
+    // would leak without this. Contrast the settle case above, where the form
+    // stays on screen and draining would break its category field.
+    expect(comboCleanup).toHaveBeenCalled();
+  });
+
+  it('saving one form leaves another open form untouched', () => {
+    // THE bug this replaced: the reload rebuilt the grid, so saving A destroyed
+    // B's in-progress edits too. Deliver B's save while A is merely open.
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const a = mountForm(grid, 'ops/a');
+    const b = mountForm(grid, 'ops/b');
+
+    clickBtn(b.form, 'Save');
+    act(() => resolveReply(grid, lastRequestId())!.applySaved(saved as never));
+
+    expect(b.card.isConnected).toBe(false); // B replaced by its view card
+    expect(a.card.isConnected).toBe(true); // A still on screen
+    expect(a.form.querySelector('.error-box')).not.toBeNull(); // still a live form
+    expect(comboCleanup).toHaveBeenCalledTimes(1); // only B's combobox was torn down
+  });
+
+  it('the reply carries the id the form was OPENED with, which keys the upsert', () => {
+    // index.js folds the record into `configs` keyed on this, not on saved.id:
+    // the host re-slugs from folder + name, so a rename arrives under a
+    // different id and matching on the new one would orphan the old entry.
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const { form } = mountForm(grid, 'ops/chart');
+    clickBtn(form, 'Save');
+    expect(resolveReply(grid, lastRequestId())!.configId).toBe('ops/chart');
+  });
+
+  it('a brand-new card reports a null configId, so the upsert appends', () => {
+    const grid = document.createElement('div');
+    document.body.appendChild(grid);
+    const { form } = mountForm(grid, null);
+    clickBtn(form, 'Save');
+    expect(resolveReply(grid, lastRequestId())!.configId).toBeNull();
   });
 });
