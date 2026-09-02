@@ -466,6 +466,17 @@ describe('MessageRouter built-in routes', () => {
     expect(openExternal.mock.calls[0][0]._raw).toBe('https://x.my.salesforce.com/001ABC');
   });
 
+  it('openRecord opens the in-app Lightning URL when an app is named', async () => {
+    const { router } = makeRouter({
+      getCurrentOrg: vi.fn(() => ({ instanceUrl: 'https://x.my.salesforce.com' })),
+    });
+    await router.handle({ type: 'openRecord', recordId: '001ABC', app: 'Sales' });
+    expect(openExternal).toHaveBeenCalledOnce();
+    expect(openExternal.mock.calls[0][0]._raw).toBe(
+      'https://x.my.salesforce.com/lightning/app/Sales/r/001ABC/view',
+    );
+  });
+
   it('openRecord is a no-op when no org is connected', async () => {
     const { router } = makeRouter({ getCurrentOrg: vi.fn(() => null) });
     await router.handle({ type: 'openRecord', recordId: '001' });

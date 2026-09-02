@@ -845,8 +845,12 @@ refreshBtn.addEventListener('click', async () => {
 ```
 
 `fc` gives you `invoke(handler, args, { button, onChunk })`, `connected`, `org`,
-`onOrg({ onConnected, onDisconnected })`, `openRecord(id)`, `confirm(prompt)`,
-`escapeHtml(s)` and `setTooltip(el, text)`.
+`onOrg({ onConnected, onDisconnected })`, `openRecord(id, { app })`,
+`confirm(prompt)`, `escapeHtml(s)` and `setTooltip(el, text)`.
+
+`openRecord(id)` opens the bare Id and lets Salesforce pick the Lightning app,
+which is what you want unless you already know the org's apps; the optional
+`{ app: 'Sales' }` pins the record to one you name.
 
 `view.html` is a fragment — no `<html>`, no `<head>`, and no inline `<script>`
 (the panel's security policy blocks those; put your code in `view.js`). Ids are

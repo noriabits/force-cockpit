@@ -159,9 +159,11 @@ refreshBtn.addEventListener('click', async () => {
 | `connected`                                     | `true` when an org is connected                                      |
 | `org`                                           | The connected org, or `null`                                         |
 | `onOrg({ onConnected, onDisconnected })`        | React to the org changing                                            |
-| `openRecord(id)`                                | Open a Salesforce record in the browser                              |
+| `openRecord(id, options?)`                      | Open a Salesforce record in the browser                              |
 | `confirm(prompt)`                               | Native "are you sure" modal. Resolves `true`/`false`                 |
 | `escapeHtml(s)`, `setTooltip(el, text)`         | Shared helpers                                                       |
+
+`openRecord(id)` opens the bare Id, and Salesforce resolves it into whichever Lightning app the user last had open — the right default, because you do not have to know anything about the org to use it. Pass `openRecord(id, { app: 'Sales' })` only when the record has one obvious home app and you want it opened there. `app` is a Lightning app **API name** (`Sales`, `Service`, `c__MyApp`); you supply it, either as a literal or from something a handler of yours queried out of `AppDefinition`. Guess it wrong and the user lands on an error page, so when in doubt omit it.
 
 ### `invoke` options
 

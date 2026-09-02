@@ -1,0 +1,8 @@
+# Git hooks and shell scripts must stay LF in the working copy, whatever
+# core.autocrlf says. Two things break on a CRLF checkout:
+#   * `sh` reads the trailing \r as part of the last argument on every line;
+#   * knip's husky plugin parses `npx lint-staged` into the binary name
+#     `lint-staged\r`, which matches no dependency — so `npm run knip` reported
+#     lint-staged as unused on Windows and passed on CI.
+.husky/** text eol=lf
+*.sh text eol=lf

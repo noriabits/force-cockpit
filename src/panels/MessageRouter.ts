@@ -29,13 +29,32 @@ import type {
   WebviewMessage,
   WebviewToHostType,
 } from '../shared/protocol';
-import { buildRecordUrl } from '../utils/salesforceUrl';
+import type { OrgDetails } from '../utils/sfCli';
+import { buildRecordInAppUrl, buildRecordUrl } from '../utils/salesforceUrl';
 import type { OperationRegistry } from './OperationRegistry';
 
 // Narrowed to the shared contract: `handle`'s switch now only compiles against
 // names that actually exist in the protocol, and `default` falls through to the
 // feature route map keyed by the same union.
 type IncomingMessage = WebviewMessage;
+
+/**
+ * The URL `openRecord` opens.
+ *
+ * Without an `app` this is the instance-root Id redirect, which Salesforce
+ * resolves into whichever Lightning app the viewer last had open — the right
+ * default, since no caller has to know the org's apps to use it. A caller that
+ * does know one (a plugin passing `{ app }`) gets the record pinned there.
+ *
+ * A module function rather than an arm of the switch: the branch would spend
+ * complexity headroom the ratchet in `eslint.config.mjs` is saving for the step
+ * to 20, and `handle` reads better naming the URL than deriving it.
+ */
+function recordUrlFor(org: OrgDetails, message: IncomingMessage): string {
+  const recordId = message.recordId as string;
+  const app = message.app as string | undefined;
+  return app ? buildRecordInAppUrl(org, recordId, app) : buildRecordUrl(org, recordId);
+}
 
 /** Owner label for a route the switch in `handle` answers itself. */
 export const BUILT_IN_OWNER = '(built-in)';
@@ -223,10 +242,7 @@ export class MessageRouter {
         return;
       case 'openRecord': {
         const org = this.connectionManager.getCurrentOrg();
-        if (org) {
-          const url = buildRecordUrl(org, message.recordId as string);
-          await vscode.env.openExternal(vscode.Uri.parse(url));
-        }
+        if (org) await vscode.env.openExternal(vscode.Uri.parse(recordUrlFor(org, message)));
         return;
       }
       case 'openExternalUrl': {

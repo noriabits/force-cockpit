@@ -174,9 +174,21 @@
 
       escapeHtml: win.__escapeHtml,
       setTooltip: win.__setTooltip,
-      /** Open a Salesforce record in the browser. */
-      openRecord: (/** @type {string} */ recordId) =>
-        vscode.postMessage({ type: 'openRecord', recordId }),
+      /**
+       * Open a Salesforce record in the browser.
+       *
+       * With no `app` this is the Id redirect, which Salesforce resolves into
+       * whichever Lightning app the user last had open — the right default,
+       * since a plugin does not have to know the org's apps to use it. Pass a
+       * Lightning app API name (`'Sales'`, `'c__MyApp'`) to pin the record to
+       * that app instead; the plugin supplies the name, either as a literal or
+       * from something its own handler queried.
+       *
+       * @param {string} recordId
+       * @param {{ app?: string }} [options]
+       */
+      openRecord: (recordId, options) =>
+        vscode.postMessage({ type: 'openRecord', recordId, app: options?.app }),
       /** Native "are you sure" modal, with no org-sensitivity gate. */
       confirm: (/** @type {string} */ prompt) =>
         new Promise((resolve) =>

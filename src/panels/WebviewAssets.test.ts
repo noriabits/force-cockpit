@@ -35,10 +35,18 @@ describe('WebviewAssets', () => {
   });
 
   const context = () => ({ extensionPath }) as unknown as import('vscode').ExtensionContext;
+
+  /**
+   * A real `asWebviewUri` hands back a Uri, and a Uri's separator is always `/`
+   * whatever `path.join` produced on the way in. A stub that echoed `fsPath`
+   * verbatim modelled that wrong on Windows only, so an assertion naming a
+   * module by its posix path passed on CI and failed on a maintainer's machine.
+   */
+  const uriPath = (p: string) => p.replace(/\\/g, '/');
   const webview = () =>
     ({
       cspSource: 'vscode-webview://x',
-      asWebviewUri: (u: { fsPath: string }) => ({ toString: () => `wv:${u.fsPath}` }),
+      asWebviewUri: (u: { fsPath: string }) => ({ toString: () => `wv:${uriPath(u.fsPath)}` }),
     }) as unknown as import('vscode').Webview;
 
   function makePlugin(id: string, files: Record<string, string>, over: Partial<PluginInfo> = {}) {
@@ -92,8 +100,8 @@ describe('WebviewAssets', () => {
     const out = await html([p]);
 
     expect(out).toContain(`<script type="module" nonce=`);
-    expect(out).toContain(`src="wv:${path.join(p.dir, 'view.js')}"`);
-    expect(out).toContain(`href="wv:${path.join(p.dir, 'view.css')}"`);
+    expect(out).toContain(`src="wv:${uriPath(path.join(p.dir, 'view.js'))}"`);
+    expect(out).toContain(`href="wv:${uriPath(path.join(p.dir, 'view.css'))}"`);
   });
 
   it('emits no script or link tag for a plugin that ships neither', async () => {
