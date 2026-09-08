@@ -123,7 +123,7 @@
     "@jsforce/jsforce-node": "3.10.16",
     "@preact/signals": "2.6.1",
     "@salesforce/core": "8.31.1",
-    "@xmldom/xmldom": "0.9.10",
+    "@xmldom/xmldom": "0.9.12",
     "chart.js": "4.5.1",
     "ignore": "7.0.5",
     "js-yaml": "4.3.1",
