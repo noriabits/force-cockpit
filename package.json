@@ -126,7 +126,7 @@
     "@xmldom/xmldom": "0.9.12",
     "chart.js": "4.5.1",
     "ignore": "7.0.5",
-    "js-yaml": "4.3.1",
+    "js-yaml": "4.3.2",
     "preact": "10.28.3",
     "xml-formatter": "3.7.0"
   },
