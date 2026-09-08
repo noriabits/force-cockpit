@@ -1011,6 +1011,9 @@ The `.vsix` for every release is available on the [GitHub Releases page](https:/
 
 ## Development
 
+Requires **Node 24** (what CI uses). `.npmrc` sets `engine-strict=true`, so a
+mismatched Node makes `npm ci` fail outright rather than warn.
+
 ```bash
 npm install
 npm run build        # Build extension (copy assets + esbuild bundles)
@@ -1020,7 +1023,15 @@ npm run lint         # ESLint over src/ and scripts/, including the complexity g
 npm test             # Vitest
 npm run package      # Build + create .vsix
 npm run audit:prod   # Check production dependencies for known vulnerabilities
+
+npm install-scripts ls   # List dependency install scripts not yet in the
+                         # `allowScripts` allowlist in package.json (read-only)
 ```
+
+Dependency install scripts run arbitrary code at `npm ci` time, so they are
+allowlisted per-package in `package.json`'s `allowScripts`. Approvals are pinned
+to a version — if a bump of `esbuild` or `@vscode/vsce-sign` lands, re-run
+`npm install-scripts approve <pkg>` in the same PR.
 
 ### Code layout conventions
 
