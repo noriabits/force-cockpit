@@ -19,14 +19,18 @@ type UserPart = vscode.LanguageModelTextPart | vscode.LanguageModelToolResultPar
  * Sent alongside every tool result, because Copilot's "Auto" model routes on the
  * text of the LAST user message and refuses the request outright when it finds
  * none — "Auto mode needs a prompt or a command to route a request". A tool
- * result is a user message made of a single result part, so without this the
- * very first round that calls a tool kills the whole run on Auto, no matter how
- * well-formed the question was. Attached to every result rather than only the
- * last one, so the prefix a round sends stays byte-identical on the next round
- * and remains eligible for prompt caching. The wording mirrors VS Code's own
- * tool-calling sample, which builds the same two-part message.
+ * result message carries nothing but result parts, so without this the very
+ * first round that calls a tool kills the whole run on Auto, no matter how
+ * well-formed the question was. Attached to every round's results rather than
+ * only the last, so the prefix a round sends stays byte-identical on the next
+ * round and remains eligible for prompt caching. The wording mirrors VS Code's
+ * own tool-calling sample, which builds the same two-part message.
  */
-const TOOL_RESULT_NOTE = 'Above is the result of the tool call. Continue from it.';
+function toolResultNote(count: number): string {
+  return count === 1
+    ? 'Above is the result of the tool call. Continue from it.'
+    : 'Above are the results of the tool calls. Continue from them.';
+}
 
 function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
   if (msg.role === 'user') {
@@ -41,15 +45,44 @@ function toVscodeMessage(msg: ChatMessage): vscode.LanguageModelChatMessage {
     if (parts.length === 0) parts.push(new vscode.LanguageModelTextPart(''));
     return vscode.LanguageModelChatMessage.Assistant(parts);
   }
-  // toolResult → a User message carrying the tool result part, plus the note
-  // above so the message is never text-free.
-  const parts: UserPart[] = [
-    new vscode.LanguageModelToolResultPart(msg.callId, [
-      new vscode.LanguageModelTextPart(msg.content),
-    ]),
-    new vscode.LanguageModelTextPart(TOOL_RESULT_NOTE),
-  ];
-  return vscode.LanguageModelChatMessage.User(parts);
+  // toolResult is never mapped alone — see toVscodeMessages.
+  throw new Error(`Unexpected message role: ${(msg as { role: string }).role}`);
+}
+
+/**
+ * One User message per ROUND of tool results, never one per result. When the
+ * model calls several tools in a single assistant turn, the provider behind
+ * Copilot (Anthropic in particular) requires every matching result to sit in the
+ * one message immediately after that turn, ahead of any other content — it pairs
+ * only the leading run of result parts and rejects the request outright
+ * otherwise ("`tool_use` ids were found without `tool_result` blocks immediately
+ * after"). So consecutive toolResult turns are folded into a single message
+ * whose result parts all come first, with the Auto-routing note once at the end.
+ */
+function toVscodeMessages(messages: ChatMessage[]): vscode.LanguageModelChatMessage[] {
+  const out: vscode.LanguageModelChatMessage[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.role !== 'toolResult') {
+      out.push(toVscodeMessage(msg));
+      continue;
+    }
+    const parts: UserPart[] = [];
+    while (i < messages.length) {
+      const next = messages[i];
+      if (next.role !== 'toolResult') break;
+      parts.push(
+        new vscode.LanguageModelToolResultPart(next.callId, [
+          new vscode.LanguageModelTextPart(next.content),
+        ]),
+      );
+      i++;
+    }
+    i--; // the for-loop's own i++ consumes the non-toolResult we stopped on
+    parts.push(new vscode.LanguageModelTextPart(toolResultNote(parts.length)));
+    out.push(vscode.LanguageModelChatMessage.User(parts));
+  }
+  return out;
 }
 
 export class VsCodeLmGateway implements LmGateway {
@@ -85,7 +118,7 @@ export class VsCodeLmGateway implements LmGateway {
       yield { kind: 'modelFallback', requestedId: requested, usedModelName: model.name };
     }
 
-    const messages = req.messages.map(toVscodeMessage);
+    const messages = toVscodeMessages(req.messages);
     const tools: vscode.LanguageModelChatTool[] = req.tools.map((t) => ({
       name: t.name,
       description: t.description,

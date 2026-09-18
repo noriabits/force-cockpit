@@ -1,7 +1,8 @@
 // Covers the ChatMessage → vscode.LanguageModelChatMessage mapping, which is
 // the only logic in the gateway that is not a straight pass-through — and the
 // one place where Copilot's "Auto" model imposes a shape requirement of its own
-// (see TOOL_RESULT_NOTE in LmGateway.ts).
+// (see toolResultNote in LmGateway.ts) on top of the tool_use/tool_result pairing
+// the provider behind Copilot enforces (see toVscodeMessages).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type SentMessage = { role: 'user' | 'assistant'; content: unknown };
@@ -96,8 +97,13 @@ describe('VsCodeLmGateway message mapping', () => {
     expect((parts[1] as vscode.LanguageModelTextPart).value.trim()).not.toBe('');
   });
 
-  it('carries the note on every tool result, so a resent prefix stays identical', async () => {
-    const [, , first, second] = await sendAndCapture([
+  // Parallel tool calls: Anthropic (behind Copilot) pairs only the LEADING run of
+  // result parts in the message after an assistant turn, so a note wedged between
+  // two results leaves the second tool_use unmatched and the request is rejected
+  // with 400 "`tool_use` ids were found without `tool_result` blocks immediately
+  // after". One message, results first, note last.
+  it('folds a round of parallel tool results into one message, results first', async () => {
+    const sent = await sendAndCapture([
       { role: 'user', text: 'list my accounts' },
       {
         role: 'assistant',
@@ -111,7 +117,28 @@ describe('VsCodeLmGateway message mapping', () => {
       { role: 'toolResult', callId: 'c2', content: 'rows' },
     ]);
 
-    const noteOf = (m: SentMessage) => (partsOf(m)[1] as vscode.LanguageModelTextPart).value;
-    expect(noteOf(first)).toBe(noteOf(second));
+    expect(sent).toHaveLength(3);
+    const parts = partsOf(sent[2]);
+    expect(parts.map((p) => (p as vscode.LanguageModelToolResultPart).callId)).toEqual([
+      'c1',
+      'c2',
+      undefined,
+    ]);
+    expect(parts[2]).toBeInstanceOf(vscode.LanguageModelTextPart);
+    expect((parts[2] as vscode.LanguageModelTextPart).value.trim()).not.toBe('');
+  });
+
+  it('keeps separate rounds in separate messages', async () => {
+    const sent = await sendAndCapture([
+      { role: 'user', text: 'list my accounts' },
+      { role: 'assistant', text: '', toolCalls: [{ callId: 'c1', name: 'run_soql', input: {} }] },
+      { role: 'toolResult', callId: 'c1', content: 'rows' },
+      { role: 'assistant', text: '', toolCalls: [{ callId: 'c2', name: 'run_soql', input: {} }] },
+      { role: 'toolResult', callId: 'c2', content: 'more rows' },
+    ]);
+
+    expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
+    expect(partsOf(sent[2])).toHaveLength(2);
+    expect(partsOf(sent[4])).toHaveLength(2);
   });
 });
