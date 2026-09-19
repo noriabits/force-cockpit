@@ -125,6 +125,8 @@ body {
   position: sticky;
   top: 41px; /* below header */
   z-index: 9;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .tab {
@@ -179,6 +181,8 @@ body {
   display: flex;
   border-bottom: 1px solid var(--vscode-panel-border);
   margin-bottom: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .utils-sub-tab,
@@ -228,7 +232,7 @@ body {
 /* Main layout */
 .cockpit-main {
   padding: 20px;
-  max-width: 960px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 
