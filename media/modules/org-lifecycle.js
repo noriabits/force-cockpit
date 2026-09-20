@@ -63,6 +63,9 @@
     statusDot.className = `status-dot connected${isProduction ? ' production' : ''}`;
     const name = org.alias || org.username;
     statusLabel.textContent = name;
+    statusLabel.classList.add('status-label--clickable');
+    statusLabel.tabIndex = 0;
+    win.__setTooltip?.(statusLabel, 'Open org in browser');
     orgAlias.textContent = org.alias || '—';
     orgUsername.textContent = org.username || '—';
     orgId.textContent = org.orgId || '—';
@@ -89,6 +92,8 @@
     win.__currentOrg = null;
     statusDot.className = 'status-dot disconnected';
     statusLabel.textContent = 'Not connected';
+    statusLabel.classList.remove('status-label--clickable');
+    statusLabel.tabIndex = -1;
     emptyState.style.display = '';
     connectingState.style.display = 'none';
     connectedContent.style.display = 'none';
@@ -130,11 +135,24 @@
     }
   });
 
-  // ── Open in Browser button ──────────────────────────────────────────────
-  btnOpenBrowser.addEventListener('click', () => {
+  // ── Open in Browser (button + clickable status label share this) ────────
+  function openOrgInBrowser() {
+    if (btnOpenBrowser.disabled) return;
     btnOpenBrowser.disabled = true;
     btnOpenBrowser.classList.add('running');
     vscode.postMessage({ type: 'openInBrowser' });
+  }
+
+  btnOpenBrowser.addEventListener('click', openOrgInBrowser);
+
+  statusLabel.addEventListener('click', () => {
+    if (win.__orgConnected) openOrgInBrowser();
+  });
+  statusLabel.addEventListener('keydown', (event) => {
+    if (win.__orgConnected && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      openOrgInBrowser();
+    }
   });
 
   win.__onMessage('openInBrowserDone', () => {
