@@ -36,6 +36,7 @@ window.DebugLogsLabels = {
   show: 'Show',
   checkingContents: 'Checking log contents…',
   deleteSelected: (n) => (n > 0 ? `Delete (${n})` : 'Delete'),
+  deletingLogs: (n) => `Deleting ${n} log${n === 1 ? '' : 's'}…`,
 
   // Viewer
   summarySoql: 'SOQL',

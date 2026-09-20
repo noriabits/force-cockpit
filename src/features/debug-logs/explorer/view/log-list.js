@@ -45,6 +45,8 @@ export function createLogList(ctx) {
   let sortAsc = false;
   let showHiddenAnyway = false;
   let hiddenCount = 0;
+  let deleting = false;
+  /** @type {HTMLButtonElement | null} */ let deletingBtn = null;
   let openLogId = '';
   /** @type {any} */ let tailTimer = null;
   let firstLoad = true;
@@ -233,7 +235,8 @@ export function createLogList(ctx) {
       if (!logs.some((log) => log.id === id)) selected.delete(id);
     }
     deleteBtn.textContent = labels.deleteSelected(selected.size);
-    deleteBtn.disabled = selected.size === 0;
+    deleteBtn.disabled = deleting || selected.size === 0;
+    deleteAllBtn.disabled = deleting || logs.length === 0;
   }
 
   // ── Content-aware noise check ───────────────────────────────────────────
@@ -311,13 +314,29 @@ export function createLogList(ctx) {
     syncTail();
   });
   refreshBtn.addEventListener('click', () => vscode.postMessage({ type: 'loadApexLogs' }));
+  /**
+   * @param {string[]} logIds
+   * @param {HTMLButtonElement} btn
+   */
+  function startDelete(logIds, btn) {
+    deleting = true;
+    deletingBtn = btn;
+    btn.classList.add('running');
+    statusEl.textContent = labels.deletingLogs(logIds.length);
+    updateDeleteButton();
+    vscode.postMessage({ type: 'deleteApexLogs', logIds });
+  }
+
   deleteBtn.addEventListener('click', () => {
-    if (selected.size === 0) return;
-    vscode.postMessage({ type: 'deleteApexLogs', logIds: [...selected] });
+    if (selected.size === 0 || deleting) return;
+    startDelete([...selected], deleteBtn);
   });
   deleteAllBtn.addEventListener('click', () => {
-    if (!logs.length) return;
-    vscode.postMessage({ type: 'deleteApexLogs', logIds: logs.map((log) => log.id) });
+    if (!logs.length || deleting) return;
+    startDelete(
+      logs.map((log) => log.id),
+      deleteAllBtn,
+    );
   });
 
   return {
@@ -347,9 +366,17 @@ export function createLogList(ctx) {
       statusEl.textContent = '';
       errorEl.textContent = message;
       errorEl.style.display = '';
+      updateDeleteButton();
     },
     clearSelection() {
       selected.clear();
+      updateDeleteButton();
+    },
+    /** Re-enables the delete buttons once a delete round-trip settles, whatever the outcome. */
+    endDelete() {
+      deleting = false;
+      deletingBtn?.classList.remove('running');
+      deletingBtn = null;
       updateDeleteButton();
     },
     setOpenLog(/** @type {string} */ logId) {

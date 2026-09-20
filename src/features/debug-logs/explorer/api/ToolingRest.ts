@@ -27,6 +27,14 @@ export class ToolingRest {
     return `/services/data/v${this.connectionManager.apiVersion}/tooling`;
   }
 
+  /**
+   * The standard (non-Tooling) API base. Only `removeMultiple` uses this —
+   * see its comment for why.
+   */
+  private get standardBase(): string {
+    return `/services/data/v${this.connectionManager.apiVersion}`;
+  }
+
   /** SOQL against the Tooling API (TraceFlag, DebugLevel, ApexLog, ApexClass…). */
   async query<T extends Record<string, unknown>>(soql: string): Promise<T[]> {
     const result = await this.connectionManager.toolingQuery<T>(soql);
@@ -80,6 +88,43 @@ export class ToolingRest {
     if (res.status < 200 || res.status >= 300) {
       throw new Error(describeHttpError(res.status, res.statusText, res.body));
     }
+  }
+
+  /**
+   * DELETE up to 200 records in one round-trip via the sObject Collections
+   * endpoint. **Deliberately hits `standardBase`, not `base`** — there is no
+   * Tooling API equivalent of this endpoint (`{base}/composite/sobjects`
+   * 404s: verified against a live org, not assumed from docs). The standard
+   * Collections endpoint accepts ApexLog ids anyway, even though ApexLog
+   * rejects the standard API everywhere else (single delete, query). `ids` must not
+   * exceed 200 (the platform's own cap); callers chunk larger lists
+   * themselves. An already-gone id comes back `success: false` with
+   * `INVALID_CROSS_REFERENCE_KEY` rather than 404ing the whole request (this
+   * endpoint has no per-request not-found status), so that one error code is
+   * folded into a success here — the same "already gone counts as deleted"
+   * idempotency `remove()` gives a 404.
+   */
+  async removeMultiple(
+    ids: string[],
+  ): Promise<Array<{ id: string; success: boolean; errors: unknown[] }>> {
+    const res = await this.connectionManager.request({
+      method: 'DELETE',
+      url: `${this.standardBase}/composite/sobjects?ids=${ids.join(',')}`,
+    });
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(describeHttpError(res.status, res.statusText, res.body));
+    }
+    const results =
+      (res.body as Array<{
+        id: string;
+        success: boolean;
+        errors: Array<{ statusCode?: string }>;
+      }>) ?? [];
+    return results.map((r) =>
+      r.success || r.errors.some((e) => e.statusCode === 'INVALID_CROSS_REFERENCE_KEY')
+        ? { ...r, success: true }
+        : r,
+    );
   }
 
   /** GET a plain-text sub-resource, e.g. `ApexLog/{id}/Body`. */

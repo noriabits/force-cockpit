@@ -6,6 +6,17 @@ import { ToolingRest } from './ToolingRest';
 
 const LIST_LIMIT = 200;
 
+/** Tooling API sObject Collections' own per-request cap. */
+const DELETE_CHUNK_SIZE = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 interface RawApexLog extends Record<string, unknown> {
   Id: string;
   LogUserId: string;
@@ -50,17 +61,25 @@ export class ApexLogApi {
     return this.rest.getText(`sobjects/ApexLog/${logId}/Body`);
   }
 
-  /** Deletes logs one by one (the Tooling API has no bulk delete for ApexLog). */
+  /**
+   * Deletes logs via the standard API's sObject Collections endpoint (see
+   * `ToolingRest.removeMultiple` for why it's the standard base, not the
+   * Tooling one), up to 200 ids per request, all chunks in flight at once —
+   * a handful of round-trips instead of one per log.
+   */
   async deleteLogs(logIds: string[]): Promise<{ deleted: number; failed: number }> {
     let deleted = 0;
     let failed = 0;
-    for (const id of logIds) {
-      try {
-        await this.rest.remove('ApexLog', id);
-        deleted++;
-      } catch {
-        failed++;
-      }
+    const results = await Promise.all(
+      chunk(logIds, DELETE_CHUNK_SIZE).map((ids) =>
+        this.rest
+          .removeMultiple(ids)
+          .catch(() => ids.map((id) => ({ id, success: false, errors: [] }))),
+      ),
+    );
+    for (const result of results.flat()) {
+      if (result.success) deleted++;
+      else failed++;
     }
     return { deleted, failed };
   }

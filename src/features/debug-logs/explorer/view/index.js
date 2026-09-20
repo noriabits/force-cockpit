@@ -108,13 +108,17 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     apexLogsClassified: (data) => logList.setClassification(data.results ?? []),
     apexLogsClassifyError: () => logList.setClassification([]),
     apexLogsDeleted: (data) => {
+      logList.endDelete();
       if (!data.confirmed) return;
       logList.clearSelection();
       logViewer.hide();
       aiPanel.hide();
       vscode.postMessage({ type: 'loadApexLogs' });
     },
-    apexLogsDeleteError: (data) => logList.showError(data.message),
+    apexLogsDeleteError: (data) => {
+      logList.endDelete();
+      logList.showError(data.message);
+    },
 
     apexLogOpened: (data) => {
       const row = logs.find((log) => log.id === data.logId) ?? null;
