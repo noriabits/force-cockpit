@@ -1,0 +1,6 @@
+name: 📇 List Authenticated Orgs
+description: >-
+  Lists every org you've authenticated to locally, with alias, username, org
+  type and connection status. Does not require a connected org — it lists
+  everything the SF CLI itself knows about.
+command: sf org list

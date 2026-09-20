@@ -1,0 +1,9 @@
+name: 📦 Import Sample Data (Tree)
+description: >-
+  Imports records from one or more sObject-tree JSON files (produced by
+  "sf data export tree") into the connected org.
+inputs:
+  - name: files
+    label: Comma-separated JSON file paths, parent-first (e.g. Account.json,Contact.json)
+    required: true
+command: sf data import tree --target-org "${orgUsername}" --files "${files}"

@@ -1,0 +1,23 @@
+name: 🏗️ Create Sandbox
+description: >-
+  Kicks off a new sandbox from the connected org and returns immediately with
+  a job ID (run "sf org resume sandbox --job-id <id>" to check status).
+  ⚠ The connected org must be the PRODUCTION org that holds the sandbox
+  license — not another sandbox.
+inputs:
+  - name: sandboxName
+    label: Sandbox name (10 or fewer alphanumeric characters)
+    required: true
+  - name: licenseType
+    label: License type
+    type: picklist
+    required: true
+    options:
+      - Developer
+      - Developer_Pro
+      - Partial
+      - Full
+  - name: alias
+    label: Local alias for the new sandbox org
+    required: true
+command: sf org create sandbox --target-org "${orgUsername}" --name "${sandboxName}" --license-type ${licenseType} --alias "${alias}" --async --no-prompt

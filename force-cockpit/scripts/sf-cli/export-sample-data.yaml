@@ -1,0 +1,14 @@
+name: 📤 Export Sample Data (Tree)
+description: >-
+  Exports records matched by a SOQL query into sObject-tree JSON file(s) that
+  can be re-imported with "sf data import tree". The query can return at most
+  2,000 records.
+inputs:
+  - name: soql
+    label: SOQL query (include child relationships for a full tree)
+    type: textarea
+    required: true
+  - name: outputDir
+    label: Output directory for the JSON file(s)
+    required: true
+command: sf data export tree --target-org "${orgUsername}" --query "${soql}" --output-dir "${outputDir}"

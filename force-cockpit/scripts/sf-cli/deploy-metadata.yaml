@@ -1,0 +1,19 @@
+name: 🚀 Deploy Metadata to Org
+description: >-
+  Deploys local source to the connected org. Pick the test level deliberately
+  — production deploys require running tests.
+inputs:
+  - name: sourceDir
+    label: Source directory to deploy (e.g. force-app)
+    required: true
+  - name: testLevel
+    label: Test level
+    type: picklist
+    required: true
+    options:
+      - NoTestRun
+      - RunSpecifiedTests
+      - RunLocalTests
+      - RunAllTestsInOrg
+      - RunRelevantTests
+command: sf project deploy start --target-org "${orgUsername}" --source-dir "${sourceDir}" --test-level ${testLevel}

@@ -1,0 +1,5 @@
+name: 📊 Org Limits
+description: >-
+  Lists API request, data storage, file storage and other governor-style org
+  limits, with remaining allocation, for the connected org.
+command: sf org list limits --target-org "${orgUsername}"

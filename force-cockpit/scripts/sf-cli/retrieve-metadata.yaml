@@ -1,0 +1,9 @@
+name: 📥 Retrieve Metadata from Org
+description: >-
+  Pulls remote metadata changes from the connected org into the given local
+  source directory.
+inputs:
+  - name: sourceDir
+    label: Local source directory to retrieve into (e.g. force-app)
+    required: true
+command: sf project retrieve start --target-org "${orgUsername}" --source-dir "${sourceDir}"

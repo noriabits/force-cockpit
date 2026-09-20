@@ -1,0 +1,9 @@
+name: ✅ Run Apex Tests
+description: >-
+  Runs the specified Apex test class(es) with code coverage against the
+  connected org and waits up to 10 minutes for the results.
+inputs:
+  - name: classNames
+    label: Test class name(s) — comma-separated
+    required: true
+command: sf apex run test --target-org "${orgUsername}" --class-names "${classNames}" --code-coverage --result-format human --wait 10
