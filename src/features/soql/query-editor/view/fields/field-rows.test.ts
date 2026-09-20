@@ -15,6 +15,14 @@ const field = (name: string, type: string, extra: Partial<DescribeField> = {}): 
   relationshipName: null,
   referenceTo: [],
   picklistValues: [],
+  inlineHelpText: null,
+  required: false,
+  custom: false,
+  unique: false,
+  externalId: false,
+  filterable: true,
+  sortable: true,
+  groupable: true,
   ...extra,
 });
 

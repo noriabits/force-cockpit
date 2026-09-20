@@ -41,6 +41,14 @@ type Field = {
   relationshipName: string | null;
   referenceTo: string[];
   picklistValues: string[];
+  inlineHelpText: string | null;
+  required: boolean;
+  custom: boolean;
+  unique: boolean;
+  externalId: boolean;
+  filterable: boolean;
+  sortable: boolean;
+  groupable: boolean;
 };
 
 const field = (name: string, type: string, extra: Partial<Field> = {}): Field => ({
@@ -50,6 +58,14 @@ const field = (name: string, type: string, extra: Partial<Field> = {}): Field =>
   relationshipName: null,
   referenceTo: [],
   picklistValues: [],
+  inlineHelpText: null,
+  required: false,
+  custom: false,
+  unique: false,
+  externalId: false,
+  filterable: true,
+  sortable: true,
+  groupable: true,
   ...extra,
 });
 
@@ -57,7 +73,13 @@ const ACCOUNT = {
   fields: [
     field('Id', 'id'),
     field('Name', 'string'),
-    field('Industry', 'picklist', { picklistValues: ['Banking', "O'Neil"] }),
+    field('Industry', 'picklist', {
+      picklistValues: ['Banking', "O'Neil"],
+      inlineHelpText: "Pick the account's primary industry",
+      required: true,
+      custom: true,
+      filterable: false,
+    }),
     field('Rating', 'picklist', { picklistValues: [] }),
     field('OwnerId', 'reference', { relationshipName: 'Owner', referenceTo: ['User'] }),
   ],
@@ -140,9 +162,19 @@ function makeDescribeCache() {
 const $ = <T extends Element>(sel: string) => document.querySelector(sel) as T;
 const $$ = (sel: string) => Array.from(document.querySelectorAll(sel));
 
-const rowEls = () => $$('.query-fields-row') as HTMLElement[];
+// Field rows are <tr class="query-fields-tr"> (a <table>, for the
+// Name/Type/Description columns); object-picker rows are still plain
+// <div class="query-fields-row query-fields-row--object"> — a flat
+// search-and-pick list has no columns to align.
+const rowEls = () => $$('.query-fields-row, .query-fields-tr') as HTMLElement[];
 const names = () => $$('.query-fields-name').map((el) => el.textContent);
 const types = () => $$('.query-fields-type').map((el) => el.textContent);
+const helpTexts = () => $$('.query-fields-help').map((el) => el.textContent);
+/** The table header cells' text, in column order — pins the order the flag columns render in. */
+const headerLabels = () => $$('.query-fields-table th').map((el) => el.textContent);
+/** A field row's flag cells (Req/Custom/Uniq/ExtId/Filt/Sort/Grp, in that order), '✓' or ''. */
+const flagCells = (name: string) =>
+  Array.from(rowFor(name).querySelectorAll('.query-fields-flag')).map((el) => el.textContent);
 const checkboxes = () => $$('.query-fields-checkbox') as HTMLInputElement[];
 const chips = () => $$('.query-fields-picklist-value') as HTMLElement[];
 const status = () => $<HTMLElement>('.query-fields-status').textContent;
@@ -174,18 +206,28 @@ const tick = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
-/** The row whose `.query-fields-name` is `name`. */
+/**
+ * The row whose `.query-fields-name` is `name` — the object row itself for
+ * the object picker, or the owning `<tr>` for a field row (where
+ * `.query-fields-name` sits two levels down, inside
+ * `.query-fields-name-cell` > `.query-fields-name-inner`).
+ */
 function rowFor(name: string): HTMLElement {
   const el = $$('.query-fields-name').find((n) => n.textContent === name);
   if (!el) throw new Error(`no row for ${name}: have ${JSON.stringify(names())}`);
-  return el.parentElement as HTMLElement;
+  return el.closest('.query-fields-row, .query-fields-tr') as HTMLElement;
 }
 
 const expanderFor = (name: string) =>
   rowFor(name).querySelector('.query-fields-expand') as HTMLButtonElement | null;
 const checkboxFor = (name: string) =>
   rowFor(name).querySelector('.query-fields-checkbox') as HTMLInputElement | null;
-const indentOf = (name: string) => rowFor(name).style.paddingLeft;
+/** The depth indent lives on `.query-fields-name-inner` for a field row, on the row itself for an object row. */
+const indentOf = (name: string) => {
+  const row = rowFor(name);
+  const inner = row.querySelector('.query-fields-name-inner') as HTMLElement | null;
+  return (inner ?? row).style.paddingLeft;
+};
 
 // ── Harness ───────────────────────────────────────────────────────────────────
 interface Harness {
@@ -325,6 +367,43 @@ describe('createFieldsPanel', () => {
       expect(types()).toEqual(['id', 'string', 'picklist', 'picklist', 'reference']);
       expect(tooltips.get(rowFor('Name'))).toBe('Name label · string');
       expect(status()).toBe('5 fields on Account');
+    });
+
+    it("shows a field's help text when it has one, and blank otherwise", async () => {
+      await mountOpen();
+      expect(helpTexts()).toEqual(['', '', "Pick the account's primary industry", '', '']);
+    });
+
+    it("folds a described field's help text into its tooltip", async () => {
+      await mountOpen();
+      expect(tooltips.get(rowFor('Industry'))).toBe(
+        "Industry label · picklist · Pick the account's primary industry",
+      );
+    });
+
+    it('orders the table columns Name, Type, then the flag columns, then Help Text last', async () => {
+      await mountOpen();
+      expect(headerLabels()).toEqual([
+        'Name',
+        'Type',
+        'Req',
+        'Custom',
+        'Uniq',
+        'ExtId',
+        'Filt',
+        'Sort',
+        'Grp',
+        'Help Text',
+      ]);
+    });
+
+    it('shows a check for each true flag and blank for each false one, in column order', async () => {
+      await mountOpen();
+      // Industry: required + custom, NOT filterable; unique/externalId default
+      // false, sortable/groupable default true (see the `field()` fixture).
+      expect(flagCells('Industry')).toEqual(['✓', '✓', '', '', '', '✓', '✓']);
+      // Id: every override left at the fixture's defaults.
+      expect(flagCells('Id')).toEqual(['', '', '', '', '✓', '✓', '✓']);
     });
 
     it('names the browsed object on the header button', async () => {
@@ -467,8 +546,7 @@ describe('createFieldsPanel', () => {
         'Alias',
       ]);
       expect(indentOf('OwnerId')).toBe('0px');
-      const all = rowEls();
-      expect(all[all.length - 1].style.paddingLeft).toBe('14px');
+      expect(indentOf('Alias')).toBe('14px');
     });
 
     it('checks a nested field against its dotted path, not its own name', async () => {

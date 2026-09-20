@@ -12,10 +12,15 @@
   gap: 8px;
 }
 
-/* Editor column + fields panel, side by side. .query-editor itself no longer
-   carries `position: relative` — .query-editor-main does now, so it stays the
-   offsetParent the autocomplete dropdown positions itself against regardless
-   of whether the fields panel is open. */
+/* Editor column. The fields panel used to be a flex sibling here ("side by
+   side") — it is now a sibling of .query-editor-body itself (a full-width
+   drawer below the editor, see .query-fields-panel), so .query-editor-main is
+   the only child of this row and always fills the full width. The
+   `@media (max-width: 700px)` rule below is consequently a no-op today (a
+   single-item flex row has nothing to stack), left in place rather than
+   removed in case a second item joins this row later. .query-editor itself no
+   longer carries `position: relative` — .query-editor-main does, so it stays
+   the offsetParent the autocomplete dropdown positions itself against. */
 .query-editor-body {
   display: flex;
   gap: 8px;
@@ -473,8 +478,20 @@
 /* ── Field browser panel ─────────────────────────────────────────────────
    Revealed by the 🗂 button in the query toolbar. Unlike History (a
    hide-on-blur dropdown) and the AI panel (below the fold, flashed open),
-   this is a persistent resizable column beside the editor — the point is to
-   leave it open and browse while typing, not to look something up once. */
+   this is a persistent, full-width drawer below the editor — the point is to
+   leave it open and browse while typing, not to look something up once.
+
+   It used to be a flex sibling of the editor ("side by side"), but a panel
+   that competes for space in the same row as a toolbar that keeps growing
+   buttons will eventually lose that fight at some width — which is exactly
+   what produced a real bug (the toolbar's Ask AI/Fields buttons visibly
+   colliding with the panel below a certain window width). It is now a
+   sibling of .query-editor-body (see view.html) instead: a full-width block
+   below the toolbar row rather than a column beside it, so it never competes
+   for horizontal space with anything, at any width. The trade-off is
+   vertical, not horizontal — opening it pushes the results table down —
+   which is why it is resizable in height only (`resize: vertical`) rather
+   than a fixed size. */
 
 /* Marks the toolbar toggle while the panel is open — it stays visible with no
    other on-screen cue once you look away from the panel itself. */
@@ -487,14 +504,17 @@
 }
 
 .query-fields-panel {
-  flex: 0 0 260px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 340px;
+  height: 220px;
+  min-height: 120px;
+  /* Leaves room for the tab bar/toolbar/results below rather than letting a
+     drag of the resize handle push the panel past the visible viewport. */
+  max-height: 70vh;
   padding: 8px;
   overflow: hidden;
-  resize: horizontal;
+  resize: vertical;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
   background: var(--vscode-editorWidget-background);
@@ -530,6 +550,12 @@
 }
 
 .query-fields-search {
+  /* Override the `flex: 1` it inherits from .text-input: .query-fields-panel
+     is a COLUMN flex container, so that flex-basis is the input's height, not
+     its width — left as `1` it grows to fill the drawer's remaining vertical
+     space (splitting it with .query-fields-list below) instead of staying a
+     single line. */
+  flex: 0 0 auto;
   padding: 4px 8px;
   font-size: 12px;
 }
@@ -537,6 +563,10 @@
 .query-fields-list {
   flex: 1;
   overflow-y: auto;
+  /* The fields table's fixed column widths add up to more than a narrow
+     drawer — scroll horizontally rather than letting the table spill past
+     the panel's edge or forcing every column back to stretching/shrinking. */
+  overflow-x: auto;
   /* Reserve the scrollbar gutter so a row's right edge doesn't shift once the
      list grows past the panel's max-height. */
   scrollbar-gutter: stable;
@@ -547,6 +577,11 @@
   color: var(--vscode-descriptionForeground);
 }
 
+/* The object PICKER's own rows (a flat search-and-pick list — see ObjectPicker
+   in fields-panel.tsx). Distinct from .query-fields-tr below: field rows are
+   real <tr>s in a <table> (for the Name/Help Text/Type columns), and
+   `display: flex` on a <td> is a table-layout footgun, so this div-based
+   layout stays only for the object picker, which has no columns to align. */
 .query-fields-row {
   display: flex;
   align-items: center;
@@ -562,6 +597,90 @@
 
 .query-fields-row--object:hover {
   background-color: var(--vscode-list-hoverBackground);
+}
+
+/* ── Fields table ─────────────────────────────────────────────────────────
+   `table-layout: fixed` with compact, fixed-px column widths — deliberately
+   NOT `width: 100%`, which stretched every column to fill however wide the
+   drawer had been resized, so a short value (e.g. `string`) sat far away
+   from its neighboring column with a lot of empty space between them. Left
+   unset, the table's own width is just the sum of its column widths, so
+   columns stay close together and read as one row regardless of how wide
+   the drawer is. */
+.query-fields-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.query-fields-table thead th {
+  position: sticky;
+  top: 0;
+  /* Above the scrolling rows so it stays legible while the body scrolls under it. */
+  z-index: 1;
+  background: var(--vscode-editorWidget-background);
+  text-align: left;
+  padding: 2px 4px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.query-fields-th-name {
+  width: 180px;
+}
+
+.query-fields-th-type {
+  width: 80px;
+}
+
+/* The boolean-flag columns (Req/Custom/Uniq/ExtId/Filt/Sort/Grp) — narrow and
+   uniform, since each holds only a checkmark or nothing. `white-space: nowrap`
+   is a safety net: a two-word label (the original "Ext Id") wraps at its
+   space onto a second line at this width, growing the sticky header taller
+   than every other one — a single-word abbreviation has no such break point. */
+.query-fields-th-flag {
+  width: 46px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Last column, deliberately: a long Help Text value must not push any other
+   column to the right — see the .query-fields-table comment above. Its width
+   is intentionally smaller than before now that seven more columns share the
+   row; the full text is still one hover away via the row's tooltip. */
+.query-fields-th-help {
+  width: 160px;
+}
+
+.query-fields-table td {
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
+.query-fields-flag {
+  text-align: center;
+}
+
+.query-fields-tr:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.query-fields-name-cell {
+  /* No padding of its own — .query-fields-name-inner owns it, so the depth
+     indent (below) only pushes the name/checkbox group, not the cell's hit
+     area. */
+  padding: 0;
+}
+
+.query-fields-name-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  min-width: 0;
 }
 
 .query-fields-expand-slot {
@@ -597,9 +716,26 @@
 }
 
 .query-fields-type {
+  /* flex: 0 0 auto is for the object PICKER's <span> usage (a flex child of
+     .query-fields-row--object) — inert and harmless on the <td> usage below.
+     font-size/color match .query-fields-name (no color set here → inherits
+     the same default foreground) so the whole row reads at one size/color. */
   flex: 0 0 auto;
-  font-size: 10px;
-  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-fields-help {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-fields-picklist-row td {
+  padding: 0;
 }
 
 .query-fields-picklist-values {

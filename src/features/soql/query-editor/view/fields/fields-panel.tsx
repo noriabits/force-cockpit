@@ -1,10 +1,23 @@
-// Field browser panel for the SOQL tab: a persistent, resizable column beside
-// the editor (not a hide-on-blur dropdown like History, not below-the-fold like
-// the AI panel) that lists an object's fields with a tick-to-select checkbox, so
-// "what fields does this even have" doesn't require already knowing what to type
-// into autocomplete. Reuses the same describeCache the autocomplete module uses
-// (already coalesced/cached, already cleared on org change) — this panel adds no
-// new host round-trips.
+// Field browser panel for the SOQL tab: a persistent, full-width drawer below
+// the editor (not a hide-on-blur dropdown like History, not below-the-fold
+// like the AI panel) that lists an object's fields with a tick-to-select
+// checkbox, so "what fields does this even have" doesn't require already
+// knowing what to type into autocomplete. Reuses the same describeCache the
+// autocomplete module uses (already coalesced/cached, already cleared on org
+// change) — this panel adds no new host round-trips.
+//
+// ── A DRAWER, NOT A SIDE COLUMN ────────────────────────────────────────────
+// `panelEl` is a sibling of `.query-editor-body` in view.html, not a child of
+// it — a full-width block below the toolbar row rather than a column beside
+// it ("side by side", the original shape). A panel sharing a row with a
+// toolbar that keeps growing buttons will eventually lose that fight at some
+// window width, which is exactly what produced a real bug (the toolbar's own
+// buttons visibly colliding with the panel below a certain width). Stacking
+// it below instead means it never competes for horizontal space with
+// anything, at any width — the trade-off moved from "the toolbar and the
+// panel fight over width" to "opening the panel pushes the results table
+// down", which is why it resizes in height only (`resize: vertical`, view.css)
+// rather than width.
 //
 // ── WHAT GOES WHERE ──────────────────────────────────────────────────────────
 // `field-rows.ts` owns what the list should CONTAIN, purely, from state plus
@@ -53,6 +66,32 @@ const win = window as unknown as {
 const MAX_OBJECT_ROWS = 200;
 /** One nesting level's indent, in px. */
 const INDENT_PX = 14;
+
+type FlagKey =
+  | 'required'
+  | 'custom'
+  | 'unique'
+  | 'externalId'
+  | 'filterable'
+  | 'sortable'
+  | 'groupable';
+
+/**
+ * The boolean-flag columns, one source of truth for both the header row
+ * (`FlagTh`) and every field row (`FieldRow`) — mapping over the same array
+ * for both is what keeps the header and the cells from drifting out of sync
+ * on a column add/reorder, rather than two hand-written lists of `<th>`s and
+ * `<td>`s that have to be edited in lockstep.
+ */
+const FLAG_COLUMNS: { key: FlagKey; header: string; tooltip: string }[] = [
+  { key: 'required', header: 'Req', tooltip: 'Required — cannot be left blank' },
+  { key: 'custom', header: 'Custom', tooltip: 'Custom field' },
+  { key: 'unique', header: 'Uniq', tooltip: 'Unique' },
+  { key: 'externalId', header: 'ExtId', tooltip: 'External Id' },
+  { key: 'filterable', header: 'Filt', tooltip: 'Usable in a SOQL WHERE clause' },
+  { key: 'sortable', header: 'Sort', tooltip: 'Usable in SOQL ORDER BY' },
+  { key: 'groupable', header: 'Grp', tooltip: 'Usable in SOQL GROUP BY' },
+];
 
 interface SObjectSummary {
   name: string;
@@ -222,6 +261,10 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
       : `${total} on ${name}`;
   });
 
+  function closePanel() {
+    open.value = false;
+  }
+
   // ── Effects over the DOM this component does NOT own ──────────────────────
   effect(() => {
     panelEl.style.display = open.value ? '' : 'none';
@@ -257,7 +300,7 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
   // ── Imperative listeners on the pre-existing controls ─────────────────────
   toggleBtn.addEventListener('click', () => {
     if (open.value) {
-      open.value = false;
+      closePanel();
       return;
     }
     connected.value = isConnected();
@@ -266,7 +309,11 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
   });
 
   closeBtn.addEventListener('click', () => {
-    open.value = false;
+    closePanel();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (open.value && e.key === 'Escape') closePanel();
   });
 
   objectBtn.addEventListener('click', () => {
@@ -327,42 +374,70 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
    * from JSX instead would fork that rule, so the row keeps a ref and calls it.
    */
   function FieldRow({ row }: { row: Row & { kind: 'field' } }) {
-    const ref = useRef<HTMLDivElement>(null);
-    const tooltip = `${row.field.label} · ${row.field.type}`;
+    const ref = useRef<HTMLTableRowElement>(null);
+    // Help text rides the tooltip too (not just its own column) so the full
+    // text is still reachable on hover if the column's ellipsis truncated it.
+    const tooltip = row.field.inlineHelpText
+      ? `${row.field.label} · ${row.field.type} · ${row.field.inlineHelpText}`
+      : `${row.field.label} · ${row.field.type}`;
     useLayoutEffect(() => {
       if (ref.current) win.__setTooltip(ref.current, tooltip);
     }, [tooltip]);
 
     return (
-      <div class="query-fields-row" ref={ref} style={{ paddingLeft: row.depth * INDENT_PX }}>
-        <span class="query-fields-expand-slot">
-          {row.expansion && (
-            <button
-              type="button"
-              class="query-fields-expand"
-              aria-label={row.expansion.expanded ? 'Collapse' : 'Expand'}
-              onClick={() =>
-                toggleExpansion(
-                  (row.expansion as NonNullable<typeof row.expansion>).set,
-                  (row.expansion as NonNullable<typeof row.expansion>).key,
-                )
-              }
-            >
-              {row.expansion.expanded ? '⌄' : '›'}
-            </button>
-          )}
-        </span>
-        {!isForeignBrowse.value && (
-          <input
-            type="checkbox"
-            class="query-fields-checkbox"
-            checked={row.checked}
-            onChange={(e) => onFieldToggled(row.checkboxPath, e.currentTarget.checked)}
-          />
-        )}
-        <span class="query-fields-name">{row.field.name}</span>
-        <span class="query-fields-type">{row.field.type}</span>
-      </div>
+      <tr class="query-fields-tr" ref={ref}>
+        <td class="query-fields-name-cell">
+          <div class="query-fields-name-inner" style={{ paddingLeft: row.depth * INDENT_PX }}>
+            <span class="query-fields-expand-slot">
+              {row.expansion && (
+                <button
+                  type="button"
+                  class="query-fields-expand"
+                  aria-label={row.expansion.expanded ? 'Collapse' : 'Expand'}
+                  onClick={() =>
+                    toggleExpansion(
+                      (row.expansion as NonNullable<typeof row.expansion>).set,
+                      (row.expansion as NonNullable<typeof row.expansion>).key,
+                    )
+                  }
+                >
+                  {row.expansion.expanded ? '⌄' : '›'}
+                </button>
+              )}
+            </span>
+            {!isForeignBrowse.value && (
+              <input
+                type="checkbox"
+                class="query-fields-checkbox"
+                checked={row.checked}
+                onChange={(e) => onFieldToggled(row.checkboxPath, e.currentTarget.checked)}
+              />
+            )}
+            <span class="query-fields-name">{row.field.name}</span>
+          </div>
+        </td>
+        <td class="query-fields-type">{row.field.type}</td>
+        {FLAG_COLUMNS.map((col) => (
+          <td key={col.key} class="query-fields-flag">
+            {row.field[col.key] ? '✓' : ''}
+          </td>
+        ))}
+        {/* Last: a long value here must not push any other column to the right. */}
+        <td class="query-fields-help">{row.field.inlineHelpText}</td>
+      </tr>
+    );
+  }
+
+  /** A boolean-flag column header, e.g. Req/Custom/Filt — the abbreviation's full meaning rides the tooltip. */
+  function FlagTh({ label, tooltip }: { label: string; tooltip: string }) {
+    const ref = useRef<HTMLTableCellElement>(null);
+    useLayoutEffect(() => {
+      if (ref.current) win.__setTooltip(ref.current, tooltip);
+    }, [tooltip]);
+    return (
+      <th class="query-fields-th-flag" ref={ref}>
+        {label}
+      </th>
     );
   }
 
@@ -423,13 +498,32 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
     return (
       <>
         {isForeignBrowse.value && <ForeignBanner />}
-        {rowModel.value.rows.map((row, i) =>
-          row.kind === 'picklistValues' ? (
-            <PicklistValues key={`v:${row.field.name}:${i}`} field={row.field} depth={row.depth} />
-          ) : (
-            <FieldRow key={`f:${row.checkboxPath}:${i}`} row={row} />
-          ),
-        )}
+        <table class="query-fields-table">
+          <thead>
+            <tr>
+              <th class="query-fields-th-name">Name</th>
+              <th class="query-fields-th-type">Type</th>
+              {FLAG_COLUMNS.map((col) => (
+                <FlagTh key={col.key} label={col.header} tooltip={col.tooltip} />
+              ))}
+              {/* Last: a long value must not push any other column to the right. */}
+              <th class="query-fields-th-help">Help Text</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rowModel.value.rows.map((row, i) =>
+              row.kind === 'picklistValues' ? (
+                <tr key={`v:${row.field.name}:${i}`} class="query-fields-picklist-row">
+                  <td colSpan={3 + FLAG_COLUMNS.length}>
+                    <PicklistValues field={row.field} depth={row.depth} />
+                  </td>
+                </tr>
+              ) : (
+                <FieldRow key={`f:${row.checkboxPath}:${i}`} row={row} />
+              ),
+            )}
+          </tbody>
+        </table>
       </>
     );
   }

@@ -33,6 +33,14 @@ function makeMock(overrides: Partial<ConnectionManager> = {}): ConnectionManager
             { value: 'Tech', active: true },
             { value: 'Retired', active: false },
           ],
+          inlineHelpText: 'Pick the closest match',
+          nillable: false,
+          custom: true,
+          unique: true,
+          externalId: true,
+          filterable: false,
+          sortable: false,
+          groupable: true,
         },
       ],
     }),
@@ -66,6 +74,46 @@ describe('DescribeService', () => {
     const owner = result.fields.find((f) => f.name === 'OwnerId');
     expect(owner?.relationshipName).toBe('Owner');
     expect(owner?.referenceTo).toEqual(['User']);
+  });
+
+  it('projects inlineHelpText, defaulting to null when the field carries none', async () => {
+    const svc = new DescribeService(makeMock());
+    const result = await svc.describeSObject('Account');
+    const industry = result.fields.find((f) => f.name === 'Industry');
+    expect(industry?.inlineHelpText).toBe('Pick the closest match');
+    const id = result.fields.find((f) => f.name === 'Id');
+    expect(id?.inlineHelpText).toBeNull();
+  });
+
+  it('projects required (the negation of nillable) and the custom/unique/externalId/filterable/sortable/groupable flags', async () => {
+    const svc = new DescribeService(makeMock());
+    const result = await svc.describeSObject('Account');
+    const industry = result.fields.find((f) => f.name === 'Industry');
+    expect(industry).toMatchObject({
+      required: true,
+      custom: true,
+      unique: true,
+      externalId: true,
+      filterable: false,
+      sortable: false,
+      groupable: true,
+    });
+  });
+
+  it('defaults the flags to false when the raw field carries none of them', async () => {
+    const svc = new DescribeService(makeMock());
+    const result = await svc.describeSObject('Account');
+    // 'Id' in the mock carries no nillable/custom/unique/externalId/filterable/sortable/groupable at all.
+    const id = result.fields.find((f) => f.name === 'Id');
+    expect(id).toMatchObject({
+      required: true, // !undefined === true — better to over-flag as required than under-flag
+      custom: false,
+      unique: false,
+      externalId: false,
+      filterable: false,
+      sortable: false,
+      groupable: false,
+    });
   });
 
   it('caches describeSObject per org + name', async () => {

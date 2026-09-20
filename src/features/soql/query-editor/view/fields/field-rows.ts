@@ -32,6 +32,20 @@ export interface DescribeField {
   relationshipName: string | null;
   referenceTo: string[];
   picklistValues: string[];
+  /** The field's Help Text (Setup's admin-set "Description" is not exposed by describe). */
+  inlineHelpText: string | null;
+  /** `!nillable` — pre-negated here so the UI never carries the double-negative. */
+  required: boolean;
+  /** A `__c` (or otherwise non-platform) field. */
+  custom: boolean;
+  unique: boolean;
+  externalId: boolean;
+  /** Usable in a SOQL `WHERE` clause — false for some long-text/multi-select types. */
+  filterable: boolean;
+  /** Usable in `ORDER BY`. */
+  sortable: boolean;
+  /** Usable in `GROUP BY`. */
+  groupable: boolean;
 }
 
 export interface DescribeObject {

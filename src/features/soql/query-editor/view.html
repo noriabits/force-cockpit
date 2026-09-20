@@ -82,38 +82,41 @@
           <span class="query-hint" id="query-hint"></span>
         </div>
       </div>
-
-      <!-- Field browser. Hidden until the 🗂 button reveals it — a persistent,
-           resizable column beside the editor (not a hide-on-blur dropdown like
-           History, and not below-the-fold like the AI panel), because "what
-           fields does this object even have" wants to stay open while typing. -->
-      <aside class="query-fields-panel" id="query-fields-panel" style="display: none">
-        <div class="query-fields-header">
-          <button
-            type="button"
-            class="btn btn-ghost query-fields-object-btn"
-            id="query-fields-object-btn"
-          ></button>
-          <button
-            type="button"
-            class="query-fields-close"
-            id="query-fields-close"
-            aria-label="Close fields panel"
-          >
-            ✕
-          </button>
-        </div>
-        <input
-          type="text"
-          id="query-fields-search"
-          class="text-input query-fields-search"
-          placeholder="Search…"
-          spellcheck="false"
-        />
-        <div class="query-fields-list" id="query-fields-list"></div>
-        <div class="query-fields-status" id="query-fields-status"></div>
-      </aside>
     </div>
+
+    <!-- Field browser. Hidden until the 🗂 button reveals it — a persistent,
+         full-width, vertically-resizable drawer below the editor (not a
+         hide-on-blur dropdown like History, and not below-the-fold like the
+         AI panel), because "what fields does this object even have" wants to
+         stay open while typing. A sibling of .query-editor-body rather than a
+         child, so it spans the full card width instead of sharing a row with
+         the toolbar. -->
+    <aside class="query-fields-panel" id="query-fields-panel" style="display: none">
+      <div class="query-fields-header">
+        <button
+          type="button"
+          class="btn btn-ghost query-fields-object-btn"
+          id="query-fields-object-btn"
+        ></button>
+        <button
+          type="button"
+          class="query-fields-close"
+          id="query-fields-close"
+          aria-label="Close fields panel"
+        >
+          ✕
+        </button>
+      </div>
+      <input
+        type="text"
+        id="query-fields-search"
+        class="text-input query-fields-search"
+        placeholder="Search…"
+        spellcheck="false"
+      />
+      <div class="query-fields-list" id="query-fields-list"></div>
+      <div class="query-fields-status" id="query-fields-status"></div>
+    </aside>
   </div>
 
   <!-- AI query generator. Hidden until the ✨ button reveals it, so the tab
