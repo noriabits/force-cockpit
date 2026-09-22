@@ -4,8 +4,8 @@
 // long text area field used to render its full value in every row, which made
 // the table unreadable and pushed it past the panel edge. Cells are now clamped
 // to one line by CSS and unclamped on click, so what the renderer must get
-// right is the tagging (which cells are clamped, and their tooltip) and the
-// click routing (a record-id link still opens the record, it does not expand).
+// right is the tagging (which cells are clamped) and the click routing (a
+// record-id link still opens the record, it does not expand).
 import { describe, expect, it, vi } from 'vitest';
 
 const { createTableRenderer } = await import('./table-rendering');
@@ -34,49 +34,45 @@ function render(rows: (string | null)[][], columnLabels = ['Id', 'Description'])
   wrapper.className = 'monitoring-table-wrapper';
   document.body.appendChild(wrapper);
   renderer.renderTableInEl(wrapper, { columnLabels, rows, totalRows: rows.length });
-  return { wrapper, vscode };
+  return { cells: wrapper.querySelectorAll('.monitoring-table-td'), wrapper, vscode };
+}
+
+function click(el: Element) {
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
 describe('monitoring table long values', () => {
-  it('clamps only the values too long to fit, and puts the full text in the tooltip', () => {
-    const { wrapper } = render([[SHORT, LONG]]);
-    const cells = wrapper.querySelectorAll('.monitoring-table-td');
+  it('clamps only the values too long to fit', () => {
+    const { cells } = render([[SHORT, LONG]]);
 
-    expect(cells[0].classList.contains('monitoring-table-td--clamped')).toBe(false);
-    expect(cells[0].getAttribute('title')).toBeNull();
-    expect(cells[1].classList.contains('monitoring-table-td--clamped')).toBe(true);
-    expect(cells[1].getAttribute('title')).toBe(LONG);
+    expect(cells[0].classList.contains('fc-cell-clamped')).toBe(false);
+    expect(cells[1].classList.contains('fc-cell-clamped')).toBe(true);
   });
 
   it('leaves a null cell alone', () => {
-    const { wrapper } = render([[SHORT, null]]);
-    const cells = wrapper.querySelectorAll('.monitoring-table-td');
+    const { cells } = render([[SHORT, null]]);
 
-    expect(cells[1].classList.contains('monitoring-table-td--clamped')).toBe(false);
-    expect(cells[1].getAttribute('title')).toBeNull();
+    expect(cells[1].classList.contains('fc-cell-clamped')).toBe(false);
   });
 
   it('expands a clamped cell on click and collapses it again', () => {
-    const { wrapper } = render([[SHORT, LONG]]);
-    const cell = wrapper.querySelectorAll('.monitoring-table-td')[1];
+    const { cells } = render([[SHORT, LONG]]);
 
-    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(cell.classList.contains('monitoring-table-td--expanded')).toBe(true);
+    click(cells[1]);
+    expect(cells[1].classList.contains('fc-cell-expanded')).toBe(true);
 
-    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(cell.classList.contains('monitoring-table-td--expanded')).toBe(false);
+    click(cells[1]);
+    expect(cells[1].classList.contains('fc-cell-expanded')).toBe(false);
   });
 
   it('still opens the record when a record-id link is clicked', () => {
     const recordId = '001000000000001AAA';
-    const { wrapper, vscode } = render([[recordId, LONG]]);
-    const link = wrapper.querySelector('.monitoring-record-link') as HTMLElement;
+    const { cells, wrapper, vscode } = render([[recordId, LONG]]);
 
-    link.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    click(wrapper.querySelector('.monitoring-record-link') as HTMLElement);
 
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'openRecord', recordId });
     // The click must not also expand the cell it happened inside.
-    const cell = wrapper.querySelectorAll('.monitoring-table-td')[0];
-    expect(cell.classList.contains('monitoring-table-td--expanded')).toBe(false);
+    expect(cells[0].classList.contains('fc-cell-expanded')).toBe(false);
   });
 });

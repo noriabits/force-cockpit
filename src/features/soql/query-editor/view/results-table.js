@@ -9,6 +9,14 @@ import { formatColumn } from './export-format';
 import { createColumnCopyMenu } from './column-copy-menu';
 import { createCellCopyButton } from './cell-copy-button';
 import { copyTextWithFeedback } from '../../../shared/view/output-actions';
+import { markExpandableCell, toggleCellExpansion } from '../../../shared/view/table-cell-expand';
+
+/**
+ * Characters that fit on one line at `#results-table td`'s 480px cap (view.css).
+ * Wider cap than the monitoring table's, so a cell has to be longer before
+ * clamping actually hides anything.
+ */
+const EXPANDABLE_LENGTH = 75;
 
 /**
  * @typedef {Object} ResultsTableCtx
@@ -168,10 +176,14 @@ export function createResultsTable(ctx) {
       for (const cell of row) {
         const td = document.createElement('td');
         td.innerHTML = cellHtml(cell);
-        if (cell != null) {
-          /** @type {any} */ (window).__setTooltip(td, cell);
-          td.setAttribute('data-tooltip-wrap', '');
-        }
+        // The raw, un-ellipsized value for the per-cell copy button, which also
+        // reads the attribute's absence as "this cell is null, nothing to copy".
+        if (cell != null) td.setAttribute('data-cell-value', cell);
+        // CSS clamps the cell to one ellipsized line; a click on a long one
+        // unwraps it in place — see the delegated click handler below. This
+        // used to be a hover tooltip, but a long text area value is usually
+        // wanted for reading and copying, which a tooltip can't do.
+        markExpandableCell(td, cell, EXPANDABLE_LENGTH);
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
@@ -257,7 +269,7 @@ export function createResultsTable(ctx) {
     return { cols, rows: sortRows(filtered, sortCol, sortAsc) };
   }
 
-  // Filter input + delegated record-link clicks.
+  // Filter input + delegated record-link / expand-cell clicks.
   filterInput.addEventListener('input', applyFilterAndSort);
   tbody.addEventListener('click', (event) => {
     const target = /** @type {HTMLElement} */ (event.target);
@@ -265,7 +277,11 @@ export function createResultsTable(ctx) {
       event.preventDefault();
       const recordId = target.getAttribute('data-record-id');
       if (recordId) vscode.postMessage({ type: 'openRecord', recordId });
+      return;
     }
+    // An expanded cell is taller than it was, so the shared copy button is now
+    // parked over the wrong part of it.
+    if (toggleCellExpansion(target)) cellCopy.hide();
   });
 
   return { setData, clear, getView };

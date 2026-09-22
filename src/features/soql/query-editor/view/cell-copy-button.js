@@ -16,6 +16,9 @@ import { copyTextWithFeedback } from '../../../shared/view/output-actions';
 /** Gap between the cell's left edge and the button. */
 const LEFT_INSET = 3;
 
+/** Cap on how far down a (possibly expanded) cell the button may sit. */
+const TOP_INSET = 6;
+
 /**
  * @typedef {Object} CellCopyButtonCtx
  * @property {HTMLElement} tbody
@@ -41,7 +44,7 @@ export function createCellCopyButton(ctx) {
     /** @type {any} */ (window).__setTooltip(el, 'Copy value');
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      const value = currentTd && currentTd.getAttribute('data-tooltip');
+      const value = currentTd && currentTd.getAttribute('data-cell-value');
       if (value) copyTextWithFeedback(el, value, '✓');
     });
     el.addEventListener('mouseout', (e) => {
@@ -78,17 +81,21 @@ export function createCellCopyButton(ctx) {
     }
     el.style.display = 'block';
     el.style.left = `${Math.round(left)}px`;
-    el.style.top = `${Math.round(rect.top + (rect.height - (el.offsetHeight || 16)) / 2)}px`;
+    // Centred on a normal one-line row, but capped near the top so an expanded
+    // cell (many wrapped lines) doesn't park the button halfway down its value.
+    const btnHeight = el.offsetHeight || 16;
+    const offsetY = Math.min((rect.height - btnHeight) / 2, TOP_INSET);
+    el.style.top = `${Math.round(rect.top + offsetY)}px`;
   }
 
   tbody.addEventListener('mouseover', (e) => {
     const target = /** @type {HTMLElement | null} */ (e.target);
     const td = /** @type {HTMLElement | null} */ (target && target.closest('td'));
     if (!td || td === currentTd) return;
-    // __setTooltip stores the raw (un-ellipsized) cell value on every non-null
-    // cell and leaves it off null ones, so this is both the value to copy and
-    // the "is there anything to copy" test.
-    if (!td.getAttribute('data-tooltip')) {
+    // results-table.js stores the raw (un-ellipsized) cell value on every
+    // non-null cell and leaves it off null ones, so this is both the value to
+    // copy and the "is there anything to copy" test.
+    if (!td.getAttribute('data-cell-value')) {
       hide();
       return;
     }

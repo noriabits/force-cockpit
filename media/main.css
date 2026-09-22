@@ -909,6 +909,29 @@ body {
   background-color: var(--vscode-list-hoverBackground);
 }
 
+/* ── Expandable table cells ───────────────────────────────────────────────
+   A result cell is clamped to one ellipsized line (each table sets its own
+   max-width) so a long text area value can't stretch its column past the panel
+   edge. Cells long enough for that to hide something carry .fc-cell-clamped,
+   and clicking one toggles .fc-cell-expanded to wrap the full value in place —
+   see src/features/shared/view/table-cell-expand.js.
+
+   The expanded rule is written `td.fc-cell-expanded`, not `.fc-cell-expanded`:
+   it has to out-weigh `.results-table td`'s `white-space: nowrap` above, and a
+   bare class ties on specificity only with the element qualifier. The column
+   cap is deliberately NOT raised here — the value wraps inside the width it
+   already had, so expanding a cell grows its row instead of shoving every
+   column to its right. */
+.fc-cell-clamped {
+  cursor: zoom-in;
+}
+
+td.fc-cell-expanded {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: zoom-out;
+}
+
 /* Card description */
 .card-description {
   font-size: 12px;

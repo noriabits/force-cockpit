@@ -5,15 +5,9 @@
 // sort-header clicks, so the filter text + sort persist across auto-refresh.
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
 import { filterRows, sortRows } from '../../../shared/view/table-sort';
+import { markExpandableCell, toggleCellExpansion } from '../../../shared/view/table-cell-expand';
 
-/**
- * Values longer than this get the expand affordance (tooltip + click to unclamp).
- * A plain length test, not a `scrollWidth > clientWidth` measurement: the latter
- * is exact but would force a layout read per cell on every render, and a table
- * of long text area values is exactly the case where that hurts most. The CSS
- * cap is 320px, so ~60 characters at 12px is close enough — over-tagging a cell
- * that happens to fit costs nothing but an unused tooltip.
- */
+/** Characters that fit on one line at `.monitoring-table-td`'s 320px cap (view.css). */
 const EXPANDABLE_LENGTH = 60;
 
 /**
@@ -54,17 +48,9 @@ export function createTableRenderer(ctx) {
           td.appendChild(a);
         } else {
           td.textContent = cell;
-          // Re-wrap via String(): isSalesforceRecordId's `value is string` predicate
-          // narrows `cell` to `never` in this else branch (a // @ts-check quirk,
-          // same as results-table.js) — the value is still a string.
-          const text = String(cell ?? '');
-          if (text.length > EXPANDABLE_LENGTH) {
-            // CSS clamps the cell to one ellipsized line; the full value is in
-            // the tooltip, and a click unclamps it in place (see scrollEl's
-            // click handler below).
-            td.classList.add('monitoring-table-td--clamped');
-            td.title = text;
-          }
+          // CSS clamps the cell to one ellipsized line (.monitoring-table-td);
+          // a click on a long one unwraps it — see scrollEl's click handler.
+          markExpandableCell(td, cell, EXPANDABLE_LENGTH);
         }
         tr.appendChild(td);
       }
@@ -139,8 +125,7 @@ export function createTableRenderer(ctx) {
           }
           return;
         }
-        const td = target.closest('.monitoring-table-td--clamped');
-        if (td) td.classList.toggle('monitoring-table-td--expanded');
+        toggleCellExpansion(target);
       });
     }
 

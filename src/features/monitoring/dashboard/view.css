@@ -387,27 +387,16 @@
   color: var(--vscode-foreground);
   /* Long text area fields (Description, Message__c, ...) otherwise blow their
      column up to the length of their longest value and turn every row into a
-     wall of wrapped text. Cap them to one ellipsized line — the full value is
-     one click (or a hover tooltip) away. Narrow columns stay under the cap and
-     are unaffected. max-width on a <td> is honoured by the auto table layout
-     the same way .results-table td in media/main.css relies on. */
+     wall of wrapped text. Cap them to one ellipsized line — a click unwraps
+     the full value in place (.fc-cell-expanded in media/main.css). Narrow
+     columns stay under the cap and are unaffected. max-width on a <td> is
+     honoured by the auto table layout the same way .results-table td in
+     media/main.css relies on. */
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: top;
-}
-
-/* Cells long enough to be worth expanding — tagged in table-rendering.js. */
-.monitoring-table-td--clamped {
-  cursor: zoom-in;
-}
-
-.monitoring-table-td--expanded {
-  max-width: 560px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  cursor: zoom-out;
 }
 
 .monitoring-table tbody tr:last-child td {
