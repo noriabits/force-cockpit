@@ -65,6 +65,14 @@ body {
   border-radius: 16px;
 }
 
+/* Version footer at the bottom of the Overview tab. */
+.cockpit-footer {
+  padding: 20px 0 8px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;

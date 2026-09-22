@@ -13,6 +13,7 @@ import {
   VIEW_JS_FILE,
   type PluginInfo,
 } from '../services/plugins/PluginRegistry';
+import { extensionVersion } from '../utils/extensionVersion';
 
 interface FeatureAssetResult {
   tabFragments: Record<string, string>;
@@ -100,6 +101,7 @@ export class WebviewAssets {
       .replace(/\$\{cspSource\}/g, this.webview.cspSource)
       .replace(/\$\{logoUri\}/g, uris.logo)
       .replace(/\$\{panelTitle\}/g, 'Force Cockpit')
+      .replace(/\$\{extensionVersion\}/g, extensionVersion(this.context))
       // Author-written markup — see `literal` on why these two cannot be
       // replacement strings.
       .replace(/\$\{pluginSubTabs\}/g, literal(pluginAssets.subTabs))

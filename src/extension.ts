@@ -15,6 +15,7 @@ import { soqlFeature } from './features/soql/query-editor/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
+import { extensionVersion } from './utils/extensionVersion';
 import { setupOrgTypeStatusBar } from './ui/orgTypeStatusBar';
 import { OrgConnectionController } from './services/org/OrgConnectionController';
 import type { FeatureContext } from './features/FeatureContext';
@@ -233,7 +234,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarView = vscode.window.createTreeView('forceCockpit.panel', {
     treeDataProvider: emptyProvider,
   });
-  sidebarView.title = ` v${context.extension.packageJSON.version}`;
+  sidebarView.title = ` v${extensionVersion(context)}`;
   sidebarView.onDidChangeVisibility(({ visible }) => {
     if (!visible) return;
     MainPanel.createOrShow(context, featureCtx, allFeatures);

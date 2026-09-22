@@ -227,5 +227,19 @@ describe('WebviewAssets', () => {
       expect(nonce).toBeTruthy();
       expect(out).toContain(`<script type="module" nonce="${nonce}"`);
     });
+
+    it('stamps the installed version into the Overview footer', async () => {
+      const out = await new WebviewAssets(
+        {
+          extensionPath: ROOT,
+          extension: { packageJSON: { version: '9.8.7' } },
+        } as unknown as import('vscode').ExtensionContext,
+        webview(),
+        [],
+        [],
+      ).getHtml();
+
+      expect(out).toContain('<footer class="cockpit-footer">Force Cockpit v9.8.7</footer>');
+    });
   });
 });
