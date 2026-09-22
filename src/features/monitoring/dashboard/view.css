@@ -30,6 +30,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Grid items default to `min-width: auto`, so a card holding a wide table
+     stretches its own grid column and drags the whole dashboard past the panel
+     edge. Let the card shrink; the table scrolls inside it instead. */
+  min-width: 0;
 }
 
 .monitoring-card-header {
@@ -299,6 +303,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 3px;
   padding: 6px;
@@ -335,7 +340,9 @@
 }
 
 .monitoring-table-scroll {
-  overflow-y: auto;
+  /* Both axes: with many columns (or one long-text column expanded) the table
+     is wider than the card, and it must scroll here rather than spill out. */
+  overflow: auto;
   max-height: 300px;
   border-top: 1px solid var(--vscode-panel-border);
 }
@@ -378,6 +385,29 @@
   padding: 5px 8px;
   border-bottom: 1px solid var(--vscode-panel-border);
   color: var(--vscode-foreground);
+  /* Long text area fields (Description, Message__c, ...) otherwise blow their
+     column up to the length of their longest value and turn every row into a
+     wall of wrapped text. Cap them to one ellipsized line — the full value is
+     one click (or a hover tooltip) away. Narrow columns stay under the cap and
+     are unaffected. max-width on a <td> is honoured by the auto table layout
+     the same way .results-table td in media/main.css relies on. */
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+/* Cells long enough to be worth expanding — tagged in table-rendering.js. */
+.monitoring-table-td--clamped {
+  cursor: zoom-in;
+}
+
+.monitoring-table-td--expanded {
+  max-width: 560px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: zoom-out;
 }
 
 .monitoring-table tbody tr:last-child td {
