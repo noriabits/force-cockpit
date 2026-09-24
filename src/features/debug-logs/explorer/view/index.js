@@ -87,7 +87,12 @@ import { createTraceFlagPanel } from './trace-flag-panel';
   /** @type {Record<string, (data: any) => void>} */
   const messageHandlers = {
     panelVisibilityChanged: (data) => {
+      const becameVisible = !visible && !!data.visible;
       visible = !!data.visible;
+      // Pick up logs written while the user was away. Only the list — the
+      // setup, the selection and any open log are left as they were (a refocus
+      // no longer re-runs onOrgConnected; see org-lifecycle.js).
+      if (becameVisible && connected) vscode.postMessage({ type: 'loadApexLogs' });
     },
 
     debugLogsSetupLoaded: (data) => {

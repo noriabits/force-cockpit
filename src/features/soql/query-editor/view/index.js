@@ -461,10 +461,14 @@ const aiPanel = createSoqlAiPanel({
 
 // An org-to-org switch never fires a disconnect, so both edges must reach the
 // panel: a run left in flight would otherwise query the NEW org under the old
-// question's framing.
-win.__onMessage('orgConnected', () => {
-  aiPanel.onOrgChanged();
-  fieldsPanel.onOrgChanged();
+// question's framing. Registered as a feature (not a raw `orgConnected`
+// listener) so it rides org-lifecycle's gate and a panel refocus — which
+// re-sends `orgConnected` — doesn't wipe the AI chat or the fields panel.
+win.__registerFeature('soql-query-editor', {
+  onOrgConnected() {
+    aiPanel.onOrgChanged();
+    fieldsPanel.onOrgChanged();
+  },
 });
 
 btnClearQuery.addEventListener('click', () => {

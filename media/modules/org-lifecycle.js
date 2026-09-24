@@ -3,6 +3,8 @@
 // Drives the Overview tab's empty/connecting/connected content, status dot + label,
 // org info card, sensitive-org banner, and the Open-in-Browser button.
 // Broadcasts onOrgConnected / onOrgDisconnected to registered feature handlers.
+// onOrgConnected fires once per real connection (including a reconnect to the
+// same org) — never merely because the panel regained visibility.
 
 (function () {
   const win = /** @type {any} */ (window);
@@ -107,8 +109,19 @@
   // `data` is always sent, but nothing here can check that.
   win.__onMessage('orgConnecting', (/** @type {any} */ msg) => setConnecting(msg.data?.orgName));
 
+  // The host re-sends `orgConnected` every time the panel regains visibility,
+  // just to refresh the header. Features must only hear about a *new*
+  // connection — otherwise a tab switch wipes their state (a chat, an in-flight
+  // run) — so their hook is gated on the host's per-connection epoch changing.
+  // null = no connection seen yet (fresh webview, or after a disconnect).
+  /** @type {number | null} */
+  let lastConnectionEpoch = null;
+
   win.__onMessage('orgConnected', (/** @type {any} */ msg) => {
     setConnected(msg.data);
+    const epoch = msg.data?.connectionEpoch ?? null;
+    if (epoch !== null && epoch === lastConnectionEpoch) return;
+    lastConnectionEpoch = epoch;
     Object.values(win.__featureHandlers).forEach(
       (/** @type {any} */ h) => h.onOrgConnected && h.onOrgConnected(msg.data),
     );
@@ -119,6 +132,7 @@
   });
 
   win.__onMessage('orgDisconnected', () => {
+    lastConnectionEpoch = null;
     setDisconnected();
     Object.values(win.__featureHandlers).forEach(
       (/** @type {any} */ h) => h.onOrgDisconnected && h.onOrgDisconnected(),

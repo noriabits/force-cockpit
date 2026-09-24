@@ -23,6 +23,25 @@ import { WebviewAssets } from './WebviewAssets';
 const mediaPath = (relPath: string) =>
   fileURLToPath(new URL(`../../media/${relPath}`, import.meta.url));
 
+/**
+ * A DOM element that accepts any write and turns any unknown method into a
+ * no-op — org-lifecycle.js only paints the header, which isn't under test.
+ */
+function inertElement(): any {
+  const target: Record<string | symbol, unknown> = {
+    style: {},
+    classList: { add() {}, remove() {}, toggle() {} },
+    dataset: {},
+  };
+  return new Proxy(target, {
+    get: (t, prop) => (prop in t ? t[prop] : () => {}),
+    set: (t, prop, value) => {
+      t[prop] = value;
+      return true;
+    },
+  });
+}
+
 interface Bootstrap {
   win: Record<string, any>;
   dispatch: (message: unknown) => void;
@@ -34,21 +53,26 @@ interface Bootstrap {
  * Each call gets a fresh window: ipc.js defines __vscode as non-configurable,
  * so a second evaluation against the same object would throw.
  */
-function loadWebviewBootstrap(): Bootstrap {
+function loadWebviewBootstrap({ withOrgLifecycle = false } = {}): Bootstrap {
   const listeners: Array<(event: { data: unknown }) => void> = [];
   const win: Record<string, any> = {
     addEventListener: (type: string, handler: (event: { data: unknown }) => void) => {
       if (type === 'message') listeners.push(handler);
     },
+    __escapeHtml: (s: string) => s,
   };
   const postMessage = vi.fn();
   const sandbox = {
     window: win,
+    document: { getElementById: () => inertElement() },
     acquireVsCodeApi: () => ({ postMessage }),
     console: { error: vi.fn(), log: vi.fn() },
   };
 
   vm.runInNewContext(fs.readFileSync(mediaPath('modules/ipc.js'), 'utf8'), sandbox);
+  if (withOrgLifecycle) {
+    vm.runInNewContext(fs.readFileSync(mediaPath('modules/org-lifecycle.js'), 'utf8'), sandbox);
+  }
   vm.runInNewContext(fs.readFileSync(mediaPath('main.js'), 'utf8'), sandbox);
 
   return {
@@ -170,6 +194,56 @@ describe('webview message bus', () => {
     const { postMessage } = loadWebviewBootstrap();
     expect(postMessage).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith({ type: 'ready' });
+  });
+
+  describe('org connection edges (org-lifecycle.js)', () => {
+    // The host re-sends `orgConnected` on every panel refocus to refresh the
+    // header. Before the epoch gate, each re-send reached every feature's
+    // onOrgConnected and wiped its state — the Ask AI chat vanished on a mere
+    // tab switch.
+    const connected = (connectionEpoch: number) => ({
+      type: 'orgConnected',
+      data: { username: 'me@example.com', connectionEpoch },
+    });
+
+    function setup() {
+      const bus = loadWebviewBootstrap({ withOrgLifecycle: true });
+      const onOrgConnected = vi.fn();
+      const onOrgDisconnected = vi.fn();
+      bus.win.__registerFeature('probe', { onOrgConnected, onOrgDisconnected });
+      return { ...bus, onOrgConnected, onOrgDisconnected };
+    }
+
+    it('fires onOrgConnected once for a refocus re-send of the same connection', () => {
+      const { win, dispatch, onOrgConnected } = setup();
+
+      dispatch(connected(1));
+      dispatch(connected(1));
+
+      expect(onOrgConnected).toHaveBeenCalledTimes(1);
+      // The header still refreshes on the re-send.
+      expect(win.__orgConnected).toBe(true);
+    });
+
+    it('fires again for a new connection, even to the same org', () => {
+      const { dispatch, onOrgConnected } = setup();
+
+      dispatch(connected(1));
+      dispatch(connected(2));
+
+      expect(onOrgConnected).toHaveBeenCalledTimes(2);
+    });
+
+    it('fires again after a disconnect, whatever the epoch', () => {
+      const { dispatch, onOrgConnected, onOrgDisconnected } = setup();
+
+      dispatch(connected(1));
+      dispatch({ type: 'orgDisconnected' });
+      dispatch(connected(1));
+
+      expect(onOrgDisconnected).toHaveBeenCalledTimes(1);
+      expect(onOrgConnected).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('loads ipc.js first, since every other module depends on its globals', () => {

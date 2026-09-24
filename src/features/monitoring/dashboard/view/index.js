@@ -26,8 +26,6 @@ import { hasNotifications } from '../notification-config';
   let isVisible = true; // Track panel visibility to pause auto-refresh when hidden
   let configs = /** @type {any[]} */ ([]);
   let searchQuery = '';
-  /** Track connected org to avoid re-rendering on focus-regain with the same org */
-  let connectedOrgId = /** @type {string | null} */ (null);
   /** Configs loaded while monitoring tab was hidden — queries deferred until visible */
   let pendingInitialLoad = false;
   /** @type {Map<string, any>} configId → Chart instance */
@@ -215,24 +213,16 @@ import { hasNotifications } from '../notification-config';
   };
   // ── Feature registration ───────────────────────────────────────────────────
   win.__registerFeature('monitoring-dashboard', {
-    onOrgConnected: function (/** @type {any} */ org) {
+    // Fires once per real connection — org-lifecycle.js gates out the
+    // `orgConnected` re-sent on panel refocus, so reloading here never wipes an
+    // in-progress edit just because the user clicked elsewhere and back.
+    onOrgConnected: function () {
       connected = true;
       addBtn.disabled = false;
-      const orgIdentifier = org && (org.orgId || org.username);
-      const sameOrg = orgIdentifier && orgIdentifier === connectedOrgId;
-      connectedOrgId = orgIdentifier || null;
-      if (!sameOrg || configs.length === 0) {
-        // Different org or first load — reload configs from disk
-        loadConfigs();
-      } else {
-        // Same org regained focus (e.g. user clicked elsewhere and back) — re-enable buttons
-        // without wiping any in-progress edit state
-        setAllButtonsDisabled(false);
-      }
+      loadConfigs();
     },
     onOrgDisconnected: function () {
       connected = false;
-      connectedOrgId = null;
       addBtn.disabled = true;
       clearAllRefreshTimers();
       setAllButtonsDisabled(true);

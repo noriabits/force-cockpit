@@ -31,6 +31,16 @@ export class MainPanel {
   // Limits cache (reuse within 60 seconds)
   private _limitsCache: { data: unknown; ts: number } | null = null;
 
+  /**
+   * Bumped on every real `connectionChanged` (either edge, including a
+   * reconnect to the same org) and sent with each `orgConnected`. The panel
+   * also re-sends `orgConnected` whenever it regains visibility — only to
+   * refresh the header — so the webview gates feature `onOrgConnected` hooks on
+   * this changing; otherwise a tab switch would read as a new connection and
+   * wipe per-feature state (chats, in-flight runs, expanded fields).
+   */
+  private _connectionEpoch = 0;
+
   get hasActiveOperations(): boolean {
     return this._operations.hasActive;
   }
@@ -225,6 +235,7 @@ export class MainPanel {
 
   private _setupConnectionListener(): void {
     const onChanged = (event: ConnectionChangedEvent) => {
+      this._connectionEpoch++;
       this._limitsCache = null; // Invalidate on org change
       if (event.connected) {
         void this._sendOrgInfo();
@@ -252,7 +263,15 @@ export class MainPanel {
       !isProduction && protectedSandboxes.includes((sandboxName ?? '').toLowerCase());
     this.postWebviewMessage({
       type: 'orgConnected',
-      data: { ...org, sandboxName, isProtectedOrg, instanceName: orgDetails.InstanceName },
+      data: {
+        ...org,
+        sandboxName,
+        isProtectedOrg,
+        instanceName: orgDetails.InstanceName,
+        // Read after the awaits above, so a slow refocus send can't carry an
+        // epoch older than a connection change that landed meanwhile.
+        connectionEpoch: this._connectionEpoch,
+      },
     });
     void this._sendStorageLimits();
     void this._sendReleaseInfo();

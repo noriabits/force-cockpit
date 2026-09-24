@@ -38,8 +38,6 @@ import {
   let connected = false;
   /** @type {any} */
   let currentOrgData = null;
-  /** @type {string | null} */
-  let lastConnectedOrgId = null;
   // Mutated in place (never reassigned) — accordion-builder and the filter bar
   // capture this reference at creation time
   /** @type {Set<string>} */
@@ -436,13 +434,10 @@ import {
       connected = true;
       currentOrgData = orgData;
       updateExecuteBtns();
-      const orgId = orgData && (orgData.orgId || orgData.username);
-      const sameOrg = orgId && orgId === lastConnectedOrgId;
-      lastConnectedOrgId = orgId || null;
-      if (!sameOrg || currentScripts.length === 0) {
-        win.__vscode.postMessage({ type: 'loadYamlScripts' });
-        win.__vscode.postMessage({ type: 'loadFavorites' });
-      }
+      // Once per real connection — a panel refocus is gated out upstream in
+      // org-lifecycle.js, so there's no same-org check to make here.
+      win.__vscode.postMessage({ type: 'loadYamlScripts' });
+      win.__vscode.postMessage({ type: 'loadFavorites' });
     },
     onOrgDisconnected: () => {
       connected = false;
