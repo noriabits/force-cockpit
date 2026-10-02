@@ -334,6 +334,11 @@ export function createTraceFlagPanel(ctx) {
     errorEl.style.display = '';
   }
 
+  function hideError() {
+    errorEl.textContent = '';
+    errorEl.style.display = 'none';
+  }
+
   for (const option of DURATION_OPTIONS) {
     const el = document.createElement('option');
     el.value = String(option.ms);
@@ -367,11 +372,13 @@ export function createTraceFlagPanel(ctx) {
       setMode('me');
       renderFlags();
       statusEl.textContent = '';
+      hideError();
     },
     setTraceFlags(/** @type {any[]} */ flags) {
       traceFlags = flags ?? [];
       renderFlags();
       statusEl.textContent = '';
+      hideError();
     },
     showEntities(/** @type {any[]} */ entities) {
       renderEntityList(entities);
@@ -401,6 +408,8 @@ export function createTraceFlagPanel(ctx) {
       selectEntity(null);
       flagsEl.innerHTML = '';
       resultsEl.innerHTML = '';
+      statusEl.textContent = '';
+      hideError();
       if (countdownTimer) {
         clearInterval(countdownTimer);
         countdownTimer = null;

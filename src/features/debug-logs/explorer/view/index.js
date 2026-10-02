@@ -160,23 +160,31 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     },
   };
 
+  /** Drop everything that belongs to the previous org. */
+  function resetPanels() {
+    setupLoaded = false;
+    logs = [];
+    tracePanel.reset();
+    logList.reset();
+    logList.stopTail();
+    logViewer.hide();
+    aiPanel.hide();
+  }
+
   win.__registerFeature('debug-logs', {
     onOrgConnected(/** @type {any} */ data) {
+      // Switching orgs connects straight to the new one with no disconnect in
+      // between, so the previous org's flags, logs and errors are cleared here
+      // too. Safe: this hook only fires on a real connection, never a refocus.
+      resetPanels();
       connected = true;
       orgData = data;
-      setupLoaded = false;
       loadEverything();
     },
     onOrgDisconnected() {
       connected = false;
       orgData = null;
-      setupLoaded = false;
-      logs = [];
-      tracePanel.reset();
-      logList.reset();
-      logList.stopTail();
-      logViewer.hide();
-      aiPanel.hide();
+      resetPanels();
     },
     onMessage(/** @type {{ type: string, data: any }} */ message) {
       const handler = messageHandlers[message.type];
