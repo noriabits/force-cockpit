@@ -5,7 +5,7 @@ export type ScriptType = 'apex' | 'command' | 'js' | 'ai' | 'rest';
 export interface ScriptInput {
   name: string;
   label?: string;
-  type?: 'string' | 'picklist' | 'checkbox' | 'textarea';
+  type?: 'string' | 'picklist' | 'checkbox' | 'textarea' | 'file';
   required?: boolean;
   options?: string[];
   default?: boolean;

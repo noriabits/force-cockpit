@@ -390,6 +390,8 @@ export class ScriptParser {
           if (inp.default === true) entry.default = true;
         } else if (inp.type === 'textarea') {
           entry.type = 'textarea';
+        } else if (inp.type === 'file') {
+          entry.type = 'file';
         }
         if (inp.required === true) entry.required = true;
         return entry;

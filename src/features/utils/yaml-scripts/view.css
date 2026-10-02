@@ -603,6 +603,22 @@ textarea.yaml-code-textarea {
   font-size: var(--vscode-editor-font-size, 12px);
 }
 
+/* ── File input (execution time): path field + Browse button ── */
+.yaml-input-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.yaml-input-file-row .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.yaml-input-file-row .btn {
+  flex-shrink: 0;
+}
+
 /* ── File link in accordion subtitle ── */
 .yaml-file-link {
   background: none;

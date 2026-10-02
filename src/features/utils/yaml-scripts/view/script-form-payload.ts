@@ -7,7 +7,7 @@
 export type RawFormInput = {
   name: string;
   label: string;
-  type: 'string' | 'picklist' | 'checkbox' | 'textarea';
+  type: 'string' | 'picklist' | 'checkbox' | 'textarea' | 'file';
   required: boolean;
   options: string;
   checkboxDefault: boolean;
@@ -16,7 +16,7 @@ export type RawFormInput = {
 export type CleanedInput = {
   name: string;
   label?: string;
-  type?: 'picklist' | 'checkbox' | 'textarea';
+  type?: 'picklist' | 'checkbox' | 'textarea' | 'file';
   required?: boolean;
   options?: string[];
   default?: boolean;
@@ -70,6 +70,8 @@ export function cleanInputs(rawInputs: RawFormInput[]): CleanedInput[] {
         if (inp.checkboxDefault) entry.default = true;
       } else if (inp.type === 'textarea') {
         entry.type = 'textarea';
+      } else if (inp.type === 'file') {
+        entry.type = 'file';
       }
       if (inp.required) entry.required = true;
       return entry;

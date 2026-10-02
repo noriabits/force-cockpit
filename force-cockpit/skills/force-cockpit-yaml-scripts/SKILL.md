@@ -71,7 +71,7 @@ inputs:
     required: true            # optional: Execute stays disabled until filled
   - name: status
     label: Status
-    type: picklist            # optional: string (default) | picklist | checkbox | textarea
+    type: picklist            # optional: string (default) | picklist | checkbox | textarea | file
     options: [New, Active, Closed]   # picklist only
   - name: sendEmail
     label: Send notification email
@@ -80,9 +80,12 @@ inputs:
   - name: notes
     label: Notes
     type: textarea              # multi-line text input
+  - name: csvPath
+    label: CSV to import
+    type: file                  # path field + Browse… button
 ```
 
-`type` field reference — these are the **only** four valid values, all optional (defaults to `string`):
+`type` field reference — these are the **only** five valid values, all optional (defaults to `string`):
 
 | `type` | Extra fields | Renders as |
 |---|---|---|
@@ -90,6 +93,7 @@ inputs:
 | `picklist` | `options: [...]` | dropdown |
 | `checkbox` | `default: true` (optional) | checkbox |
 | `textarea` | — | multi-line text input |
+| `file` | — | text field + **Browse…** button (OS file dialog); the value is the chosen file's **absolute path** |
 
 Use `${name}` anywhere in the script body (and, for `ai` scripts, in `gather.soql:` / `gather.apex:` too) to substitute the value. Escaping is automatic and type-aware — **never hand-escape a placeholder yourself**:
 
@@ -98,6 +102,13 @@ Use `${name}` anywhere in the script body (and, for `ai` scripts, in `gather.soq
 | `apex` | Backslash-escaped exactly like Apex's own `String.escapeSingleQuotes` — `\` → `\\`, `'` → `\'`, newlines → literal `\n`. Safe to drop straight into an Apex string literal `'${var}'`. (Not `''`-doubling: Apex reads `''` as two adjacent literals with nothing joining them, which does not compile.) |
 | `js` | JSON string escaping, plus `'` → `\u0027`. Safe inside a JS string literal written either way — `'${var}'` or `"${var}"` — and still valid JSON, so `JSON.parse("${var}")` works |
 | `command` / `ai` | Raw, unescaped |
+
+**`file` inputs carry a path, not the file's contents.** The value is an absolute path in the OS's native form (e.g. `C:\Users\me\data.csv` on Windows), and it goes through the same escaping as any other value:
+
+- `js` — read it with the sandbox's `fs` global: `fs.readFileSync("${csvPath}", 'utf8')`. JSON escaping takes care of Windows backslashes. See [Reading a user-chosen file](#reading-a-user-chosen-file).
+- `command` — the path is inserted raw, so **always quote it** (`cat "${csvPath}"`) or a path with spaces splits into several arguments.
+- `apex` — Apex runs in the org and cannot read local files; there the path is just a string.
+- `ai` — the prompt gets the raw path. The model can only open it if the file is inside the workspace and `allowReadWorkspaceFiles: true` is set.
 
 There's one built-in **system placeholder**, always available without declaring it in `inputs:`: `${orgUsername}` — the connected org's username (empty string if no org is connected). If you declare a user input with the same name, your input wins.
 
@@ -232,6 +243,26 @@ js: |-
 | `input.parseLines(text, fields)` | Splits `text` into `\n`-separated, `#`-comment-skipping, comma-delimited rows and maps each to `{ [fields[i]]: value }` — handy for pasted bulk data |
 | `workspaceRoot` | Absolute path of the open workspace |
 | `setTimeout`, `clearTimeout`, `Promise` | Standard async primitives |
+
+### Reading a user-chosen file
+
+Pair a `type: file` input with `fs` to process a file the user picks at run time:
+
+```yaml
+name: 📄 Count Last Names in File
+inputs:
+  - name: csvPath
+    label: File with one last name per line
+    type: file
+    required: true
+js: |
+  const file = "${csvPath}";
+  const text = fs.readFileSync(file, 'utf8');
+  const rows = input.parseLines(text, ['lastName']).filter((row) => row.lastName);
+  log(`${rows.length} last names in ${path.basename(file)}`);
+```
+
+Assign the placeholder to a variable once, inside a plain `"..."` or `'...'` literal. Don't put it in a backtick template literal. The escaping does not cover backticks or `${`, so a path containing either would break out of the template.
 
 ## Composing scripts
 
@@ -537,6 +568,8 @@ Safety model: **you** write the `gather` query/Apex and it runs exactly as writt
 - Expecting a `js` orchestrator's `outputs` to include what its callees produced — re-export with `setOutput` instead.
 - Leaving a comparand unquoted in a `when:` — `!== None` is an undefined identifier; write `!== "None"`.
 - Using `type: picklist` without an `options:` list.
+- Leaving a `type: file` placeholder unquoted in a `command` script — `cat ${csvPath}` breaks on paths with spaces; write `cat "${csvPath}"`.
+- Expecting a `type: file` input to hold the file's contents — it holds the path; read the file yourself (`fs.readFileSync` in `js`).
 - Hand-escaping a `${placeholder}` — don't; escaping is automatic and type-aware, and double-escaping will corrupt the value.
 - Forgetting quotes around a `${var}` placeholder inside Apex/JS string literals — e.g. `'${accountId}'`, not bare `${accountId}`.
 

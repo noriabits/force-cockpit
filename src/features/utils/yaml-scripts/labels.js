@@ -87,6 +87,7 @@ window.YamlScriptsLabels = {
   typePicklist: 'Picklist',
   typeCheckbox: 'Checkbox',
   typeTextarea: 'Textarea',
+  typeFile: 'File',
   labelCheckboxDefault: 'Checked by default',
   placeholderOptions: 'Option1, Option2, Option3',
   errorInputNameInvalid:

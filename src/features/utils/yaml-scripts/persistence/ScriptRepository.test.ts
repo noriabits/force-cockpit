@@ -313,6 +313,26 @@ describe('ScriptRepository', () => {
       expect(doc.inputs).toEqual([{ name: 'items', type: 'textarea', required: true }]);
     });
 
+    it('serializes file inputs correctly', () => {
+      const userDir = path.join(tmpDir, 'user');
+      const repo = new ScriptRepository({
+        userPath: userDir,
+        privatePath: '',
+        workspaceRoot: '',
+      });
+      repo.save({
+        name: 'S',
+        description: '',
+        type: 'js',
+        script: 'log("${csvPath}");',
+        folder: 'cat',
+        inputs: [{ name: 'csvPath', type: 'file', required: true }],
+      });
+      const content = fs.readFileSync(path.join(userDir, 'cat', 's.yaml'), 'utf8');
+      const doc = yaml.load(content) as Record<string, unknown>;
+      expect(doc.inputs).toEqual([{ name: 'csvPath', type: 'file', required: true }]);
+    });
+
     it('round-trips then: steps so a form save never drops them', () => {
       const userDir = path.join(tmpDir, 'user');
       const repo = new ScriptRepository({ userPath: userDir, privatePath: '', workspaceRoot: '' });

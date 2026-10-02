@@ -53,6 +53,12 @@ describe('cleanInputs', () => {
     ]);
   });
 
+  it('marks file type', () => {
+    expect(cleanInputs([rawInput({ name: 'foo', type: 'file' })])).toEqual([
+      { name: 'foo', type: 'file' },
+    ]);
+  });
+
   it('omits type for plain string inputs', () => {
     expect(cleanInputs([rawInput({ name: 'foo', type: 'string' })])).toEqual([{ name: 'foo' }]);
   });

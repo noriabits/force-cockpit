@@ -177,11 +177,14 @@ Each input supports:
 |-------|----------|-------------|
 | `name` | Yes | Variable identifier (alphanumeric + underscore) — used as `${name}` in the script body |
 | `label` | No | Display label (defaults to `name`) |
-| `type` | No | `string` (text input, default) or `picklist` (dropdown) |
+| `type` | No | `string` (text input, default), `picklist` (dropdown), `checkbox`, `textarea` (multi-line) or `file` (path field + **Browse** button) |
 | `required` | No | If `true`, Execute is disabled until the field is filled |
 | `options` | Picklist only | List of selectable values |
+| `default` | Checkbox only | `true` to pre-check the box |
 
 Write `${variableName}` in your script code where you want the value substituted. Escaping is handled automatically (Apex-safe for `apex`, JSON-safe for `js`, raw for `command`).
+
+A `file` input lets the user pick a file with the OS dialog (or paste a path). `${name}` receives the file's **absolute path**, not its contents. A `js` script reads it with `fs.readFileSync("${csvPath}", 'utf8')`. In a `command` script, quote it (`cat "${csvPath}"`) so paths with spaces stay one argument.
 
 ### System Placeholders
 

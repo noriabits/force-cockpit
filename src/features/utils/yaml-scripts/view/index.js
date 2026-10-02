@@ -417,6 +417,12 @@ import {
         scriptForm.setFilePath(data?.filePath ?? '');
       }
     },
+    browseForInputFileResult: (data) => {
+      if (data?.cancelled) accordionBuilder.cancelBrowsedInputFile(data?.requestId ?? '');
+      else accordionBuilder.applyBrowsedInputFile(data?.requestId ?? '', data?.filePath ?? '');
+    },
+    browseForInputFileError: (data) =>
+      accordionBuilder.cancelBrowsedInputFile(data?.requestId ?? ''),
     listChatModelsResult: (data) => scriptForm.setModels(data?.models ?? []),
     listChatModelsError: () => scriptForm.setModels([]),
     listSkillsResult: (data) => scriptForm.setSkills(data?.skills ?? []),

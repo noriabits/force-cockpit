@@ -269,8 +269,8 @@ export function createScriptForm(ctx) {
       (script.inputs || []).map((/** @type {any} */ inp) => ({
         name: inp.name || '',
         label: inp.label || '',
-        type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea'} */ (
-          ['picklist', 'checkbox', 'textarea'].includes(inp.type) ? inp.type : 'string'
+        type: /** @type {'string' | 'picklist' | 'checkbox' | 'textarea' | 'file'} */ (
+          ['picklist', 'checkbox', 'textarea', 'file'].includes(inp.type) ? inp.type : 'string'
         ),
         required: !!inp.required,
         options:

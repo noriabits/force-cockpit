@@ -50,6 +50,32 @@ export function createAccordionBuilder(ctx) {
   } = ctx;
 
   /**
+   * In-flight OS file dialogs for `file` inputs, keyed by the `requestId` the
+   * host echoes back — several accordions can be open, so the result must find
+   * the one field that asked.
+   * @type {Map<string, { pathInput: HTMLInputElement, updateExecuteState: () => void }>}
+   */
+  const pendingFileBrowses = new Map();
+
+  /**
+   * Fills the `file` input that requested a browse with the chosen path.
+   * @param {string} requestId
+   * @param {string} filePath
+   */
+  function applyBrowsedInputFile(requestId, filePath) {
+    const pending = pendingFileBrowses.get(requestId);
+    if (!pending) return;
+    pendingFileBrowses.delete(requestId);
+    pending.pathInput.value = filePath;
+    pending.updateExecuteState();
+  }
+
+  /** @param {string} requestId */
+  function cancelBrowsedInputFile(requestId) {
+    pendingFileBrowses.delete(requestId);
+  }
+
+  /**
    * Custom tooltips: native `title` tooltips don't render in VS Code webviews,
    * so header icon buttons opt into the shared body-appended tooltip via the
    * global `win.__setTooltip` helper (media/modules/tooltip.js).
@@ -286,6 +312,27 @@ export function createAccordionBuilder(ctx) {
           select.addEventListener('change', updateExecuteState);
           inputFields.set(input.name, select);
           fieldDiv.appendChild(select);
+        } else if (input.type === 'file') {
+          const fileRow = document.createElement('div');
+          fileRow.className = 'yaml-input-file-row';
+          const pathInput = document.createElement('input');
+          pathInput.type = 'text';
+          pathInput.className = 'text-input';
+          pathInput.placeholder = input.label || input.name;
+          pathInput.addEventListener('input', updateExecuteState);
+          const browseBtn = document.createElement('button');
+          browseBtn.type = 'button';
+          browseBtn.className = 'btn';
+          browseBtn.textContent = labels.btnBrowse;
+          browseBtn.addEventListener('click', () => {
+            const requestId = `${script.id}::${input.name}`;
+            pendingFileBrowses.set(requestId, { pathInput, updateExecuteState });
+            vscode.postMessage({ type: 'browseForInputFile', requestId });
+          });
+          inputFields.set(input.name, pathInput);
+          fileRow.appendChild(pathInput);
+          fileRow.appendChild(browseBtn);
+          fieldDiv.appendChild(fileRow);
         } else if (input.type === 'textarea') {
           const textarea = document.createElement('textarea');
           textarea.className = 'text-input yaml-input-textarea';
@@ -399,5 +446,5 @@ export function createAccordionBuilder(ctx) {
     return section;
   }
 
-  return { buildAccordion, updateFavoriteStars };
+  return { buildAccordion, updateFavoriteStars, applyBrowsedInputFile, cancelBrowsedInputFile };
 }

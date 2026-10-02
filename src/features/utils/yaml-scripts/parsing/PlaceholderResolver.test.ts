@@ -119,6 +119,28 @@ describe('substituteInputs', () => {
     expect(substituteInputs(s, { items: 'a\nb\nc' })).toBe("String s = 'a\\nb\\nc';");
   });
 
+  describe('file input paths (Windows separators, spaces)', () => {
+    const filePath = 'C:\\Users\\me\\My Data\\a.csv';
+    const inputs = [{ name: 'csvPath', type: 'file' as const }];
+
+    it('apex: backslashes are escaped inside the string literal', () => {
+      const s = script({ inputs, type: 'apex', script: "String p = '${csvPath}';" });
+      expect(substituteInputs(s, { csvPath: filePath })).toBe(
+        "String p = 'C:\\\\Users\\\\me\\\\My Data\\\\a.csv';",
+      );
+    });
+
+    it('js: the substituted literal evaluates back to the exact path', () => {
+      const s = script({ inputs, type: 'js', script: '"${csvPath}"' });
+      expect(JSON.parse(substituteInputs(s, { csvPath: filePath }))).toBe(filePath);
+    });
+
+    it('command: the path is inserted raw', () => {
+      const s = script({ inputs, type: 'command', script: 'type "${csvPath}"' });
+      expect(substituteInputs(s, { csvPath: filePath })).toBe(`type "${filePath}"`);
+    });
+  });
+
   it('handles regex-special characters in input names', () => {
     const s = script({ inputs: [{ name: 'a.b' }], type: 'command', script: 'echo ${a.b}' });
     expect(substituteInputs(s, { 'a.b': 'hello' })).toBe('echo hello');

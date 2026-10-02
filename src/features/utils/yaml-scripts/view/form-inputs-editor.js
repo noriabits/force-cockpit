@@ -6,7 +6,7 @@
  * @typedef {{
  *   name: string,
  *   label: string,
- *   type: 'string' | 'picklist' | 'checkbox' | 'textarea',
+ *   type: 'string' | 'picklist' | 'checkbox' | 'textarea' | 'file',
  *   required: boolean,
  *   options: string,
  *   checkboxDefault: boolean,
@@ -54,10 +54,14 @@ function buildSharedInputHeader(input, idx, inputs, labels, onChanged) {
   const optTextarea = document.createElement('option');
   optTextarea.value = 'textarea';
   optTextarea.textContent = labels.typeTextarea;
+  const optFile = document.createElement('option');
+  optFile.value = 'file';
+  optFile.textContent = labels.typeFile;
   typeSelect.appendChild(optString);
   typeSelect.appendChild(optPicklist);
   typeSelect.appendChild(optCheckbox);
   typeSelect.appendChild(optTextarea);
+  typeSelect.appendChild(optFile);
   typeSelect.value = input.type;
 
   const reqLabel = document.createElement('label');

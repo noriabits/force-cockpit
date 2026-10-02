@@ -44,6 +44,12 @@ describe('ScriptParser', () => {
         { name: 'itemList', type: 'textarea', required: true },
       ]);
     });
+
+    it('parses a file input', () => {
+      expect(parser.parseInputs([{ name: 'csvPath', type: 'file', required: true }])).toEqual([
+        { name: 'csvPath', type: 'file', required: true },
+      ]);
+    });
   });
 
   describe('makeInvalidScript', () => {

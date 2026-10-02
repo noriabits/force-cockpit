@@ -204,6 +204,26 @@ export const yamlScriptsFeature: FeatureModuleFactory = (ctx) => {
         successType: 'browseForScriptFileResult',
         errorType: 'browseForScriptFileError',
       },
+      // Run-form `file` inputs. Unlike `browseForScriptFile` this hands back the
+      // absolute path (the file may live anywhere), and the router echoes the
+      // webview's `requestId` so the result reaches the field that asked.
+      browseForInputFile: {
+        handler: async () => {
+          const workspaceRoot = paths.workspaceRoot;
+          const defaultUri = workspaceRoot ? vscode.Uri.file(workspaceRoot) : undefined;
+          const result = await vscode.window.showOpenDialog({
+            defaultUri,
+            canSelectMany: false,
+            canSelectFiles: true,
+            canSelectFolders: false,
+            openLabel: 'Select File',
+          });
+          if (!result || result.length === 0) return { cancelled: true };
+          return { cancelled: false, filePath: result[0].fsPath };
+        },
+        successType: 'browseForInputFileResult',
+        errorType: 'browseForInputFileError',
+      },
       openScriptFile: {
         handler: async (msg) => {
           const filePath = msg.filePath as string;
