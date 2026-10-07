@@ -2,6 +2,7 @@
 // The trace-flag manager: pick what to trace (me / Automated Process / any user
 // / an Apex class), pick a debug level (preset, custom, or an existing
 // DebugLevel), pick a duration, and manage the flags that are already running.
+import { DEBUG_LEVEL_PRESETS, RECOMMENDED_PRESET_ID } from '../debugLevelPresets';
 import { DURATION_OPTIONS, formatCountdown } from './format';
 
 const CATEGORIES = [
@@ -45,7 +46,9 @@ export function createTraceFlagPanel(ctx) {
   const statusEl = /** @type {HTMLElement} */ ($('dbg-trace-status'));
   const errorEl = /** @type {HTMLElement} */ ($('dbg-trace-error'));
 
-  /** @type {any[]} */ let presets = [];
+  // Static, so they ship with the webview rather than riding the org round-trip:
+  // a failing user/trace-flag query must not leave the picker empty.
+  /** @type {any[]} */ let presets = DEBUG_LEVEL_PRESETS;
   /** @type {any[]} */ let systemUsers = [];
   /** @type {any} */ let currentUser = null;
   /** @type {any[]} */ let traceFlags = [];
@@ -346,19 +349,21 @@ export function createTraceFlagPanel(ctx) {
     durationSel.appendChild(el);
   }
 
+  renderPresets();
+  presetSel.value = RECOMMENDED_PRESET_ID;
+  updatePresetHint();
+
   return {
     /** Hydrate from the `loadDebugLogsSetup` round-trip. */
     applySetup(/** @type {any} */ data) {
-      presets = data.presets ?? [];
       systemUsers = data.systemUsers ?? [];
       currentUser = data.currentUser ?? null;
       traceFlags = data.traceFlags ?? [];
-      renderPresets();
 
       const org = ctx.getOrgData();
       const sensitive = org && (!org.sandboxName || org.isProtectedOrg);
       const stored = data.state?.presetId;
-      const wanted = sensitive ? 'production-safe' : (stored ?? data.recommendedPresetId);
+      const wanted = sensitive ? 'production-safe' : (stored ?? RECOMMENDED_PRESET_ID);
       if (presets.some((p) => p.id === wanted)) presetSel.value = wanted;
       updatePresetHint();
       if (sensitive) {

@@ -6,7 +6,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { FeatureModuleFactory } from '../../FeatureModule';
 import { LogAnalyzer } from './ai/LogAnalyzer';
-import { DEBUG_LEVEL_PRESETS, RECOMMENDED_PRESET_ID } from './debugLevelPresets';
 import { DebugLogsService } from './DebugLogsService';
 import { createDebugLogsStateStore, type DebugLogsState } from './DebugLogsStateStore';
 import { isEmptyByMetadata } from './parsing/logNoise';
@@ -55,8 +54,6 @@ export const debugLogsFeature: FeatureModuleFactory = (ctx) => {
             service.listTraceFlags(),
           ]);
           return {
-            presets: DEBUG_LEVEL_PRESETS,
-            recommendedPresetId: RECOMMENDED_PRESET_ID,
             currentUser,
             systemUsers,
             traceFlags,

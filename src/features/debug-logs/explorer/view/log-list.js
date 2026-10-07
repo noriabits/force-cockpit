@@ -390,6 +390,8 @@ export function createLogList(ctx) {
       knownIds = new Set();
       firstLoad = true;
       openLogId = '';
+      errorEl.style.display = 'none';
+      statusEl.textContent = '';
       render();
     },
     stopTail() {
