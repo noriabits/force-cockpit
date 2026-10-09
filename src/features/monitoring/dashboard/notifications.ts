@@ -5,6 +5,10 @@ import { playRowCountPing } from './audio';
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
 const STORAGE_KEY = 'monitoring.notificationCooldowns';
+/** Second segment of a row-count snooze key (`configId:rows:orgKey`); threshold keys carry the value-field index there instead. */
+const SNOOZE_1H_LABEL = 'Snooze 1h';
+const SNOOZE_TODAY_LABEL = 'Snooze for today';
+const ROW_COUNT_KEY_PART = 'rows';
 
 /** Maps cooldownKey → "silence until" timestamp */
 const notificationCooldowns = new Map<string, number>();
@@ -42,18 +46,27 @@ export function clearAllCooldownsFor(configId: string, workspaceState: vscode.Me
 export function pruneCooldowns(
   configId: string,
   valueFields: MonitoringValueField[],
+  notifyOnIncrease: boolean,
   workspaceState: vscode.Memento,
 ): void {
   let changed = false;
   for (const [key] of notificationCooldowns) {
     if (!key.startsWith(configId + ':')) continue;
-    const idx = parseInt(key.split(':')[1], 10);
-    if (isNaN(idx) || idx >= valueFields.length || valueFields[idx]?.threshold == null) {
+    const part = key.split(':')[1];
+    const stale =
+      part === ROW_COUNT_KEY_PART
+        ? !notifyOnIncrease
+        : isStaleThresholdIndex(parseInt(part, 10), valueFields);
+    if (stale) {
       notificationCooldowns.delete(key);
       changed = true;
     }
   }
   if (changed) persistSnoozes(workspaceState);
+}
+
+function isStaleThresholdIndex(idx: number, valueFields: MonitoringValueField[]): boolean {
+  return isNaN(idx) || idx >= valueFields.length || valueFields[idx]?.threshold == null;
 }
 
 export function clearRowCountBaseline(configId: string): void {
@@ -77,6 +90,7 @@ export function checkThresholds(
   configName: string,
   datasets: Array<{ data: number[] }>,
   valueFields: MonitoringValueField[],
+  orgKey = '',
 ): ThresholdBreach[] {
   const now = Date.now();
   const breaches: ThresholdBreach[] = [];
@@ -89,7 +103,7 @@ export function checkThresholds(
       condition === 'above' ? v >= vf.threshold! : v <= vf.threshold!,
     );
     if (!breached) continue;
-    const cooldownKey = `${configId}:${i}`;
+    const cooldownKey = `${configId}:${i}:${orgKey}`;
     const silenceUntil = notificationCooldowns.get(cooldownKey) ?? 0;
     if (now < silenceUntil) continue;
     notificationCooldowns.set(cooldownKey, now + COOLDOWN_MS);
@@ -104,23 +118,45 @@ export function checkThresholds(
   return breaches;
 }
 
+function applySnooze(
+  selection: string | undefined,
+  cooldownKey: string,
+  workspaceState: vscode.Memento,
+): void {
+  if (selection === SNOOZE_1H_LABEL) {
+    notificationCooldowns.set(cooldownKey, Date.now() + SNOOZE_1H_MS);
+  } else if (selection === SNOOZE_TODAY_LABEL) {
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    notificationCooldowns.set(cooldownKey, midnight.getTime());
+  } else {
+    return;
+  }
+  persistSnoozes(workspaceState);
+}
+
+function showSnoozableWarning(
+  message: string,
+  cooldownKey: string,
+  workspaceState: vscode.Memento,
+): void {
+  vscode.window
+    .showWarningMessage(message, SNOOZE_1H_LABEL, SNOOZE_TODAY_LABEL)
+    .then((selection) => applySnooze(selection, cooldownKey, workspaceState));
+}
+
 export function fireBreachNotifications(
   breaches: ThresholdBreach[],
   workspaceState: vscode.Memento,
 ): void {
   for (const { message, cooldownKey } of breaches) {
-    vscode.window.showWarningMessage(message, 'Snooze 1h', 'Snooze for today').then((selection) => {
-      if (selection === 'Snooze 1h') {
-        notificationCooldowns.set(cooldownKey, Date.now() + SNOOZE_1H_MS);
-        persistSnoozes(workspaceState);
-      } else if (selection === 'Snooze for today') {
-        const midnight = new Date();
-        midnight.setHours(24, 0, 0, 0);
-        notificationCooldowns.set(cooldownKey, midnight.getTime());
-        persistSnoozes(workspaceState);
-      }
-    });
+    showSnoozableWarning(message, cooldownKey, workspaceState);
   }
+}
+
+export interface RowCountIncrease {
+  message: string;
+  cooldownKey: string;
 }
 
 export function checkRowCountIncrease(
@@ -129,7 +165,7 @@ export function checkRowCountIncrease(
   configName: string,
   totalRows: number,
   notifyOnIncrease: boolean,
-): string[] {
+): RowCountIncrease[] {
   let perOrg = previousRowCounts.get(configId);
   if (!perOrg) {
     perOrg = new Map();
@@ -139,17 +175,25 @@ export function checkRowCountIncrease(
   perOrg.set(orgKey, totalRows);
   if (!notifyOnIncrease || prev === undefined || totalRows <= prev) return [];
   const delta = totalRows - prev;
-  return [`[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`];
+  return [
+    {
+      message: `[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`,
+      cooldownKey: `${configId}:${ROW_COUNT_KEY_PART}:${orgKey}`,
+    },
+  ];
 }
 
 export function fireRowCountNotifications(
-  messages: string[],
+  increases: RowCountIncrease[],
+  workspaceState: vscode.Memento,
   outputChannel?: vscode.OutputChannel,
 ): void {
-  if (messages.length === 0) return;
+  const now = Date.now();
+  const audible = increases.filter((i) => now >= (notificationCooldowns.get(i.cooldownKey) ?? 0));
+  if (audible.length === 0) return;
   playRowCountPing(outputChannel);
-  for (const message of messages) {
-    void vscode.window.showWarningMessage(message);
+  for (const { message, cooldownKey } of audible) {
+    showSnoozableWarning(message, cooldownKey, workspaceState);
   }
 }
 

@@ -76,6 +76,28 @@ export class BackgroundRefresher {
     return this.opts.connectionManager.getCurrentOrg()?.username ?? '';
   }
 
+  /** Fires threshold + row-count notifications; returns whether the row count grew. */
+  private notify(
+    cfg: MonitoringConfig,
+    datasets: Array<{ data: number[] }>,
+    totalRows: number,
+  ): boolean {
+    const orgKey = this.currentOrgKey();
+    fireBreachNotifications(
+      checkThresholds(cfg.id, cfg.name, datasets, cfg.valueFields, orgKey),
+      this.opts.workspaceState,
+    );
+    const increases = checkRowCountIncrease(
+      cfg.id,
+      orgKey,
+      cfg.name,
+      totalRows,
+      Boolean(cfg.notifyOnIncrease),
+    );
+    fireRowCountNotifications(increases, this.opts.workspaceState, this.opts.outputChannel);
+    return increases.length > 0;
+  }
+
   private async _tick(cfg: MonitoringConfig): Promise<void> {
     if (!this.opts.connectionManager.isConnected) return;
     try {
@@ -98,25 +120,14 @@ export class BackgroundRefresher {
       cfg.labelField,
       cfg.valueFields,
     );
-    fireBreachNotifications(
-      checkThresholds(cfg.id, cfg.name, result.datasets, cfg.valueFields),
-      this.opts.workspaceState,
-    );
-    const rowCountMessages = checkRowCountIncrease(
-      cfg.id,
-      this.currentOrgKey(),
-      cfg.name,
-      result.totalRows,
-      Boolean(cfg.notifyOnIncrease),
-    );
-    fireRowCountNotifications(rowCountMessages, this.opts.outputChannel);
+    const rowCountIncreased = this.notify(cfg, result.datasets, result.totalRows);
     this.opts.postToWebview({
       type: 'monitoringBackgroundRefreshResult',
       data: {
         configId: cfg.id,
         chartType: cfg.chartType,
         result,
-        rowCountIncreased: rowCountMessages.length > 0,
+        rowCountIncreased,
       },
     });
   }
@@ -132,25 +143,14 @@ export class BackgroundRefresher {
     const datasets = (cfg.valueFields as MonitoringValueField[]).map((_, i) => ({
       data: result.rows.map((row) => Number(row[offset + i]) || 0),
     }));
-    fireBreachNotifications(
-      checkThresholds(cfg.id, cfg.name, datasets, cfg.valueFields),
-      this.opts.workspaceState,
-    );
-    const rowCountMessages = checkRowCountIncrease(
-      cfg.id,
-      this.currentOrgKey(),
-      cfg.name,
-      result.totalRows,
-      Boolean(cfg.notifyOnIncrease),
-    );
-    fireRowCountNotifications(rowCountMessages, this.opts.outputChannel);
+    const rowCountIncreased = this.notify(cfg, datasets, result.totalRows);
     this.opts.postToWebview({
       type: 'monitoringBackgroundRefreshResult',
       data: {
         configId: cfg.id,
         chartType: cfg.chartType,
         result,
-        rowCountIncreased: rowCountMessages.length > 0,
+        rowCountIncreased,
       },
     });
   }

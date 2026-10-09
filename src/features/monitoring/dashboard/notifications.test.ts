@@ -54,7 +54,7 @@ describe('notifications', () => {
         [vf({ threshold: 100 })],
       );
       expect(breaches).toHaveLength(1);
-      expect(breaches[0].cooldownKey).toBe('cat/c:0');
+      expect(breaches[0].cooldownKey).toBe('cat/c:0:');
       expect(breaches[0].message).toContain('exceeded threshold of 100');
       expect(breaches[0].message).toContain('current: 150');
     });
@@ -132,21 +132,21 @@ describe('notifications', () => {
       showWarningMessage.mockResolvedValue('Snooze 1h');
       const memento = makeMemento();
 
-      mod.fireBreachNotifications([{ message: 'boom', cooldownKey: 'cat/c:0' }], memento as never);
+      mod.fireBreachNotifications([{ message: 'boom', cooldownKey: 'cat/c:0:' }], memento as never);
       // Flush the .then() on the showWarningMessage promise
       await Promise.resolve();
       await Promise.resolve();
 
       expect(memento.update).toHaveBeenCalled();
       const saved = memento.store['monitoring.notificationCooldowns'] as Record<string, number>;
-      expect(saved['cat/c:0']).toBeGreaterThan(Date.now());
+      expect(saved['cat/c:0:']).toBeGreaterThan(Date.now());
 
       // A fresh module load with an expired snooze prunes it
       mod.__resetNotificationStateForTests();
       const expiredMemento = makeMemento();
       expiredMemento.store['monitoring.notificationCooldowns'] = {
-        'old:0': Date.now() - 1000,
-        'live:0': Date.now() + 5_000_000,
+        'old:0:': Date.now() - 1000,
+        'live:0:': Date.now() + 5_000_000,
       };
       mod.loadPersistedSnoozes(expiredMemento as never);
       // live key still silences a breach; old key does not
@@ -170,7 +170,7 @@ describe('notifications', () => {
         string,
         number
       >;
-      expect(saved['cat/c:0']).toBeUndefined();
+      expect(saved['cat/c:0:']).toBeUndefined();
     });
   });
 
@@ -213,8 +213,8 @@ describe('notifications', () => {
       checkRowCountIncrease('id', 'org', 'n', 5, true); // baseline
       const msgs = checkRowCountIncrease('id', 'org', 'n', 8, true);
       expect(msgs).toHaveLength(1);
-      expect(msgs[0]).toContain('3 new records');
-      expect(msgs[0]).toContain('(5 → 8)');
+      expect(msgs[0].message).toContain('3 new records');
+      expect(msgs[0].message).toContain('(5 → 8)');
       // baseline now 8 → another check at 8 does not fire
       expect(checkRowCountIncrease('id', 'org', 'n', 8, true)).toEqual([]);
     });
@@ -222,7 +222,9 @@ describe('notifications', () => {
     it('uses singular "record" for a delta of 1', async () => {
       const { checkRowCountIncrease } = await load();
       checkRowCountIncrease('id', 'org', 'n', 5, true);
-      expect(checkRowCountIncrease('id', 'org', 'n', 6, true)[0]).toContain('1 new record (');
+      expect(checkRowCountIncrease('id', 'org', 'n', 6, true)[0].message).toContain(
+        '1 new record (',
+      );
     });
 
     it('does not fire when the count shrinks', async () => {
@@ -255,7 +257,7 @@ describe('notifications', () => {
       // back to orgA: growth from 5 → 9 fires against orgA's retained baseline
       const msgs = checkRowCountIncrease('id', 'orgA', 'n', 9, true);
       expect(msgs).toHaveLength(1);
-      expect(msgs[0]).toContain('(5 → 9)');
+      expect(msgs[0].message).toContain('(5 → 9)');
     });
 
     it('clearRowCountBaseline resets every org so the next call re-establishes silently', async () => {
@@ -268,19 +270,131 @@ describe('notifications', () => {
     });
   });
 
+  describe('per-org snooze keys', () => {
+    it('a threshold snoozed in one org still fires in another', async () => {
+      const mod = await load();
+      showWarningMessage.mockResolvedValue('Snooze 1h');
+      const memento = makeMemento();
+      const args = [[{ data: [150] }], [vf({ threshold: 100 })]] as const;
+      const [breach] = mod.checkThresholds('c', 'n', ...args, 'orgA');
+      mod.fireBreachNotifications([breach], memento as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      vi.advanceTimersByTime(61_000); // past the 1-minute dedup, still inside the 1h snooze
+      expect(mod.checkThresholds('c', 'n', ...args, 'orgA')).toHaveLength(0);
+      expect(mod.checkThresholds('c', 'n', ...args, 'orgB')).toHaveLength(1);
+    });
+  });
+
   describe('fireRowCountNotifications', () => {
-    it('plays the ping and shows a warning per message', async () => {
+    const inc = (message: string, cooldownKey = 'id:rows:org') => ({ message, cooldownKey });
+
+    it('plays the ping and shows a snoozable warning per increase', async () => {
       const { fireRowCountNotifications } = await load();
-      fireRowCountNotifications(['m1', 'm2']);
+      showWarningMessage.mockResolvedValue(undefined);
+      fireRowCountNotifications(
+        [inc('m1', 'a:rows:o'), inc('m2', 'b:rows:o')],
+        makeMemento() as never,
+      );
       expect(playRowCountPing).toHaveBeenCalledTimes(1);
       expect(showWarningMessage).toHaveBeenCalledTimes(2);
+      expect(showWarningMessage).toHaveBeenCalledWith('m1', 'Snooze 1h', 'Snooze for today');
     });
 
-    it('is a no-op for an empty message list', async () => {
+    it('is a no-op for an empty list', async () => {
       const { fireRowCountNotifications } = await load();
-      fireRowCountNotifications([]);
+      fireRowCountNotifications([], makeMemento() as never);
       expect(playRowCountPing).not.toHaveBeenCalled();
       expect(showWarningMessage).not.toHaveBeenCalled();
+    });
+
+    it('persists "Snooze 1h", then stays silent (toast and ping) while snoozed', async () => {
+      const { fireRowCountNotifications } = await load();
+      showWarningMessage.mockResolvedValue('Snooze 1h');
+      const memento = makeMemento();
+      fireRowCountNotifications([inc('m1')], memento as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      const saved = memento.store['monitoring.notificationCooldowns'] as Record<string, number>;
+      expect(saved['id:rows:org']).toBeGreaterThan(Date.now());
+
+      showWarningMessage.mockClear();
+      playRowCountPing.mockClear();
+      fireRowCountNotifications([inc('m2')], memento as never);
+      expect(showWarningMessage).not.toHaveBeenCalled();
+      expect(playRowCountPing).not.toHaveBeenCalled();
+    });
+
+    it('"Snooze for today" lasts until local midnight', async () => {
+      const { fireRowCountNotifications } = await load();
+      showWarningMessage.mockResolvedValue('Snooze for today');
+      const memento = makeMemento();
+      fireRowCountNotifications([inc('m1')], memento as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      const saved = memento.store['monitoring.notificationCooldowns'] as Record<string, number>;
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0);
+      expect(saved['id:rows:org']).toBe(midnight.getTime());
+    });
+
+    it('a snooze for one org does not silence another', async () => {
+      const { fireRowCountNotifications } = await load();
+      showWarningMessage.mockResolvedValue('Snooze 1h');
+      const memento = makeMemento();
+      fireRowCountNotifications([inc('m1', 'id:rows:orgA')], memento as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      showWarningMessage.mockClear();
+      fireRowCountNotifications([inc('m2', 'id:rows:orgB')], memento as never);
+      expect(showWarningMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps advancing the baseline while snoozed, so a later alert reports only the new delta', async () => {
+      const { checkRowCountIncrease, fireRowCountNotifications } = await load();
+      showWarningMessage.mockResolvedValue('Snooze 1h');
+      const memento = makeMemento();
+      checkRowCountIncrease('id', 'org', 'n', 5, true);
+      fireRowCountNotifications(checkRowCountIncrease('id', 'org', 'n', 8, true), memento as never);
+      await Promise.resolve();
+      await Promise.resolve();
+      // during the snooze: 8 → 20 is detected but silent
+      const silent = checkRowCountIncrease('id', 'org', 'n', 20, true);
+      fireRowCountNotifications(silent, memento as never);
+      expect(showWarningMessage).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(2 * 60 * 60 * 1000);
+      const next = checkRowCountIncrease('id', 'org', 'n', 21, true);
+      expect(next[0].message).toContain('(20 → 21)');
+    });
+  });
+
+  describe('pruneCooldowns', () => {
+    function seed(mod: NotificationsModule) {
+      mod.loadPersistedSnoozes({
+        get: () => ({
+          'c:0:org': Date.now() + 5_000_000,
+          'c:3:org': Date.now() + 5_000_000,
+          'c:rows:org': Date.now() + 5_000_000,
+        }),
+      } as never);
+    }
+    const persisted = (m: ReturnType<typeof makeMemento>) =>
+      Object.keys((m.store['monitoring.notificationCooldowns'] ?? {}) as object).sort();
+
+    it('keeps the row-count key while notifyOnIncrease is on, drops stale indices', async () => {
+      const mod = await load();
+      seed(mod);
+      const memento = makeMemento();
+      mod.pruneCooldowns('c', [vf({ threshold: 1 })], true, memento as never);
+      expect(persisted(memento)).toEqual(['c:0:org', 'c:rows:org']);
+    });
+
+    it('drops the row-count key once notifyOnIncrease is turned off', async () => {
+      const mod = await load();
+      seed(mod);
+      const memento = makeMemento();
+      mod.pruneCooldowns('c', [vf({ threshold: 1 })], false, memento as never);
+      expect(persisted(memento)).toEqual(['c:0:org']);
     });
   });
 });

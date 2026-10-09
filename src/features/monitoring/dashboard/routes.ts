@@ -47,20 +47,20 @@ function fireQueryNotifications(
   notifyOnIncrease: boolean,
   deps: MonitoringRoutesDeps,
 ): boolean {
+  const orgKey = deps.connectionManager.getCurrentOrg()?.username ?? '';
   fireBreachNotifications(
-    checkThresholds(configId, configName, datasets, valueFields),
+    checkThresholds(configId, configName, datasets, valueFields, orgKey),
     deps.workspaceState,
   );
-  const orgKey = deps.connectionManager.getCurrentOrg()?.username ?? '';
-  const rowCountMessages = checkRowCountIncrease(
+  const increases = checkRowCountIncrease(
     configId,
     orgKey,
     configName,
     totalRows,
     notifyOnIncrease,
   );
-  fireRowCountNotifications(rowCountMessages, deps.outputChannel);
-  return rowCountMessages.length > 0;
+  fireRowCountNotifications(increases, deps.workspaceState, deps.outputChannel);
+  return increases.length > 0;
 }
 
 export function buildMonitoringRoutes(deps: MonitoringRoutesDeps): Record<string, RouteDescriptor> {
@@ -140,7 +140,12 @@ export function buildMonitoringRoutes(deps: MonitoringRoutesDeps): Record<string
     saveMonitoringConfig: {
       handler: async (msg) => {
         const saved = service.saveConfig(msg.config as MonitoringConfig, msg.isPrivate as boolean);
-        pruneCooldowns(saved.id, saved.valueFields, workspaceState);
+        pruneCooldowns(
+          saved.id,
+          saved.valueFields,
+          Boolean(saved.notifyOnIncrease),
+          workspaceState,
+        );
         clearRowCountBaseline(saved.id);
         const configs = await service.loadConfigs(loadHiddenBuiltins(workspaceState));
         refresher.restart(configs);

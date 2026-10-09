@@ -51,7 +51,7 @@ describe('monitoring snooze persistence', () => {
   it('loads persisted snoozes and suppresses notifications for snoozed thresholds', async () => {
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({
-      'monitoring.notificationCooldowns': { 'chart1:0': futureTime },
+      'monitoring.notificationCooldowns': { 'chart1:0:test@org.com': futureTime },
     });
     const createFeature = await loadFactory();
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
@@ -85,8 +85,8 @@ describe('monitoring snooze persistence', () => {
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({
       'monitoring.notificationCooldowns': {
-        'expired:0': expiredTime,
-        'active:0': futureTime,
+        'expired:0:test@org.com': expiredTime,
+        'active:0:test@org.com': futureTime,
       },
     });
     const createFeature = await loadFactory();
@@ -146,12 +146,12 @@ describe('monitoring snooze persistence', () => {
     await vi.waitFor(() => {
       expect(memento.update).toHaveBeenCalledWith(
         'monitoring.notificationCooldowns',
-        expect.objectContaining({ 'chart1:0': expect.any(Number) }),
+        expect.objectContaining({ 'chart1:0:test@org.com': expect.any(Number) }),
       );
     });
 
     const savedData = memento.update.mock.calls[0][1] as Record<string, number>;
-    const snoozeUntil = savedData['chart1:0'];
+    const snoozeUntil = savedData['chart1:0:test@org.com'];
     // Should be approximately 1 hour from now
     expect(snoozeUntil).toBeGreaterThan(Date.now() + 3_500_000);
     expect(snoozeUntil).toBeLessThanOrEqual(Date.now() + 3_600_000 + 1000);
@@ -188,7 +188,7 @@ describe('monitoring snooze persistence', () => {
     });
 
     const savedData = memento.update.mock.calls[0][1] as Record<string, number>;
-    const snoozeUntil = savedData['chart1:0'];
+    const snoozeUntil = savedData['chart1:0:test@org.com'];
     // Should be midnight tonight
     const midnight = new Date();
     midnight.setHours(24, 0, 0, 0);
@@ -200,7 +200,10 @@ describe('monitoring snooze persistence', () => {
 
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({
-      'monitoring.notificationCooldowns': { 'chart1:0': futureTime, 'other:0': futureTime },
+      'monitoring.notificationCooldowns': {
+        'chart1:0:test@org.com': futureTime,
+        'other:0': futureTime,
+      },
     });
     const createFeature = await loadFactory();
     const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
@@ -222,7 +225,7 @@ describe('monitoring snooze persistence', () => {
 
     // chart1:0 should be pruned, other:0 should remain
     const savedData = memento.update.mock.calls.at(-1)?.[1] as Record<string, number>;
-    expect(savedData).not.toHaveProperty('chart1:0');
+    expect(savedData).not.toHaveProperty('chart1:0:test@org.com');
     expect(savedData).toHaveProperty('other:0');
   });
 
@@ -230,7 +233,7 @@ describe('monitoring snooze persistence', () => {
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({
       'monitoring.notificationCooldowns': {
-        'chart1:0': futureTime,
+        'chart1:0:test@org.com': futureTime,
         'chart1:1': futureTime,
         'chart1:2': futureTime,
       },
@@ -255,7 +258,7 @@ describe('monitoring snooze persistence', () => {
 
     const savedData = memento.update.mock.calls.at(-1)?.[1] as Record<string, number>;
     // field 0 still has threshold — keep it
-    expect(savedData).toHaveProperty('chart1:0');
+    expect(savedData).toHaveProperty('chart1:0:test@org.com');
     // fields 1 and 2 are out of bounds — pruned
     expect(savedData).not.toHaveProperty('chart1:1');
     expect(savedData).not.toHaveProperty('chart1:2');
