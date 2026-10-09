@@ -296,6 +296,18 @@ export function createScriptForm(ctx) {
     formName.focus();
   }
 
+  /**
+   * Open a new-script form pre-filled with Apex from elsewhere — the ▶️ Apex
+   * tab's "Save as script". Apex is resetForm's default type, so only the code
+   * needs setting; the user still names, files and saves it here.
+   * @param {string} code
+   */
+  function showNewApexForm(code) {
+    showNewForm();
+    editor.setContent(code ?? '');
+    updateSaveBtn();
+  }
+
   function hideNewForm() {
     newForm.style.display = 'none';
     newBtn.disabled = false;
@@ -462,6 +474,7 @@ export function createScriptForm(ctx) {
 
   return {
     showNewForm,
+    showNewApexForm,
     showEditForm,
     hideNewForm,
     refreshFolders: () => folderCombobox.refresh(),

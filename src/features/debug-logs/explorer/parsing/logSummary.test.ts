@@ -146,13 +146,50 @@ describe('extractLimits', () => {
 });
 
 describe('extractExceptions', () => {
-  it('captures the message and the stack frames that follow it', () => {
+  it('merges the throw and the FATAL_ERROR it became into one entry with the stack', () => {
     const { events } = parseLog(FATAL_LOG);
     const exceptions = extractExceptions(events);
-    expect(exceptions).toHaveLength(2); // EXCEPTION_THROWN + FATAL_ERROR
-    const fatal = exceptions[1];
-    expect(fatal.message).toContain('NullPointerException');
-    expect(fatal.stack[0]).toContain('OrderService.calculate: line 42');
+    expect(exceptions).toHaveLength(1);
+    const [only] = exceptions;
+    expect(only.message).toContain('NullPointerException');
+    expect(only.fatal).toBe(true);
+    // Anchored at the throw site (line 5 of the log), not the FATAL_ERROR line.
+    expect(only.lineNo).toBe(5);
+    expect(only.stack[0]).toContain('OrderService.calculate: line 42');
+  });
+
+  it('keeps a caught exception (no FATAL_ERROR) as its own non-fatal entry', () => {
+    const log = [
+      '10:00:00.1 (1)|EXCEPTION_THROWN|[36]|FeatureFlagNotFoundException: No flag "X"',
+      '10:00:00.1 (2)|EXCEPTION_THROWN|[1]|System.DmlException: Insert failed',
+      '10:00:00.1 (3)|FATAL_ERROR|System.DmlException: Insert failed',
+    ].join('\n');
+    const exceptions = extractExceptions(parseLog(log).events);
+    expect(exceptions.map((e) => [e.message.split(':')[0], e.fatal])).toEqual([
+      ['FeatureFlagNotFoundException', false],
+      ['System.DmlException', true],
+    ]);
+  });
+
+  it('does not merge two different exceptions', () => {
+    const log = [
+      '10:00:00.1 (1)|EXCEPTION_THROWN|[1]|System.QueryException: a',
+      '10:00:00.1 (2)|FATAL_ERROR|System.DmlException: b',
+    ].join('\n');
+    expect(extractExceptions(parseLog(log).events)).toHaveLength(2);
+  });
+
+  it('finds the stack after a blank line, as an anonymous block logs it', () => {
+    const log = [
+      '10:00:00.1 (1)|EXCEPTION_THROWN|[1]|System.DmlException: Insert failed',
+      '10:00:00.1 (2)|FATAL_ERROR|System.DmlException: Insert failed',
+      '',
+      'AnonymousBlock: line 1, column 1',
+      '',
+      '10:00:00.1 (3)|CODE_UNIT_FINISHED|execute_anonymous_apex',
+    ].join('\n');
+    const [only] = extractExceptions(parseLog(log).events);
+    expect(only.stack).toEqual(['AnonymousBlock: line 1, column 1']);
   });
 });
 

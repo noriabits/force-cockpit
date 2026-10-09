@@ -136,18 +136,38 @@ function limitPressure(summary: LogSummary): LogIssue[] {
   return issues;
 }
 
+/**
+ * A throw that became a FATAL_ERROR failed the transaction (critical). One with
+ * no matching FATAL_ERROR was caught somewhere and execution carried on, so it
+ * is a warning under its own rule: often deliberate (a feature-flag helper that
+ * treats "not found" as off), occasionally a swallowed real error.
+ */
 function exceptions(summary: LogSummary): LogIssue[] {
-  return summary.exceptions.map((ex) => ({
-    rule: 'exception',
-    severity: 'critical' as const,
-    title: truncate(ex.message, 120) || 'Unhandled exception',
-    detail: 'The transaction threw an exception.',
-    lineNo: ex.lineNo,
-    evidence: ex.stack.slice(0, 5),
-    suggestion:
-      'Follow the first stack frame to the class and line that threw, and check the state it ' +
-      'assumed (null references, empty query results, missing custom settings).',
-  }));
+  return summary.exceptions.map((ex) =>
+    ex.fatal
+      ? {
+          rule: 'exception',
+          severity: 'critical' as const,
+          title: truncate(ex.message, 120) || 'Unhandled exception',
+          detail: 'The transaction threw an exception.',
+          lineNo: ex.lineNo,
+          evidence: ex.stack.slice(0, 5),
+          suggestion:
+            'Follow the first stack frame to the class and line that threw, and check the state it ' +
+            'assumed (null references, empty query results, missing custom settings).',
+        }
+      : {
+          rule: 'caught-exception',
+          severity: 'warning' as const,
+          title: truncate(ex.message, 120) || 'Caught exception',
+          detail: 'Thrown and caught — the transaction carried on.',
+          lineNo: ex.lineNo,
+          evidence: ex.stack.slice(0, 5),
+          suggestion:
+            'Often deliberate (a helper that treats "not found" as a default). If it is not ' +
+            'expected, find the catch block that swallowed it and check what it does next.',
+        },
+  );
 }
 
 function triggerNameOf(e: LogEvent): string | null {

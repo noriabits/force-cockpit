@@ -1,0 +1,85 @@
+/* ▶️ Apex tab. The log card reuses the Debug Logs viewer's `dbg-*` styles
+   (debug-logs/explorer/view.css); the tab bar, toolbar and history dropdown use
+   the shared `.query-*` rules in media/main.css. */
+
+.apex-editor {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  box-sizing: border-box;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 12px);
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 3px;
+  outline: none;
+}
+
+.apex-editor:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.apex-editor::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--vscode-descriptionForeground));
+}
+
+.apex-editor::selection {
+  background-color: var(--vscode-editor-selectionBackground, rgba(100, 150, 220, 0.4));
+}
+
+.apex-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.apex-preset {
+  width: auto;
+}
+
+.apex-running {
+  display: block;
+  margin-top: 8px;
+}
+
+.apex-outcome {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-left: 3px solid;
+  border-radius: 3px;
+  background-color: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
+}
+
+.apex-outcome--ok {
+  border-left-color: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+}
+
+.apex-outcome--warn {
+  border-left-color: var(--vscode-editorWarning-foreground, var(--vscode-charts-yellow));
+}
+
+.apex-outcome--error {
+  border-left-color: var(--vscode-errorForeground);
+}
+
+.apex-outcome-title {
+  font-weight: 600;
+}
+
+.apex-outcome-detail {
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}

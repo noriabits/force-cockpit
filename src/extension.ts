@@ -10,6 +10,7 @@ import { yamlScriptsFeature } from './features/utils/yaml-scripts/index';
 import { executionLogsFeature } from './features/utils/execution-logs/index';
 import { createMonitoringDashboardFeature } from './features/monitoring/dashboard/index';
 import { debugLogsFeature } from './features/debug-logs/explorer/index';
+import { anonymousApexFeature } from './features/debug-logs/anonymous-apex/index';
 import { askAiFeature } from './features/overview/ask-ai/index';
 import { soqlFeature } from './features/soql/query-editor/index';
 import { recordDetailFeature } from './features/soql/record-detail/index';
@@ -156,6 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
     monitoringFeature.factory,
     executionLogsFeature,
     debugLogsFeature,
+    anonymousApexFeature,
     askAiFeature,
   ];
 

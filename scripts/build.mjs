@@ -49,6 +49,10 @@ const BUNDLES = [
     out: 'dist/features/debug-logs/explorer/view.js',
   },
   {
+    entry: 'src/features/debug-logs/anonymous-apex/view/index.tsx',
+    out: 'dist/features/debug-logs/anonymous-apex/view.js',
+  },
+  {
     entry: 'src/features/overview/ask-ai/view/index.js',
     out: 'dist/features/overview/ask-ai/view.js',
   },

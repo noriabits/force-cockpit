@@ -3,3 +3,4 @@
 export * from './messages';
 export * from './monitoring';
 export * from './recordDetail';
+export * from './anonymousApex';

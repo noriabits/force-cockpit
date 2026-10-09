@@ -135,7 +135,8 @@ export interface LogSummary {
   };
   slowestUnits: CodeUnitTiming[];
   /** Exception/FATAL_ERROR messages in order of appearance. */
-  exceptions: { lineNo: number; message: string; stack: string[] }[];
+  /** One entry per distinct failure — a throw and the FATAL_ERROR it became are merged. */
+  exceptions: { lineNo: number; message: string; stack: string[]; fatal: boolean }[];
 }
 
 /** `SOQL_EXECUTE_EXPLAIN`'s leading operation type — how the query was resolved. */

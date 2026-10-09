@@ -8,12 +8,8 @@ import { TraceFlagApi } from './api/TraceFlagApi';
 import { ToolingRest } from './api/ToolingRest';
 import { findPreset } from './debugLevelPresets';
 import { LogBodyCache } from './LogBodyCache';
-import { buildExecutionTree, pruneDepth } from './parsing/executionTree';
-import { detectIssues } from './parsing/issueDetector';
-import { parseLog } from './parsing/logLine';
+import { analyzeLog } from './parsing/analyzeLog';
 import { isEmptyByContent, resolveNoiseOptions } from './parsing/logNoise';
-import { buildSummary } from './parsing/logSummary';
-import { extractQueryPlans } from './parsing/queryPlan';
 import type {
   ApexLogRow,
   CategoryLevels,
@@ -24,12 +20,8 @@ import type {
   TraceLogType,
 } from './types';
 
-/** Above this, the parsed events are not shipped to the webview in full. */
-const MAX_INLINE_BYTES = 5 * 1024 * 1024;
 /** How many bodies the tier-2 noise check fetches at once. */
 const CLASSIFY_CONCURRENCY = 4;
-/** Depth kept when the tree is sent to the webview / the model. */
-const MAX_TREE_DEPTH = 12;
 
 export interface OpenedLog {
   logId: string;
@@ -89,21 +81,13 @@ export class DebugLogsService {
   /** Fetch + parse a log for the viewer. Huge logs come back head/tail-trimmed. */
   async openLog(logId: string): Promise<OpenedLog> {
     const body = await this.getBody(logId);
-    const { header, events } = parseLog(body);
-    const summary = buildSummary(events, body);
-    const issues = detectIssues(events, summary);
-    const tree = pruneDepth(buildExecutionTree(events), MAX_TREE_DEPTH);
-    const queryPlans = extractQueryPlans(events);
-
-    const partial = body.length > MAX_INLINE_BYTES;
-    const shipped = partial ? [...events.slice(0, 2000), ...events.slice(-2000)] : events;
-
+    const { partial, totalLines, parsed } = analyzeLog(body);
     return {
       logId,
       body: partial ? '' : body,
       partial,
-      totalLines: events.length,
-      parsed: { header, events: shipped, summary, issues, tree, queryPlans },
+      totalLines,
+      parsed,
     };
   }
 

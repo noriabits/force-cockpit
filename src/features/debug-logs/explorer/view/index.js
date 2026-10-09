@@ -42,7 +42,7 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     onStateChange: saveState,
   });
 
-  const logViewer = createLogViewer({ labels, vscode, escapeHtml });
+  const logViewer = createLogViewer({ escapeHtml });
 
   const aiPanel = createAiPanel({
     labels,

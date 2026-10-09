@@ -40,6 +40,7 @@
 // (see `FeatureModule.routes`); the rest are the built-in cases handled inline
 // by `MessageRouter.handle`.
 export type WebviewToHostType =
+  | 'addApexHistory'
   | 'addQueryHistory'
   | 'addRestCallHistory'
   | 'analyzeApexLog'
@@ -59,6 +60,7 @@ export type WebviewToHostType =
   | 'describeGlobal'
   | 'describeSObject'
   | 'editScriptCode'
+  | 'executeAnonymousApex'
   | 'executeYamlScript'
   | 'exportQueryResult'
   | 'extendTraceFlag'
@@ -66,6 +68,7 @@ export type WebviewToHostType =
   | 'listChatModels'
   | 'listSkills'
   | 'loadApexLogs'
+  | 'loadApexState'
   | 'loadAskAiConversation'
   | 'loadAskAiHistory'
   | 'loadAskAiState'
@@ -104,6 +107,9 @@ export type WebviewToHostType =
   | 'runMonitoringQuery'
   | 'runMonitoringTableQuery'
   | 'saveApexLogAnalysis'
+  | 'saveApexPreset'
+  | 'saveApexSavedSnippets'
+  | 'saveApexTabs'
   | 'saveAskAiState'
   | 'saveDebugLogsState'
   | 'saveMonitoringConfig'
@@ -125,6 +131,10 @@ export type WebviewToHostType =
 // `errorType`; the rest are unsolicited pushes (org lifecycle, streaming log
 // chunks, background refresh results, file-watcher notifications).
 export type HostToWebviewType =
+  | 'anonymousApexError'
+  | 'anonymousApexExecuted'
+  | 'apexHistoryError'
+  | 'apexHistoryUpdated'
   | 'apexLogAnalysisSaveError'
   | 'apexLogAnalysisSaved'
   | 'apexLogAnalyzeError'
@@ -137,6 +147,14 @@ export type HostToWebviewType =
   | 'apexLogsDeleted'
   | 'apexLogsError'
   | 'apexLogsLoaded'
+  | 'apexPresetError'
+  | 'apexPresetSaved'
+  | 'apexSavedSnippetsError'
+  | 'apexSavedSnippetsUpdated'
+  | 'apexStateError'
+  | 'apexStateLoaded'
+  | 'apexTabsError'
+  | 'apexTabsSaved'
   | 'askAiAnswer'
   | 'askAiChatReset'
   | 'askAiChatResetError'
@@ -309,11 +327,14 @@ export interface ErrorPayload {
 }
 
 /**
- * The two tab strips persist through the shared `createTabStrip`, which posts
+ * The three tab strips persist through the shared `createTabStrip`, which posts
  * `{ type: ctx.persistType }` — a *variable*, not a literal. Narrowing it here
  * keeps that one dynamic post inside the union instead of escaping it.
  */
-export type TabPersistType = Extract<WebviewToHostType, 'saveQueryTabs' | 'saveRestCallTabs'>;
+export type TabPersistType = Extract<
+  WebviewToHostType,
+  'saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs'
+>;
 
 // NOTE: no runtime constants are exported here on purpose. The webview message
 // dispatcher lives in `media/modules/ipc.js`, which is a plain non-bundled IIFE

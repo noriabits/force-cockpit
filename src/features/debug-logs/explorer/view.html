@@ -110,44 +110,8 @@
     <button type="button" class="btn btn-ghost" id="dbg-close-viewer">Close</button>
   </div>
 
-  <div class="dbg-summary" id="dbg-summary"></div>
-  <div class="dbg-issues" id="dbg-issues"></div>
-
-  <div class="dbg-view-modes">
-    <div class="dbg-seg" id="dbg-mode-seg">
-      <button type="button" class="dbg-seg-btn active" data-mode="pretty">Pretty</button>
-      <button type="button" class="dbg-seg-btn" data-mode="tree">Tree</button>
-      <button type="button" class="dbg-seg-btn" data-mode="queries">Queries</button>
-      <button type="button" class="dbg-seg-btn" data-mode="raw">Raw</button>
-    </div>
-    <input
-      type="text"
-      class="text-input dbg-filter-input"
-      id="dbg-log-search"
-      data-no-generic-filter
-      spellcheck="false"
-      placeholder="Search in log…"
-    />
-    <span class="query-match-count" id="dbg-search-count"></span>
-    <button type="button" class="btn btn-ghost btn-icon" id="dbg-search-prev">▲</button>
-    <button type="button" class="btn btn-ghost btn-icon" id="dbg-search-next">▼</button>
-    <label class="dbg-check">
-      <input type="checkbox" id="dbg-hide-noise" checked /> Hide noise
-    </label>
-  </div>
-  <div class="dbg-chips" id="dbg-chips"></div>
-
-  <pre class="dbg-log-output" id="dbg-log-output"></pre>
-  <div class="dbg-tree" id="dbg-log-tree" style="display: none"></div>
-  <div class="dbg-query-table-wrap" id="dbg-query-table-wrap" style="display: none"></div>
-  <button
-    type="button"
-    class="btn btn-ghost dbg-load-more"
-    id="dbg-load-more"
-    style="display: none"
-  >
-    Load more lines
-  </button>
+  <!-- Rendered by view/log-viewer.js (bodyHtml) — shared with the ▶️ Apex tab. -->
+  <div id="dbg-viewer-body"></div>
 
   <div class="dbg-ai" id="dbg-ai" style="display: none">
     <div class="dbg-ai-toolbar">

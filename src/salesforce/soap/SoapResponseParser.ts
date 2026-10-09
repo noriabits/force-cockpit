@@ -5,6 +5,9 @@ export interface ExecuteAnonymousSoapResult {
   compiled: boolean;
   success: boolean;
   compileProblem: string | null;
+  /** Position of a compile problem, 1-based; null when Salesforce sends -1. */
+  line: number | null;
+  column: number | null;
   exceptionMessage: string | null;
   exceptionStackTrace: string | null;
   debugLog: string;
@@ -33,10 +36,18 @@ export function parseExecuteAnonymousResponse(xmlResponse: string): ExecuteAnony
     compiled: extractXmlValue(xmlResponse, 'compiled') === 'true',
     success: extractXmlValue(xmlResponse, 'success') === 'true',
     compileProblem: extractXmlValue(xmlResponse, 'compileProblem') || null,
+    line: positionOf(extractXmlValue(xmlResponse, 'line')),
+    column: positionOf(extractXmlValue(xmlResponse, 'column')),
     exceptionMessage: extractXmlValue(xmlResponse, 'exceptionMessage') || null,
     exceptionStackTrace: extractXmlValue(xmlResponse, 'exceptionStackTrace') || null,
     debugLog: extractXmlValue(xmlResponse, 'debugLog') || '',
   };
+}
+
+/** `-1` (and anything unparsable) means "no position". */
+function positionOf(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function extractXmlValue(xml: string, tagName: string): string {

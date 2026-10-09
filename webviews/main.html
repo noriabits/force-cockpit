@@ -57,6 +57,9 @@
       <button class="tab" data-tab="soql" role="tab" aria-selected="false" aria-controls="tab-soql">
         ⚡ SOQL
       </button>
+      <button class="tab" data-tab="apex" role="tab" aria-selected="false" aria-controls="tab-apex">
+        ▶️ Apex
+      </button>
       <button
         class="tab"
         data-tab="monitoring"
@@ -204,7 +207,7 @@
           </p>
         </section>
 
-        <div class="utils-sub-tab-bar">
+        <div class="utils-sub-tab-bar" id="utils-sub-tab-bar">
           <button class="utils-sub-tab active" data-utils-tab="scripts">📜 Custom</button>
           <button class="utils-sub-tab" data-utils-tab="built-in">🔩 Built-in</button>
           <button class="utils-sub-tab" data-utils-tab="logs">📋 Logs</button>
@@ -260,6 +263,21 @@
         <div class="soql-sub-tab-panel" id="soql-sub-tab-record-detail">
           <!-- features:soql-record-detail -->
         </div>
+      </div>
+      <!-- ═══════════════════ TAB: Apex ═══════════════════ -->
+      <div class="tab-content" id="tab-apex" role="tabpanel">
+        <section class="card">
+          <div class="card-header">
+            <h3 class="card-title">▶️ Apex</h3>
+          </div>
+          <p class="card-description">
+            Execute anonymous Apex against the connected org, in tabs with recent + saved history.
+            The debug log comes back parsed — limits, detected issues, the execution tree and the
+            queries — at the log level you pick.
+          </p>
+        </section>
+
+        <!-- features:apex -->
       </div>
       <!-- ═══════════════════ TAB: Monitoring ═══════════════════ -->
       <div class="tab-content" id="tab-monitoring" role="tabpanel">

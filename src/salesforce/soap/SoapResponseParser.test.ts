@@ -37,6 +37,23 @@ const EXECUTION_ERROR_XML = `<result>
 </result>`;
 
 describe('parseExecuteAnonymousResponse', () => {
+  it('reads a compile problem’s line and column', () => {
+    const result = parseExecuteAnonymousResponse(
+      COMPILE_ERROR_XML.replace('</result>', '<column>13</column></result>'),
+    );
+    expect(result.line).toBe(3);
+    expect(result.column).toBe(13);
+  });
+
+  it('reports no position when Salesforce sends -1 or nothing', () => {
+    const result = parseExecuteAnonymousResponse(
+      EXECUTION_ERROR_XML.replace('</result>', '<line>-1</line><column>-1</column></result>'),
+    );
+    expect(result.line).toBeNull();
+    expect(result.column).toBeNull();
+    expect(parseExecuteAnonymousResponse('<result></result>').line).toBeNull();
+  });
+
   it('parses a successful execution with debug log', () => {
     const result = parseExecuteAnonymousResponse(SUCCESS_XML);
     expect(result.compiled).toBe(true);

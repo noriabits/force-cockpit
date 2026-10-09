@@ -38,17 +38,6 @@ window.DebugLogsLabels = {
   deleteSelected: (n) => (n > 0 ? `Delete (${n})` : 'Delete'),
   deletingLogs: (n) => `Deleting ${n} log${n === 1 ? '' : 's'}…`,
 
-  // Viewer
-  summarySoql: 'SOQL',
-  summaryDml: 'DML',
-  summaryRows: 'Query rows',
-  summaryCallouts: 'Callouts',
-  truncatedChip: '⚠ truncated',
-  noIssues: 'No issues detected by the built-in rules.',
-  loadMore: 'Load more lines',
-  linesShown: (shown, total) => `${shown} of ${total} lines`,
-  partialLog: 'This log is too large to show in full — only its start and end are loaded.',
-
   // AI
   analyzeOpen: '✨ Analyze with AI',
   analyzeClose: '✕ Hide AI panel',

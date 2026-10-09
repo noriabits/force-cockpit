@@ -3,7 +3,7 @@ import { cloneName, deriveName, shouldRevertToAuto } from './tab-naming';
 import { resolveDropTarget } from './tab-drop-target';
 
 /**
- * The tab bar shared by the SOQL query tabs and the REST request tabs. Owns the
+ * The tab bar shared by the SOQL query tabs, the REST request tabs and the Apex tabs. Owns the
  * tab list, the active index, each tab's in-memory outcome, and each tab's
  * in-flight run — everything that is the same whatever a tab actually holds.
  *
@@ -47,8 +47,8 @@ const REORDER_DEADZONE_PX = 6;
  * @property {HTMLElement} tabBarEl
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {import('../../../shared/protocol').TabPersistType} persistType
- *   Message type the tab list is persisted under. Narrowed to the two real names
- *   ('saveQueryTabs' | 'saveRestCallTabs') because this is the one place a
+ *   Message type the tab list is persisted under. Narrowed to the three real names
+ *   ('saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs') because this is the one place a
  *   message type is posted from a VARIABLE — the protocol union cannot see it.
  * @property {() => any} newPayload  Payload for a brand-new tab.
  * @property {(record: any) => any} payloadOf  The persisted payload fields of a tab/record.

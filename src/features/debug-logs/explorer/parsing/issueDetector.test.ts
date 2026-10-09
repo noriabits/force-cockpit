@@ -22,6 +22,24 @@ describe('detectIssues', () => {
     expect(issuesFor(SUCCESS_LOG)).toEqual([]);
   });
 
+  it('reports a caught exception as a warning under its own rule, and a fatal one as critical', () => {
+    const log = [
+      '10:00:00.1 (1)|EXCEPTION_THROWN|[36]|FeatureFlagNotFoundException: No flag "X"',
+      '10:00:00.1 (2)|EXCEPTION_THROWN|[1]|System.DmlException: Insert failed',
+      '10:00:00.1 (3)|FATAL_ERROR|System.DmlException: Insert failed',
+    ].join('\n');
+    const { events } = parseLog(log);
+    const issues = detectIssues(events, buildSummary(events, log));
+    const fatal = issues.filter((i) => i.rule === 'exception');
+    const caught = issues.filter((i) => i.rule === 'caught-exception');
+    expect(fatal).toHaveLength(1);
+    expect(fatal[0].severity).toBe('critical');
+    expect(caught).toHaveLength(1);
+    expect(caught[0].severity).toBe('warning');
+    // Sorted critical first.
+    expect(issues.indexOf(fatal[0])).toBeLessThan(issues.indexOf(caught[0]));
+  });
+
   it('reports the exception first for a failed transaction', () => {
     const issues = issuesFor(FATAL_LOG);
     expect(issues[0].rule).toBe('exception');

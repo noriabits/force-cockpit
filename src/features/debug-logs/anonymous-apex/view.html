@@ -1,0 +1,24 @@
+<!-- ▶️ Apex — ad-hoc Execute Anonymous. Preact renders everything inside
+     #apex-card (src/features/debug-logs/anonymous-apex/view/index.tsx).
+
+     The log card below is NOT Preact's: it is the Debug Logs tab's own viewer
+     (debug-logs/explorer/view/log-viewer.js), which renders its body into
+     #apex-viewer-body itself — one skeleton shared by both tabs, `dbg-*` styles
+     included. -->
+<section class="card" id="apex-card"></section>
+
+<section class="card dbg-card" id="apex-viewer-card" style="display: none">
+  <div class="card-header">
+    <h3 class="card-title" id="apex-viewer-title">📄 Debug log</h3>
+    <span class="status-hint" id="apex-viewer-status"></span>
+  </div>
+
+  <div class="dbg-viewer-meta" id="apex-viewer-meta"></div>
+  <div class="feature-actions dbg-viewer-actions">
+    <button type="button" class="btn btn-ghost" id="apex-open-raw">Open raw in editor</button>
+    <button type="button" class="btn btn-ghost" id="apex-copy-log">Copy to clipboard</button>
+  </div>
+
+  <div id="apex-viewer-body"></div>
+  <div class="error-box" id="apex-viewer-error" style="display: none"></div>
+</section>

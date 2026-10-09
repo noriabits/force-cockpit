@@ -168,7 +168,8 @@ export function createQueryPlanTable(ctx) {
       '<span class="dbg-rating-badge dbg-rating-badge--warning">Not selective</span> Salesforce estimates relativeCost ≥ 1 · ' +
       '<span class="dbg-rating-badge dbg-rating-badge--good">Selective</span> indexed and cost &lt; 1 · ' +
       '<span class="dbg-rating-badge dbg-rating-badge--unknown">Unknown</span> no explain plan captured' +
-      "<br>Est. rows / Object rows are the query planner's estimates from (possibly stale) statistics — Rows is what the query actually returned.";
+      "<br>Est. rows / Object rows are the query planner's estimates from (possibly stale) statistics — Rows is what the query actually returned." +
+      '<br><strong>Plan details (Op, Indexed on, Cost, Est. rows, Object rows) are only logged when the log level for Database is FINEST</strong> — capture the log with the <em>SOQL / database deep dive</em> preset to get them. Some objects (custom metadata, some system objects) never have a plan.';
     container.appendChild(legend);
 
     const wrap = document.createElement('div');

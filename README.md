@@ -6,7 +6,7 @@
 [![Release](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml/badge.svg)](https://github.com/noriabits/force-cockpit/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/noriabits/force-cockpit)](https://github.com/noriabits/force-cockpit/blob/main/LICENSE)
 
-A VSCode cockpit for Salesforce orgs, built around your own automation. Connect via the SF CLI, then write Apex, shell, JavaScript, or AI-powered scripts — organized into folders and categories — to automate whatever your workflow needs, plus SOQL querying, REST calls, live monitoring dashboards, and AI-explained debug logs, all without leaving VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
+A VSCode cockpit for Salesforce orgs, built around your own automation. Connect via the SF CLI, then write Apex, shell, JavaScript, or AI-powered scripts — organized into folders and categories — to automate whatever your workflow needs, plus SOQL querying, anonymous Apex, REST calls, live monitoring dashboards, and AI-explained debug logs, all without leaving VSCode. Contact: Pablo Fernández Posadas [@paferpo](https://github.com/paferpo)
 
 ---
 
@@ -57,6 +57,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                    |
 | **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted, REST), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                            |
 | **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, a browsable fields side panel, Tooling toggle, explained errors) with a filterable, sortable results table, plus a **Record Detail** to view and edit every field of one record   |
+| **Apex**       | Execute anonymous Apex in tabs, with recent/saved snippets, a log-level picker, and the debug log parsed the same way as the Debug Logs tab — limits, detected issues, execution tree and queries                                                       |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with request tabs, custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                      |
 | **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
@@ -456,6 +457,20 @@ The **🔎 Record Detail** sub-tab shows a single record with **every field your
 - **Save safely** — **Review changes** shows each field's value before and after; **Confirm save** then sends **only the fields you changed**. Clearing a field sets it to empty (`null`) in Salesforce. On a production org or a protected sandbox you're asked to confirm first, and if Salesforce rejects the save (a validation rule, a required field) its own error message is shown and your edits are kept so you can fix them. Moving to another record with unsaved changes asks before discarding them.
 
 Related lists, creating and deleting records, and bulk edits aren't supported.
+
+## Apex Tab
+
+The **▶️ Apex** tab runs anonymous Apex against the connected org — the Developer Console's _Execute Anonymous_, without leaving VS Code.
+
+- **Write and run** — type Apex in the editor and press **▶ Execute** (or `Cmd`/`Ctrl`+`Enter`). `Tab` indents. It runs as you, in the connected org, and **DML is committed**: on a production org or a protected sandbox you're always asked to confirm first.
+- **Tabs** — keep several snippets open at once. A tab is named after the first meaningful name in its code (`UserInfo`, `Account`, `MyInvoiceService`), or `Apex` when there is none; double-click to rename, drag to reorder, **⧉ Clone** to duplicate. A run keeps going in its own tab while you work in another, and its result lands in the tab that started it.
+- **History** — every snippet you run is recorded under **History ▾ → Recent**; **★ Save** stores the current one under a name. Picking an entry opens it in its own tab.
+- **Log level** — pick one of the Debug Logs presets (Balanced, USER_DEBUG only, SOQL deep dive, …). It applies to this run only and overrides any trace flag you have set.
+- **Results** — a success, a compile error (with its line and column, and a **Go to line** button that selects it in the editor), or an uncaught exception with its stack trace. The debug log appears below with the same summary bars, detected issues, category chips, execution tree and query table as the [Debug Logs tab](#debug-logs-tab). **USER_DEBUG only** (on by default) shows just your `System.debug` lines; untick it for the whole log. **Open raw in editor** and **Copy to clipboard** take the raw log.
+- **Cancel** — **✕ Cancel** stops waiting, but Apex can't be stopped once it reaches Salesforce: the transaction may still complete on the server.
+- **Save as script** — **📜 Save as script** opens the Scripts tab's new-script form with your snippet already in it, ready to name and file.
+
+Your tabs, history, saved snippets and log-level pick are saved per workspace; results are not.
 
 ## Monitoring Tab
 

@@ -1,7 +1,17 @@
 // @ts-check
 // The log viewer: limit summary, detected issues, category chips, text search
-// and the three view modes (Pretty / Tree / Raw). Parsing happened on the host —
-// this module only renders what it was given.
+// and the four view modes (Pretty / Tree / Queries / Raw). Parsing happened on
+// the host — this module only renders what it was given.
+//
+// TWO CONSUMERS: the Debug Logs tab and the ▶️ Apex tab. It finds its markup by
+// id and RENDERS that markup itself: each consumer's view.html holds only an
+// empty `<div id="{prefix}-viewer-body">` mount (between its own title/actions
+// and, for Debug Logs, the AI panel), and `createLogViewer({ idPrefix })` fills
+// it with `bodyHtml(prefix)` below — so there is one copy of the skeleton, not
+// one per tab. The classes, and therefore the styles in this feature's
+// view.css, are shared. Its strings live here rather than in a labels.js global
+// for the same reason: the Apex bundle runs before the Debug Logs labels script
+// in document order, so a borrowed global would not exist yet.
 import { scrollAndHighlight } from '../../../shared/view/scroll-highlight';
 import { EVENT_GROUP_LABELS, groupOf, isErrorEvent } from '../parsing/eventCategories';
 import { filterLines, findMatches } from '../parsing/logFilter';
@@ -9,19 +19,83 @@ import { formatBytes, formatMs } from './format';
 import { createExecutionTree } from './execution-tree';
 import { createQueryPlanTable } from './query-plan-table';
 
+/**
+ * The viewer's body: summary → issues → view modes → chips → output panes →
+ * load-more. Ids carry `prefix` (`dbg`, `apex`); `$()` below maps `dbg-…` to it.
+ * @param {string} prefix
+ */
+function bodyHtml(prefix) {
+  return `
+  <div class="dbg-summary" id="${prefix}-summary"></div>
+  <div class="dbg-issues" id="${prefix}-issues"></div>
+
+  <div class="dbg-view-modes">
+    <div class="dbg-seg" id="${prefix}-mode-seg">
+      <button type="button" class="dbg-seg-btn active" data-mode="pretty">Pretty</button>
+      <button type="button" class="dbg-seg-btn" data-mode="tree">Tree</button>
+      <button type="button" class="dbg-seg-btn" data-mode="queries">Queries</button>
+      <button type="button" class="dbg-seg-btn" data-mode="raw">Raw</button>
+    </div>
+    <input
+      type="text"
+      class="text-input dbg-filter-input"
+      id="${prefix}-log-search"
+      data-no-generic-filter
+      spellcheck="false"
+      placeholder="Search in log…"
+    />
+    <span class="query-match-count" id="${prefix}-search-count"></span>
+    <button type="button" class="btn btn-ghost btn-icon" id="${prefix}-search-prev">▲</button>
+    <button type="button" class="btn btn-ghost btn-icon" id="${prefix}-search-next">▼</button>
+    <label class="dbg-check">
+      <input type="checkbox" id="${prefix}-hide-noise" checked /> Hide noise
+    </label>
+  </div>
+  <div class="dbg-chips" id="${prefix}-chips"></div>
+
+  <pre class="dbg-log-output" id="${prefix}-log-output"></pre>
+  <div class="dbg-tree" id="${prefix}-log-tree" style="display: none"></div>
+  <div class="dbg-query-table-wrap" id="${prefix}-query-table-wrap" style="display: none"></div>
+  <button
+    type="button"
+    class="btn btn-ghost dbg-load-more"
+    id="${prefix}-load-more"
+    style="display: none"
+  >
+    Load more lines
+  </button>
+`;
+}
+
 /** Lines rendered per chunk — a 200k-line log must not lock the webview. */
 const CHUNK_SIZE = 5000;
 
+const labels = {
+  summarySoql: 'SOQL',
+  summaryDml: 'DML',
+  summaryRows: 'Query rows',
+  summaryCallouts: 'Callouts',
+  truncatedChip: '⚠ truncated',
+  noIssues: 'No issues detected by the built-in rules.',
+  loadMore: 'Load more lines',
+  linesShown: (/** @type {number} */ shown, /** @type {number} */ total) =>
+    `${shown} of ${total} lines`,
+  partialLog: 'This log is too large to show in full — only its start and end are loaded.',
+};
+
 /**
  * @param {{
- *   labels: any,
- *   vscode: { postMessage: (msg: any) => void },
  *   escapeHtml: (s: string) => string,
+ *   idPrefix?: string,
  * }} ctx
  */
 export function createLogViewer(ctx) {
-  const { labels, escapeHtml } = ctx;
-  const $ = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
+  const { escapeHtml } = ctx;
+  const prefix = ctx.idPrefix ?? 'dbg';
+  const mount = document.getElementById(`${prefix}-viewer-body`);
+  if (mount) mount.innerHTML = bodyHtml(prefix);
+  const $ = (/** @type {string} */ id) =>
+    /** @type {HTMLElement} */ (document.getElementById(id.replace(/^dbg-/, prefix + '-')));
 
   const card = $('dbg-viewer-card');
   const titleEl = $('dbg-viewer-title');
@@ -294,25 +368,35 @@ export function createLogViewer(ctx) {
 
   return {
     /**
-     * @param {any} data  the `apexLogOpened` payload
-     * @param {any} logRow the matching list row, for the metadata line
+     * @param {any} data  the `apexLogOpened` payload (or an Apex run's `log`)
+     * @param {any} logRow the matching list row, for the metadata line; null for none
+     * @param {{ groups?: string[], title?: string, scroll?: boolean }} [options]
+     *   `groups` pre-selects category chips; `scroll: false` keeps the page where it is
+     *   (a tab switch re-showing a stored log should not jump the view).
      */
-    show(data, logRow) {
+    show(data, logRow, options = {}) {
       opened = data;
       row = logRow;
-      activeGroups = [];
+      activeGroups = options.groups ? [...options.groups] : [];
       matches = [];
       searchInput.value = '';
       searchCount.textContent = '';
       errorEl.style.display = 'none';
       card.style.display = '';
-      titleEl.textContent = `🔍 ${logRow ? logRow.operation : 'Log'}`;
+      titleEl.textContent = options.title ?? `🔍 ${logRow ? logRow.operation : 'Log'}`;
       renderMeta();
       renderSummary();
       renderIssues();
       renderChips();
       setMode('pretty');
-      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (options.scroll !== false) card.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    },
+    /** Replace the selected category chips, e.g. a "USER_DEBUG only" toggle. */
+    setGroups(/** @type {string[]} */ groups) {
+      activeGroups = [...groups];
+      if (!opened) return;
+      renderChips();
+      setMode('pretty');
     },
     hide() {
       card.style.display = 'none';

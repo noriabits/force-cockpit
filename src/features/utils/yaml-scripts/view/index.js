@@ -433,6 +433,15 @@ import {
     reloadYamlScripts: () => win.__vscode.postMessage({ type: 'loadYamlScripts' }),
   };
 
+  // The ▶️ Apex tab's "Save as script" — a cross-bundle seam, so a window global
+  // like `__showRecordDetail`. Switches to Scripts → Custom first, so it works
+  // from wherever it is called.
+  win.__newApexScript = (/** @type {string} */ code) => {
+    win.__activateTab('utils');
+    win.__activateSubTab('utils-sub-tab-bar', 'scripts');
+    scriptForm.showNewApexForm(code);
+  };
+
   // ── Feature registration ──────────────────────────────────────────────────
 
   win.__registerFeature('yaml-scripts', {

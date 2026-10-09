@@ -149,25 +149,54 @@ export function extractLimits(events: LogEvent[]): LimitUsage[] {
   return [...byName.values()];
 }
 
-/** FATAL_ERROR / EXCEPTION_THROWN entries with the stack frames that follow them. */
+/**
+ * FATAL_ERROR / EXCEPTION_THROWN entries with the stack frames that follow them.
+ *
+ * One failure is usually logged TWICE: `EXCEPTION_THROWN` where it is raised and
+ * `FATAL_ERROR` as it escapes the transaction, with the same message. They are
+ * merged into one entry — anchored at the throw site (the more useful line to jump
+ * to), carrying the fatal's stack (the thrown event has none) and `fatal: true`.
+ * A thrown exception with no matching FATAL_ERROR was caught somewhere, and stays
+ * on its own; two different exceptions are never merged.
+ */
 export function extractExceptions(
   events: LogEvent[],
-): { lineNo: number; message: string; stack: string[] }[] {
-  const out: { lineNo: number; message: string; stack: string[] }[] = [];
+): { lineNo: number; message: string; stack: string[]; fatal: boolean }[] {
+  const out: { lineNo: number; message: string; stack: string[]; fatal: boolean }[] = [];
   for (let i = 0; i < events.length; i++) {
     const event = events[i];
     if (event.event !== 'FATAL_ERROR' && event.event !== 'EXCEPTION_THROWN') continue;
     const message = event.fields.filter((f) => !/^\[\d+\]$/.test(f)).join(' | ');
-    const stack: string[] = [];
-    for (let j = i + 1; j < events.length && !events[j].event; j++) {
-      const line = events[j].raw.trim();
-      if (!line) break;
-      stack.push(line);
-      if (stack.length >= 25) break;
+    const stack = stackAfter(events, i);
+    const fatal = event.event === 'FATAL_ERROR';
+    const thrown = fatal ? out.filter((e) => !e.fatal && e.message === message).pop() : undefined;
+    if (thrown) {
+      thrown.fatal = true;
+      thrown.stack = stack;
+    } else {
+      out.push({ lineNo: event.lineNo, message, stack, fatal });
     }
-    out.push({ lineNo: event.lineNo, message, stack });
   }
   return out;
+}
+
+/**
+ * The continuation lines after `events[i]`. Salesforce may put a blank line
+ * between a FATAL_ERROR and its first frame, so blanks are skipped until a frame
+ * is found; once frames start, the next blank ends the stack.
+ */
+function stackAfter(events: LogEvent[], i: number): string[] {
+  const stack: string[] = [];
+  for (let j = i + 1; j < events.length && !events[j].event; j++) {
+    const line = events[j].raw.trim();
+    if (!line) {
+      if (stack.length) break;
+      continue;
+    }
+    stack.push(line);
+    if (stack.length >= 25) break;
+  }
+  return stack;
 }
 
 function countRows(events: LogEvent[]): number {
@@ -212,6 +241,7 @@ function slowestUnits(events: LogEvent[], limit = 15): CodeUnitTiming[] {
 
 export function buildSummary(events: LogEvent[], body: string): LogSummary {
   const count = (name: string) => events.filter((e) => e.event === name).length;
+  const exceptions = extractExceptions(events);
   return {
     durationMs: durationFromEvents(events),
     truncated: isTruncated(body),
@@ -222,11 +252,11 @@ export function buildSummary(events: LogEvent[], body: string): LogSummary {
       dml: count('DML_BEGIN'),
       callouts: count('CALLOUT_REQUEST'),
       userDebug: count('USER_DEBUG'),
-      exceptions: count('FATAL_ERROR') + count('EXCEPTION_THROWN'),
+      exceptions: exceptions.length,
       rows: countRows(events),
     },
     slowestUnits: slowestUnits(events),
-    exceptions: extractExceptions(events),
+    exceptions,
   };
 }
 
