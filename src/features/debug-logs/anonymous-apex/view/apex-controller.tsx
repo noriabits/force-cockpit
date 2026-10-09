@@ -48,7 +48,6 @@ type TabError = { message: string } | { cancelled: true };
 export interface ApexViewState {
   code: Signal<string>;
   presetId: Signal<string>;
-  userDebugOnly: Signal<boolean>;
   /** The active tab's in-flight opId. See the header. */
   runningOpId: Signal<string | null>;
   display: Signal<ApexDisplay>;
@@ -58,7 +57,6 @@ export function createApexState(): ApexViewState {
   return {
     code: signal(''),
     presetId: signal(RECOMMENDED_PRESET_ID),
-    userDebugOnly: signal(true),
     runningOpId: signal<string | null>(null),
     display: signal<ApexDisplay>(null),
   };
@@ -85,8 +83,6 @@ interface CockpitWindow {
 const win = () => window as unknown as CockpitWindow;
 const L = () => win().AnonymousApexLabels;
 
-const USER_DEBUG_GROUPS = ['userDebug'];
-
 interface StripTab extends ApexSnippet {
   name: string;
   opId?: string | null;
@@ -105,8 +101,6 @@ export function createApexController(state: ApexViewState) {
   /** Code in flight, by opId — what history records once the run settles. */
   const runs = createTabRunner<StripTab, string>({ tabs: () => tabs, vscode, prefix: 'apex' });
 
-  const groups = () => (state.userDebugOnly.value ? USER_DEBUG_GROUPS : []);
-
   /** The log viewer, built on first use: its markup is view.html's, not ours. */
   function logViewer() {
     if (!viewer && document.getElementById('apex-viewer-card')) {
@@ -119,7 +113,7 @@ export function createApexController(state: ApexViewState) {
     const v = logViewer();
     if (!v) return;
     if (!log) return v.hide();
-    v.show(log, null, { groups: groups(), title: L().logTitle, scroll });
+    v.show(log, null, { title: L().logTitle, scroll });
   }
 
   /** Paint whatever the given tab last produced — an outcome, a failure, or nothing. */
@@ -207,11 +201,6 @@ export function createApexController(state: ApexViewState) {
   function setPreset(presetId: string) {
     state.presetId.value = presetId;
     vscode.postMessage({ type: 'saveApexPreset', presetId });
-  }
-
-  function setUserDebugOnly(on: boolean) {
-    state.userDebugOnly.value = on;
-    logViewer()?.setGroups(groups());
   }
 
   /** Raw log text of the active tab's last run — the shipped body, or the shown lines. */
@@ -310,7 +299,6 @@ export function createApexController(state: ApexViewState) {
     stopAllRuns,
     goToLine,
     setPreset,
-    setUserDebugOnly,
     cloneActiveTab: () => tabs.cloneActive(),
     saveAsScript: () => win().__newApexScript?.(state.code.value),
     /** Fold a live-editor edit into the active tab. Bound to the textarea. */

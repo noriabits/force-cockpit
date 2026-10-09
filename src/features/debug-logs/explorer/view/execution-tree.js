@@ -1,7 +1,7 @@
 // @ts-check
 // Renders the parsed call tree: collapsible nodes with total/self milliseconds
 // and a proportional timeline bar, so "where did the time go" is visible at a
-// glance. Clicking a node jumps the Pretty view to its log line.
+// glance. Clicking a node jumps the Log view to its log line.
 
 /**
  * @param {{ escapeHtml: (s: string) => string, onJumpToLine: (lineNo: number) => void }} ctx

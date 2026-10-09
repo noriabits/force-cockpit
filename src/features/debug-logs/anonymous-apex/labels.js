@@ -13,8 +13,6 @@ window.AnonymousApexLabels = {
   presetLabel: 'Log level',
   presetTooltip:
     'Debug levels for this run’s log. They apply to this call only and override any active trace flag.',
-  userDebugOnly: 'USER_DEBUG only',
-  userDebugOnlyTooltip: 'Show only your System.debug lines in the log below',
   running: 'Executing…',
   success: '✓ Executed successfully',
   compileError: '✗ Compile error',

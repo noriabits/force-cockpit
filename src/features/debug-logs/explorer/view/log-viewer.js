@@ -1,6 +1,6 @@
 // @ts-check
 // The log viewer: limit summary, detected issues, category chips, text search
-// and the four view modes (Pretty / Tree / Queries / Raw). Parsing happened on
+// and the three view modes (Log / Tree / Queries). Parsing happened on
 // the host — this module only renders what it was given.
 //
 // TWO CONSUMERS: the Debug Logs tab and the ▶️ Apex tab. It finds its markup by
@@ -31,10 +31,9 @@ function bodyHtml(prefix) {
 
   <div class="dbg-view-modes">
     <div class="dbg-seg" id="${prefix}-mode-seg">
-      <button type="button" class="dbg-seg-btn active" data-mode="pretty">Pretty</button>
+      <button type="button" class="dbg-seg-btn active" data-mode="log">Log</button>
       <button type="button" class="dbg-seg-btn" data-mode="tree">Tree</button>
       <button type="button" class="dbg-seg-btn" data-mode="queries">Queries</button>
-      <button type="button" class="dbg-seg-btn" data-mode="raw">Raw</button>
     </div>
     <input
       type="text"
@@ -117,7 +116,7 @@ export function createLogViewer(ctx) {
   /** @type {any} */ let opened = null;
   /** @type {any} */ let row = null;
   /** @type {string[]} */ let activeGroups = [];
-  /** @type {'pretty'|'tree'|'queries'|'raw'} */ let mode = 'pretty';
+  /** @type {'log'|'tree'|'queries'} */ let mode = 'log';
   /** @type {number[]} */ let matches = [];
   let matchCursor = 0;
   let rendered = 0;
@@ -125,14 +124,14 @@ export function createLogViewer(ctx) {
   const tree = createExecutionTree({
     escapeHtml,
     onJumpToLine: (lineNo) => {
-      setMode('pretty');
+      setMode('log');
       jumpToLine(lineNo);
     },
   });
   const queryTable = createQueryPlanTable({
     escapeHtml,
     onJumpToLine: (lineNo) => {
-      setMode('pretty');
+      setMode('log');
       jumpToLine(lineNo);
     },
   });
@@ -230,7 +229,7 @@ export function createLogViewer(ctx) {
       if (issue.lineNo !== null) {
         item.classList.add('dbg-issue--clickable');
         item.addEventListener('click', () => {
-          setMode('pretty');
+          setMode('log');
           jumpToLine(issue.lineNo);
         });
       }
@@ -242,6 +241,21 @@ export function createLogViewer(ctx) {
 
   function renderChips() {
     chipsEl.innerHTML = '';
+    // "None": the whole log, nothing filtered. It is a state as much as a button —
+    // lit while no category is selected AND Hide noise is off, and clicking it
+    // clears both. (It took over from the old Raw view, which was exactly that.)
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'dbg-chip';
+    none.classList.toggle('active', !activeGroups.length && !hideNoise.checked);
+    none.textContent = 'None';
+    none.addEventListener('click', () => {
+      activeGroups = [];
+      hideNoise.checked = false;
+      renderChips();
+      renderLines(true);
+    });
+    chipsEl.appendChild(none);
     for (const group of EVENT_GROUP_LABELS) {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -280,15 +294,12 @@ export function createLogViewer(ctx) {
   }
 
   function renderLines(/** @type {boolean} */ reset) {
-    if (mode !== 'pretty' && mode !== 'raw') return;
+    if (mode !== 'log') return;
     if (reset) {
       rendered = 0;
       outputEl.innerHTML = '';
     }
-    const indices =
-      mode === 'raw'
-        ? opened.events.map((/** @type {any} */ _e, /** @type {number} */ i) => i)
-        : visibleIndices();
+    const indices = visibleIndices();
     const slice = indices.slice(rendered, rendered + CHUNK_SIZE);
     outputEl.insertAdjacentHTML(
       'beforeend',
@@ -302,7 +313,21 @@ export function createLogViewer(ctx) {
     statusEl.textContent = labels.linesShown(indices.length, opened.totalLines);
   }
 
+  /** Whether the Log view, as currently filtered, would render this line. */
+  function isLineVisible(/** @type {number} */ lineNo) {
+    return visibleIndices().some((i) => opened.events[i].lineNo === lineNo);
+  }
+
   function jumpToLine(/** @type {number} */ lineNo) {
+    // A jump from an issue, the tree, the query table or a search match must land
+    // on its line. If a chip or Hide noise is filtering it out, drop every filter
+    // (exactly what the None chip does) rather than scroll to nothing.
+    if (!isLineVisible(lineNo)) {
+      activeGroups = [];
+      hideNoise.checked = false;
+      renderChips();
+      renderLines(true);
+    }
     // The line may live past the rendered chunk — keep loading until it is in.
     let guard = 0;
     while (
@@ -315,7 +340,7 @@ export function createLogViewer(ctx) {
     scrollAndHighlight(outputEl, `[data-line="${lineNo}"]`, 'dbg-line--highlight', 1500);
   }
 
-  function setMode(/** @type {'pretty'|'tree'|'queries'|'raw'} */ next) {
+  function setMode(/** @type {'log'|'tree'|'queries'} */ next) {
     mode = next;
     modeSeg.querySelectorAll('.dbg-seg-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-mode') === next);
@@ -325,7 +350,7 @@ export function createLogViewer(ctx) {
     treeEl.style.display = isTree ? '' : 'none';
     queryTableEl.style.display = isQueries ? '' : 'none';
     outputEl.style.display = isTree || isQueries ? 'none' : '';
-    chipsEl.style.display = next === 'pretty' ? '' : 'none';
+    chipsEl.style.display = next === 'log' ? '' : 'none';
     loadMoreBtn.style.display = 'none';
     if (isTree) tree.render(treeEl, opened.tree);
     else if (isQueries) queryTable.render(queryTableEl, opened.queryPlans);
@@ -348,7 +373,7 @@ export function createLogViewer(ctx) {
     matchCursor = (index + matches.length) % matches.length;
     const event = opened.events[matches[matchCursor]];
     searchCount.textContent = `${matchCursor + 1} of ${matches.length}`;
-    setMode('pretty');
+    setMode('log');
     jumpToLine(event.lineNo);
   }
 
@@ -358,7 +383,10 @@ export function createLogViewer(ctx) {
     const next = /** @type {HTMLElement} */ (event.target).getAttribute('data-mode');
     if (next && opened) setMode(/** @type {any} */ (next));
   });
-  hideNoise.addEventListener('change', () => renderLines(true));
+  hideNoise.addEventListener('change', () => {
+    renderChips(); // "None" is only lit while nothing at all is filtering
+    renderLines(true);
+  });
   loadMoreBtn.addEventListener('click', () => renderLines(false));
   searchInput.addEventListener('input', () => {
     if (opened) runSearch();
@@ -370,14 +398,14 @@ export function createLogViewer(ctx) {
     /**
      * @param {any} data  the `apexLogOpened` payload (or an Apex run's `log`)
      * @param {any} logRow the matching list row, for the metadata line; null for none
-     * @param {{ groups?: string[], title?: string, scroll?: boolean }} [options]
-     *   `groups` pre-selects category chips; `scroll: false` keeps the page where it is
+     * @param {{ title?: string, scroll?: boolean }} [options]
+     *   `scroll: false` keeps the page where it is
      *   (a tab switch re-showing a stored log should not jump the view).
      */
     show(data, logRow, options = {}) {
       opened = data;
       row = logRow;
-      activeGroups = options.groups ? [...options.groups] : [];
+      activeGroups = [];
       matches = [];
       searchInput.value = '';
       searchCount.textContent = '';
@@ -388,15 +416,8 @@ export function createLogViewer(ctx) {
       renderSummary();
       renderIssues();
       renderChips();
-      setMode('pretty');
+      setMode('log');
       if (options.scroll !== false) card.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    },
-    /** Replace the selected category chips, e.g. a "USER_DEBUG only" toggle. */
-    setGroups(/** @type {string[]} */ groups) {
-      activeGroups = [...groups];
-      if (!opened) return;
-      renderChips();
-      setMode('pretty');
     },
     hide() {
       card.style.display = 'none';

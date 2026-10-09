@@ -26,6 +26,13 @@ export const DEFAULT_FILTER: LogFilterOptions = {
 export function filterLines(events: LogEvent[], options: LogFilterOptions): number[] {
   const selected = new Set(options.groups);
   const needle = options.text.trim().toLowerCase();
+  // Nothing filtering: the whole log, in order. Without this shortcut the loop
+  // below drops every non-event line that precedes the first event — the header
+  // (log levels) and an anonymous run's "Execute Anonymous: …" line — because a
+  // continuation is only kept after a kept event. That is right when something
+  // IS filtering, but "no filters" must mean the untouched log.
+  if (selected.size === 0 && !options.hideNoise && !needle) return events.map((_e, i) => i);
+
   const out: number[] = [];
   let lastKept = false;
 

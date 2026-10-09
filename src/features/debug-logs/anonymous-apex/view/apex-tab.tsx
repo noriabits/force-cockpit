@@ -145,14 +145,6 @@ export function ApexTab({ state, controller }: { state: ApexViewState; controlle
             ))}
           </select>
         </label>
-        <label class="apex-option" data-tooltip={L_.userDebugOnlyTooltip}>
-          <input
-            type="checkbox"
-            checked={state.userDebugOnly.value}
-            onChange={(e) => controller.setUserDebugOnly(e.currentTarget.checked)}
-          />
-          {L_.userDebugOnly}
-        </label>
       </div>
 
       {running && <div class="status-hint apex-running">{L_.running}</div>}

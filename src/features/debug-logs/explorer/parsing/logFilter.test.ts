@@ -22,6 +22,20 @@ describe('filterLines', () => {
     expect(kept).toContain('HEAP_ALLOCATE');
   });
 
+  it('returns every line, header included, when nothing is filtering', () => {
+    const log = [
+      '65.0 APEX_CODE,DEBUG',
+      'Execute Anonymous: insert new Account();',
+      '10:00:00.1 (1)|EXECUTION_STARTED',
+      '10:00:00.1 (2)|HEAP_ALLOCATE|[1]|Bytes:4',
+    ].join('\n');
+    const parsed = events(log);
+    const none = { ...DEFAULT_FILTER, hideNoise: false };
+    expect(filterLines(parsed, none)).toEqual([0, 1, 2, 3]);
+    // With a filter on, the pre-event lines belong to no kept event and go.
+    expect(filterLines(parsed, DEFAULT_FILTER)).toEqual([2]);
+  });
+
   it('restricts to the selected groups', () => {
     const parsed = events(SUCCESS_LOG);
     const kept = filterLines(parsed, { ...DEFAULT_FILTER, groups: ['soql'] }).map(

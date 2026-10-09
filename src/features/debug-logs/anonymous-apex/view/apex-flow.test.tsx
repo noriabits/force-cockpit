@@ -48,6 +48,8 @@ function installGlobals() {
   };
   w.__confirmAction = (_prompt: string, onConfirmed: () => void) => onConfirmed();
   w.__newApexScript = (code: string) => newScripts.push(code);
+  // jsdom has no layout, so no scrollIntoView — the viewer's jump-to-line calls it.
+  Element.prototype.scrollIntoView = () => {};
 }
 
 async function mount() {
@@ -213,6 +215,69 @@ describe('▶️ Apex tab flow', () => {
 
     expect(postsOf('addApexHistory')).toHaveLength(0);
     expect(postsOf('operationEnded').some((p) => p.opId === opId)).toBe(true);
+  });
+
+  it('offers Log / Tree / Queries, and a None chip that clears every filter', async () => {
+    await mount();
+    loadEmptyState();
+    deliver('anonymousApexExecuted', okOutcome(execute('System.debug(1);')));
+
+    const modes = $$('#apex-mode-seg .dbg-seg-btn').map((b) => b.textContent);
+    expect(modes).toEqual(['Log', 'Tree', 'Queries']);
+
+    const chips = () => $$('#apex-chips .dbg-chip') as HTMLElement[];
+    const chip = (label: string) => chips().find((c) => c.textContent === label)!;
+    const hideNoise = $<HTMLInputElement>('#apex-hide-noise');
+
+    // None leads the row, and is not lit while Hide noise (default on) is filtering.
+    expect(chips()[0].textContent).toBe('None');
+    expect(chip('None').classList.contains('active')).toBe(false);
+
+    click(chip('SOQL / SOSL'));
+    expect(chip('SOQL / SOSL').classList.contains('active')).toBe(true);
+    expect(document.querySelectorAll('#apex-log-output .dbg-line')).toHaveLength(1);
+
+    click(chip('None'));
+    expect(hideNoise.checked).toBe(false);
+    expect(chip('SOQL / SOSL').classList.contains('active')).toBe(false);
+    expect(chip('None').classList.contains('active')).toBe(true);
+    expect(document.querySelectorAll('#apex-log-output .dbg-line')).toHaveLength(3);
+
+    // Re-ticking Hide noise means something is filtering again, so None goes dark.
+    click(hideNoise);
+    expect(chip('None').classList.contains('active')).toBe(false);
+  });
+
+  it('clears the filters when a search jump targets a line they hide', async () => {
+    await mount();
+    loadEmptyState();
+    deliver('anonymousApexExecuted', okOutcome(execute('System.debug(1);')));
+
+    const chip = (label: string) =>
+      ($$('#apex-chips .dbg-chip') as HTMLElement[]).find((c) => c.textContent === label)!;
+    click(chip('SOQL / SOSL'));
+    expect(document.querySelectorAll('#apex-log-output .dbg-line')).toHaveLength(1);
+
+    // "hello" is the USER_DEBUG line, which the SOQL chip is hiding.
+    setValue($<HTMLInputElement>('#apex-log-search') as never, 'hello');
+
+    expect(chip('SOQL / SOSL').classList.contains('active')).toBe(false);
+    expect(chip('None').classList.contains('active')).toBe(true);
+    expect(document.querySelector('#apex-log-output [data-line="2"]')).not.toBeNull();
+  });
+
+  it('keeps the filters when the jump target is already visible', async () => {
+    await mount();
+    loadEmptyState();
+    deliver('anonymousApexExecuted', okOutcome(execute('System.debug(1);')));
+
+    const chip = (label: string) =>
+      ($$('#apex-chips .dbg-chip') as HTMLElement[]).find((c) => c.textContent === label)!;
+    click(chip('USER_DEBUG'));
+    setValue($<HTMLInputElement>('#apex-log-search') as never, 'hello');
+
+    expect(chip('USER_DEBUG').classList.contains('active')).toBe(true);
+    expect(chip('None').classList.contains('active')).toBe(false);
   });
 
   it('shows a compile error with its position, and Go to line selects that line', async () => {
