@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { MonitoringValueField } from './MonitoringDashboardService';
 import { playRowCountPing } from './audio';
+import type { ConnectionManager } from '../../../salesforce/connection';
 
 const COOLDOWN_MS = 60_000;
 const SNOOZE_1H_MS = 60 * 60 * 1000;
@@ -80,9 +81,26 @@ function formatValueForNotification(value: number, format?: string): string {
   return value.toLocaleString();
 }
 
-/** What a notification shows for the org: the alias when there is one, else the username. */
-export function orgLabelOf(org: { alias?: string; username: string } | null): string {
-  return org ? org.alias || org.username : '';
+/**
+ * What a notification shows for the org: the alias when there is one; otherwise
+ * "Production" for production, or the last `.`-separated part of the username
+ * (the sandbox name in `user@company.com.sandbox`) — the full username is too long.
+ */
+export function orgLabelOf(
+  org: { alias?: string; username: string } | null,
+  isProduction: boolean,
+): string {
+  if (!org) return '';
+  if (org.alias) return org.alias;
+  if (isProduction) return 'Production';
+  return org.username.slice(org.username.lastIndexOf('.') + 1);
+}
+
+/** The label for whichever org is connected right now. Production = no sandbox name in the instance URL, the same rule the banner uses. */
+export function currentOrgLabel(
+  connectionManager: Pick<ConnectionManager, 'getCurrentOrg' | 'getSandboxName'>,
+): string {
+  return orgLabelOf(connectionManager.getCurrentOrg(), connectionManager.getSandboxName() === null);
 }
 
 /** `[Config · org]`, or `[Config]` when no org is known. */

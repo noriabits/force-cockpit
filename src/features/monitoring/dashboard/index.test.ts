@@ -54,7 +54,11 @@ describe('monitoring snooze persistence', () => {
       'monitoring.notificationCooldowns': { 'chart1:0:test@org.com': futureTime },
     });
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -90,7 +94,11 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -121,7 +129,11 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -162,7 +174,11 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -206,7 +222,11 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -239,7 +259,11 @@ describe('monitoring snooze persistence', () => {
       },
     });
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -270,7 +294,11 @@ describe('monitoring snooze persistence', () => {
 
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);
@@ -299,7 +327,11 @@ describe('monitoring snooze persistence', () => {
     showWarningMessage.mockResolvedValue(undefined);
     const memento = makeMemento();
     const createFeature = await loadFactory();
-    const cm = { query: vi.fn(), getCurrentOrg: () => ({ username: 'test@org.com' }) } as any;
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
     const ctx = fakeFeatureContext({ workspaceState: memento as any, connectionManager: cm });
     const { factory } = createFeature(ctx);
     const feature = factory(ctx);

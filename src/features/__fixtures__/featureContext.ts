@@ -67,6 +67,7 @@ export function fakeFeatureContext(overrides: FakeContextOverrides = {}): Featur
       on: noop,
       off: noop,
       getCurrentOrg: () => null,
+      getSandboxName: () => null,
     },
     workspaceState: { get: (_k: string, d: unknown) => d, update: async () => {} },
     describeService: {},

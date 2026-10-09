@@ -10,7 +10,7 @@ import {
   fireBreachNotifications,
   checkRowCountIncrease,
   fireRowCountNotifications,
-  orgLabelOf,
+  currentOrgLabel,
 } from './notifications';
 import { hasNotifications } from './notification-config';
 import type { HostMessage } from '../../../shared/protocol';
@@ -81,7 +81,7 @@ export class BackgroundRefresher {
   ): boolean {
     const org = this.opts.connectionManager.getCurrentOrg();
     const orgKey = org?.username ?? '';
-    const orgLabel = orgLabelOf(org);
+    const orgLabel = currentOrgLabel(this.opts.connectionManager);
     fireBreachNotifications(
       checkThresholds(cfg.id, cfg.name, datasets, cfg.valueFields, orgKey, orgLabel),
       this.opts.workspaceState,

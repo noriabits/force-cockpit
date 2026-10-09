@@ -12,7 +12,7 @@ import {
   pruneCooldowns,
   clearAllCooldownsFor,
   clearRowCountBaseline,
-  orgLabelOf,
+  currentOrgLabel,
 } from './notifications';
 
 const HIDDEN_BUILTINS_KEY = 'monitoring.hiddenBuiltins';
@@ -50,7 +50,7 @@ function fireQueryNotifications(
 ): boolean {
   const org = deps.connectionManager.getCurrentOrg();
   const orgKey = org?.username ?? '';
-  const orgLabel = orgLabelOf(org);
+  const orgLabel = currentOrgLabel(deps.connectionManager);
   fireBreachNotifications(
     checkThresholds(configId, configName, datasets, valueFields, orgKey, orgLabel),
     deps.workspaceState,

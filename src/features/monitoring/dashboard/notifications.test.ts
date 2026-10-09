@@ -271,11 +271,25 @@ describe('notifications', () => {
   });
 
   describe('org label in messages', () => {
-    it('orgLabelOf prefers the alias, falls back to the username, and is empty with no org', async () => {
+    it('orgLabelOf: alias wins, then Production, then the last dot-part of the username', async () => {
       const { orgLabelOf } = await load();
-      expect(orgLabelOf({ alias: 'uat', username: 'a@b.com' })).toBe('uat');
-      expect(orgLabelOf({ username: 'a@b.com' })).toBe('a@b.com');
-      expect(orgLabelOf(null)).toBe('');
+      expect(orgLabelOf({ alias: 'uat', username: 'a@b.com.uat' }, false)).toBe('uat');
+      expect(orgLabelOf({ alias: 'prod-alias', username: 'a@b.com' }, true)).toBe('prod-alias');
+      expect(orgLabelOf({ username: 'a@b.com' }, true)).toBe('Production');
+      expect(orgLabelOf({ username: 'a@company.com.dev02' }, false)).toBe('dev02');
+      expect(orgLabelOf({ username: 'nodots' }, false)).toBe('nodots');
+      expect(orgLabelOf(null, true)).toBe('');
+    });
+
+    it('currentOrgLabel treats a missing sandbox name as production', async () => {
+      const { currentOrgLabel } = await load();
+      const cm = (sandbox: string | null) =>
+        ({
+          getCurrentOrg: () => ({ username: 'a@company.com.dev02' }),
+          getSandboxName: () => sandbox,
+        }) as never;
+      expect(currentOrgLabel(cm(null))).toBe('Production');
+      expect(currentOrgLabel(cm('dev02'))).toBe('dev02');
     });
 
     it('tags a threshold breach and a row-count increase with the org', async () => {

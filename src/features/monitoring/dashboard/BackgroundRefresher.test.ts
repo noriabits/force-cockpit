@@ -75,6 +75,7 @@ describe('BackgroundRefresher', () => {
     const cm = {
       isConnected: opts.isConnected ?? true,
       getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
     } as any;
     const postToWebview = opts.postToWebview ?? vi.fn();
     const refresher = new BackgroundRefresher({
