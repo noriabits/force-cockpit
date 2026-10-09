@@ -341,29 +341,44 @@ export class ConnectionManager extends EventEmitter {
     this.emit('connectionChanged', { connected: false } as ConnectionChangedEvent);
   }
 
+  /** The live connection, or the NOT_CONNECTED error every org call reports. */
+  private requireConnection(): jsforce.Connection {
+    if (!this._connection) {
+      throw new Error(NOT_CONNECTED);
+    }
+    return this._connection;
+  }
+
   async query<T extends Record<string, unknown> = Record<string, unknown>>(
     soql: string,
   ): Promise<jsforce.QueryResult<T>> {
-    if (!this._connection) {
-      throw new Error(NOT_CONNECTED);
-    }
-    const conn = this._connection;
+    const conn = this.requireConnection();
     return this.withSessionRetry(() => conn.query<T>(soql));
   }
 
+  /**
+   * The next batch of a query whose result came back `done: false`. `locator` is
+   * that result's `nextRecordsUrl` (jsforce accepts the full path or the bare id);
+   * `useToolingApi` must match the API the first batch ran against, since a
+   * Standard-API locator means nothing to the Tooling endpoint and vice versa.
+   */
+  async queryMore<T extends Record<string, unknown> = Record<string, unknown>>(
+    locator: string,
+    useToolingApi = false,
+  ): Promise<jsforce.QueryResult<T>> {
+    const conn = this.requireConnection();
+    return this.withSessionRetry(() =>
+      useToolingApi ? conn.tooling.queryMore<T>(locator) : conn.queryMore<T>(locator),
+    );
+  }
+
   async describeGlobal(): Promise<jsforce.DescribeGlobalResult> {
-    if (!this._connection) {
-      throw new Error(NOT_CONNECTED);
-    }
-    const conn = this._connection;
+    const conn = this.requireConnection();
     return this.withSessionRetry(() => conn.describeGlobal());
   }
 
   async describeSObject(name: string): Promise<jsforce.DescribeSObjectResult> {
-    if (!this._connection) {
-      throw new Error(NOT_CONNECTED);
-    }
-    const conn = this._connection;
+    const conn = this.requireConnection();
     return this.withSessionRetry(() => conn.describe(name));
   }
 
@@ -444,10 +459,7 @@ export class ConnectionManager extends EventEmitter {
   async toolingQuery<T extends Record<string, unknown> = Record<string, unknown>>(
     soql: string,
   ): Promise<jsforce.QueryResult<T>> {
-    if (!this._connection) {
-      throw new Error(NOT_CONNECTED);
-    }
-    const conn = this._connection;
+    const conn = this.requireConnection();
     return this.withSessionRetry(() => conn.tooling.query<T>(soql));
   }
 

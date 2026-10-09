@@ -82,6 +82,28 @@ export const soqlFeature = defineFeature({
       successType: 'queryResult',
       errorType: 'queryError',
     },
+    /**
+     * One more batch of a partial result. The webview sends only the locator and
+     * the API the first batch ran on — never the rows it already holds, since the
+     * dispatcher echoes the whole request back onto the reply. No diagnostics: a
+     * locator failing (usually expired, ~15 min idle) says nothing about the SOQL.
+     */
+    queryMore: {
+      handler: async (msg, signal) => {
+        try {
+          return await service.queryMore(
+            msg.locator as string,
+            msg.useToolingApi as boolean,
+            signal,
+          );
+        } catch (err) {
+          if (signal?.aborted) return NO_REPLY;
+          throw err;
+        }
+      },
+      successType: 'queryMoreResult',
+      errorType: 'queryMoreError',
+    },
     loadQueryState: {
       handler: async () => stateStore.getState(),
       successType: 'queryStateLoaded',

@@ -456,9 +456,12 @@ export function createTabStrip(ctx) {
   }
 
   // ── Per-tab run state ───────────────────────────────────────────────────────
-  /** Mark the active tab as running (or idle, with null). @param {string | null} opId */
-  function setActiveOpId(opId) {
-    const tab = active();
+  /**
+   * Mark a tab as running (or idle, with null) — the active one unless `tab` names
+   * another, e.g. a background tab whose Fetch all asks for its next batch.
+   * @param {string | null} opId @param {any} [tab]
+   */
+  function setActiveOpId(opId, tab = active()) {
     if (tab) tab.opId = opId;
     renderBar();
   }

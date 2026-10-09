@@ -17,6 +17,8 @@ import { capitalizeKeywordEndingAt } from './keyword-case';
 import { createSoqlAiPanel } from './ai-panel';
 import { createFieldsPanel } from './fields/fields-panel';
 import { MAX_RESULT_ROWS } from '../ai/requestMessage';
+import { canLoadMore, describeResultSize } from './paging';
+import { createQueryPaging } from './query-paging';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -111,11 +113,16 @@ function hideResults() {
   table.clear();
 }
 
-/** @param {{ records: any[], totalSize: number }} data */
+/** @param {any} data A queryResult payload, possibly grown by background batches. */
 function showResults(data) {
   errorView.hide();
-  table.setData(data.records, data.totalSize);
+  table.setData(data.records, data.totalSize, {
+    summary: describeResultSize(data),
+    complete: !canLoadMore(data),
+  });
   queryResults.style.display = '';
+  // A failed batch keeps the rows it already had; the error shows below them.
+  if (data.pagingError) errorView.show(data.pagingError);
 }
 
 /** @param {{ message: string, diagnostics?: any }} error */
@@ -128,10 +135,12 @@ function showError(error) {
 /**
  * Paint the tab's stored outcome. A query that finishes while the user is on a
  * different tab settles silently onto its own tab; this is where it surfaces.
+ * A tab still loading batches shows nothing yet: the result appears once, whole.
  * @param {any} tab
  */
 function renderTabOutput(tab) {
-  if (tab && tab.results) showResults(tab.results);
+  if (tab && tab.opId) hideResults();
+  else if (tab && tab.results) showResults(tab.results);
   else if (tab && tab.error) showError(tab.error);
   else hideResults();
 }
@@ -154,7 +163,7 @@ function paintRunState(tab) {
   const running = !!(tab && tab.opId);
   btnRunQuery.disabled = running;
   btnRunQuery.classList.toggle('running', running);
-  queryHint.textContent = running ? 'Running…' : '';
+  queryHint.textContent = running ? runningHint(tab) : '';
 
   if (running && !queryCancelBtn) {
     queryCancelBtn = document.createElement('button');
@@ -166,6 +175,8 @@ function paintRunState(tab) {
       stopRun(tabs.getActiveOpId());
       tabs.setActiveOpId(null);
       paintRunState(activeTab);
+      // Stopping a large result mid-load keeps every batch it already got.
+      renderTabOutput(activeTab);
     });
     btnRunQuery.parentElement?.insertBefore(queryCancelBtn, btnRunQuery.nextSibling);
   } else if (!running && queryCancelBtn) {
@@ -194,6 +205,31 @@ const tabs = createQueryTabs({
 // The tabs factory hydrates the textarea once at construction time, before any
 // onActivate fires.
 highlighter.refresh();
+
+// ── Large results ─────────────────────────────────────────────────────────────
+// A result past Salesforce's first batch keeps loading in the background, up to
+// MAX_LOADED_ROWS. Nothing is shown until it settles: the hint shows progress,
+// and the table is painted once, whole.
+const paging = createQueryPaging({
+  vscode,
+  tabs,
+  nextOpId: () => 'soql-' + ++opSeq,
+  onProgress: (tab) => {
+    if (tab === tabs.getActive()) paintRunState(tab);
+  },
+  onSettled: (tab) => {
+    if (tab !== tabs.getActive()) return;
+    renderTabOutput(tab);
+    paintRunState(tab);
+  },
+});
+
+/** @param {any} tab */
+function runningHint(tab) {
+  if (!paging.isPaging(tab.opId)) return 'Running…';
+  const { records, totalSize } = tab.results;
+  return `Loading rows… ${records.length.toLocaleString('en-US')} of ${totalSize.toLocaleString('en-US')}`;
+}
 
 /**
  * Overwrite the active tab's editor with a query. The AI panel's handoff path —
@@ -285,6 +321,7 @@ const pendingRuns = new Map();
 function stopRun(opId) {
   if (!opId) return;
   pendingRuns.delete(opId);
+  paging.forget(opId);
   vscode.postMessage({ type: 'cancelOperation', opId });
   vscode.postMessage({ type: 'operationEnded', opId });
 }
@@ -294,6 +331,7 @@ function stopAllRuns() {
   for (const opId of tabs.getRunningOpIds()) stopRun(opId);
   tabs.clearAllOpIds();
   paintRunState(tabs.getActive());
+  renderTabOutput(tabs.getActive()); // batches a stopped load already got
 }
 
 // Clear the visible results on disconnect (the active tab's in-memory results
@@ -336,6 +374,12 @@ win.__onMessage('queryResult', (/** @type {any} */ msg) => {
   pendingRuns.delete(opId);
   if (run) history.recordRun(run.soql, run.useToolingApi);
 
+  // More than one batch: keep loading, and paint once it settles (onSettled).
+  if (paging.continueLoading(tab)) {
+    if (tab === tabs.getActive()) paintRunState(tab);
+    return;
+  }
+
   // A background tab's results are stored only; onActivate paints them later.
   if (tab !== tabs.getActive()) return;
   showResults(msg.data);
@@ -357,6 +401,16 @@ win.__onMessage('queryError', (/** @type {any} */ msg) => {
   if (tab !== tabs.getActive()) return;
   showError(msg.data);
   paintRunState(tab);
+});
+
+win.__onMessage('queryMoreResult', (/** @type {any} */ msg) => {
+  const owner = ownerOf(msg);
+  if (owner) paging.onResult(owner, msg.data);
+});
+
+win.__onMessage('queryMoreError', (/** @type {any} */ msg) => {
+  const owner = ownerOf(msg);
+  if (owner) paging.onError(owner, msg.data);
 });
 
 win.__onMessage('queryStateLoaded', (/** @type {any} */ msg) => {

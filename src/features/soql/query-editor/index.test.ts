@@ -18,8 +18,9 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('fs', () => ({ promises: { writeFile } }));
 
-const { runQuery, diagnose, stateStore } = vi.hoisted(() => ({
+const { runQuery, queryMore, diagnose, stateStore } = vi.hoisted(() => ({
   runQuery: vi.fn(),
+  queryMore: vi.fn(),
   diagnose: vi.fn(),
   stateStore: {
     getState: vi.fn(),
@@ -32,6 +33,7 @@ const { runQuery, diagnose, stateStore } = vi.hoisted(() => ({
 vi.mock('./QueryService', () => ({
   QueryService: class {
     runQuery = runQuery;
+    queryMore = queryMore;
   },
 }));
 vi.mock('./SoqlDiagnosticsService', () => ({
@@ -112,6 +114,7 @@ describe('soql feature module', () => {
       'generateSoqlQuery',
       'loadQueryState',
       'query',
+      'queryMore',
       'resetSoqlAiChat',
       'saveQueryTabs',
       'saveSavedQueries',
@@ -232,6 +235,54 @@ describe('query route', () => {
     expect(postMessage).not.toHaveBeenCalled();
     // Still released, so the panel does not stay busy forever.
     expect(operations.endTerminalOp).toHaveBeenCalledWith('soql-2');
+  });
+});
+
+describe('queryMore route', () => {
+  const LOCATOR = '/services/data/v65.0/query/01gXX-2000';
+
+  it('forwards the locator and the Tooling flag, echoing the opId', async () => {
+    const ac = new AbortController();
+    queryMore.mockResolvedValue({ records: [{ Id: '2' }], totalSize: 3, done: true });
+    const { router, postMessage } = makeRouter({
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+
+    await router.handle({ type: 'queryMore', locator: LOCATOR, useToolingApi: true, opId: 's-3' });
+
+    expect(queryMore).toHaveBeenCalledWith(LOCATOR, true, ac.signal);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryMoreResult',
+      data: expect.objectContaining({ records: [{ Id: '2' }], done: true, opId: 's-3' }),
+    });
+  });
+
+  it('failure → queryMoreError with the message and no diagnostics', async () => {
+    queryMore.mockRejectedValue(new Error('INVALID_QUERY_LOCATOR'));
+    const { router, postMessage } = makeRouter();
+
+    await router.handle({ type: 'queryMore', locator: LOCATOR, opId: 's-4' });
+
+    expect(diagnose).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'queryMoreError',
+      data: expect.objectContaining({ message: 'INVALID_QUERY_LOCATOR', opId: 's-4' }),
+    });
+  });
+
+  it('a cancelled batch posts nothing', async () => {
+    const ac = new AbortController();
+    queryMore.mockImplementation(async () => {
+      ac.abort();
+      throw new Error('Operation cancelled');
+    });
+    const { router, postMessage } = makeRouter({
+      operations: { createTerminalAbort: vi.fn(() => ac) },
+    });
+
+    await router.handle({ type: 'queryMore', locator: LOCATOR, opId: 's-5' });
+
+    expect(postMessage).not.toHaveBeenCalled();
   });
 });
 

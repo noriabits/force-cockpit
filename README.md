@@ -415,7 +415,8 @@ The editor supports:
 
 The results table supports:
 
-- **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the total rows match.
+- **Large results** — Salesforce returns a query in batches of up to 2,000 rows. When there is more, Force Cockpit keeps loading the rest in the background (the hint next to **Run Query** shows `Loading rows… 12,000 of 48,213`) and shows the table once, complete. It never loads more than **50,000 rows**: past that the meta line says so (`Showing 50,000 of 120,000 records — stopped at the 50,000-row limit`) and the answer is a narrower query. **✕ Cancel** stops loading and shows the rows already loaded. Filter, sort, copy and export act on the loaded rows, so check the meta line before treating an export of a very large result as the whole thing. `SELECT COUNT()` is unaffected.
+- **Filter** — type in the filter box above the table to narrow rows by a case-insensitive match across all columns; a counter shows how many of the loaded rows match (it says `loaded` when the result was cut short).
 - **Sort** — click any column header to sort; click again to reverse.
 - **Copy a column** — click the **⧉** button on a column header to pick a copy format for that column's values: **one per line** (`a`⏎`b`), **comma-separated** (`a,b`), **quoted list** (`'a', 'b'`) or **IN-clause** (`('a', 'b')`, ready to paste after a `WHERE … IN`). Every format copies the current view — so it respects the filter and the sort — with duplicates and blanks dropped.
 - **Copy a cell** — hover any cell and a **⧉** button appears at its left edge; one click copies that cell's full value, including the part cut off by the column width.

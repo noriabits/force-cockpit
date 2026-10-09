@@ -93,3 +93,43 @@ describe('results table long values', () => {
     expect(cells[0].classList.contains('fc-cell-expanded')).toBe(false);
   });
 });
+
+describe('results table paging', () => {
+  function build() {
+    document.body.innerHTML = '';
+    const thead = document.createElement('thead');
+    const tbody = document.createElement('tbody');
+    const filterInput = document.createElement('input');
+    const counterEl = document.createElement('span');
+    const meta = document.createElement('div');
+    const api = createResultsTable({
+      thead,
+      tbody,
+      meta,
+      filterInput,
+      counterEl,
+      vscode: { postMessage: vi.fn() },
+      escapeHtml: (s: unknown) => String(s),
+    });
+    const filter = (q: string) => {
+      filterInput.value = q;
+      filterInput.dispatchEvent(new Event('input'));
+    };
+    return { api, filter, counterEl, meta, filterInput };
+  }
+
+  const first = [{ Name: 'bravo' }, { Name: 'delta' }];
+  const all = [...first, { Name: 'alpha' }, { Name: 'charlie' }];
+
+  it('says the filter counter covers loaded rows only while partial', () => {
+    const t = build();
+    t.api.setData(first, 4, { complete: false, summary: 'Showing 2 of 4 records' });
+    t.filter('bra');
+    expect(t.counterEl.textContent).toBe('1 of 2 loaded');
+    expect(t.meta.textContent).toBe('Showing 2 of 4 records');
+
+    t.api.setData(all, 4);
+    t.filter('bra');
+    expect(t.counterEl.textContent).toBe('1 of 4');
+  });
+});

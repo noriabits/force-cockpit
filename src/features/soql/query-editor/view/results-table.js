@@ -40,6 +40,8 @@ export function createResultsTable(ctx) {
   /** @type {(string | null)[][]} */
   let rows = [];
   let totalSize = 0;
+  /** False while the loaded rows are only part of the result (see paging.ts). */
+  let complete = true;
   let sortCol = -1;
   let sortAsc = true;
 
@@ -189,18 +191,27 @@ export function createResultsTable(ctx) {
       tbody.appendChild(tr);
     }
 
-    counterEl.textContent = q ? `${ordered.length} of ${rows.length}` : '';
+    const loaded = complete ? '' : ' loaded';
+    counterEl.textContent = q ? `${ordered.length} of ${rows.length}${loaded}` : '';
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
   /**
+   * @typedef {Object} SetDataOptions
+   * @property {string} [summary] The meta line; defaults to the record count.
+   * @property {boolean} [complete] False when more batches exist than are loaded.
+   */
+
+  /**
    * @param {any[]} records
    * @param {number} size
+   * @param {SetDataOptions} [opts]
    */
-  function setData(records, size) {
+  function setData(records, size, opts = {}) {
     copyMenu.close();
     cellCopy.hide();
     totalSize = size;
+    complete = opts.complete ?? true;
     sortCol = -1;
     sortAsc = true;
     filterInput.value = '';
@@ -243,7 +254,9 @@ export function createResultsTable(ctx) {
       }),
     );
 
-    meta.textContent = `${totalSize} record${totalSize !== 1 ? 's' : ''} (showing ${records.length})`;
+    meta.textContent =
+      opts.summary ??
+      `${totalSize} record${totalSize !== 1 ? 's' : ''} (showing ${records.length})`;
     renderHeader();
     applyFilterAndSort();
   }
@@ -254,6 +267,7 @@ export function createResultsTable(ctx) {
     cols = [];
     rows = [];
     totalSize = 0;
+    complete = true;
     sortCol = -1;
     sortAsc = true;
     filterInput.value = '';

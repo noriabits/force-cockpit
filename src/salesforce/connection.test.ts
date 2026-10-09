@@ -15,6 +15,8 @@ let identityCallCount = 0;
 /** The most recently constructed connection, so tests can inspect its config. */
 let lastConnection: FakeConnection | null = null;
 const queryMock = vi.fn();
+const queryMoreMock = vi.fn();
+const toolingQueryMoreMock = vi.fn();
 
 interface FakeConnection {
   instanceUrl: string;
@@ -61,6 +63,10 @@ vi.mock('@jsforce/jsforce-node', async () => {
       query(soql: string) {
         return queryMock(soql);
       }
+      queryMore(locator: string) {
+        return queryMoreMock(locator);
+      }
+      tooling = { queryMore: (locator: string) => toolingQueryMoreMock(locator) };
     },
   };
 });
@@ -109,6 +115,8 @@ describe('ConnectionManager', () => {
     identityCallCount = 0;
     lastConnection = null;
     queryMock.mockReset();
+    queryMoreMock.mockReset();
+    toolingQueryMoreMock.mockReset();
     getConnectionOptionsMock.mockReset().mockResolvedValue({
       instanceUrl: 'https://example.my.salesforce.com',
       accessToken: 'TOKEN',
@@ -391,6 +399,34 @@ describe('ConnectionManager', () => {
 
       await expect(cm.query('SELECT Id FROM Account')).rejects.toThrow('expired');
       expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('queryMore() follows the locator on the API the first batch used', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      queryMoreMock.mockResolvedValueOnce({ records: [{ Id: 's' }] });
+      toolingQueryMoreMock.mockResolvedValueOnce({ records: [{ Id: 't' }] });
+
+      expect(await cm.queryMore('/q/01g-2000')).toEqual({ records: [{ Id: 's' }] });
+      expect(await cm.queryMore('/tq/01g-2000', true)).toEqual({ records: [{ Id: 't' }] });
+      expect(queryMoreMock).toHaveBeenCalledWith('/q/01g-2000');
+      expect(toolingQueryMoreMock).toHaveBeenCalledWith('/tq/01g-2000');
+    });
+
+    it('queryMore() retries once after renewing an expired session', async () => {
+      const cm = new ConnectionManager();
+      await cm.connect(org());
+      onIdentity = (conn) => {
+        conn.accessToken = 'TOKEN2';
+      };
+      queryMoreMock
+        .mockRejectedValueOnce(
+          Object.assign(new Error('expired'), { errorCode: 'INVALID_SESSION_ID' }),
+        )
+        .mockResolvedValueOnce({ records: [{ Id: '2' }] });
+
+      expect(await cm.queryMore('/q/01g-2000')).toEqual({ records: [{ Id: '2' }] });
+      expect(queryMoreMock).toHaveBeenCalledTimes(2);
     });
 
     it('propagates non-session errors without attempting a refresh', async () => {
