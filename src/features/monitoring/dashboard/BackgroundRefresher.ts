@@ -10,6 +10,7 @@ import {
   fireBreachNotifications,
   checkRowCountIncrease,
   fireRowCountNotifications,
+  orgLabelOf,
 } from './notifications';
 import { hasNotifications } from './notification-config';
 import type { HostMessage } from '../../../shared/protocol';
@@ -72,19 +73,17 @@ export class BackgroundRefresher {
     return Array.from(this._timers.keys());
   }
 
-  private currentOrgKey(): string {
-    return this.opts.connectionManager.getCurrentOrg()?.username ?? '';
-  }
-
   /** Fires threshold + row-count notifications; returns whether the row count grew. */
   private notify(
     cfg: MonitoringConfig,
     datasets: Array<{ data: number[] }>,
     totalRows: number,
   ): boolean {
-    const orgKey = this.currentOrgKey();
+    const org = this.opts.connectionManager.getCurrentOrg();
+    const orgKey = org?.username ?? '';
+    const orgLabel = orgLabelOf(org);
     fireBreachNotifications(
-      checkThresholds(cfg.id, cfg.name, datasets, cfg.valueFields, orgKey),
+      checkThresholds(cfg.id, cfg.name, datasets, cfg.valueFields, orgKey, orgLabel),
       this.opts.workspaceState,
     );
     const increases = checkRowCountIncrease(
@@ -93,6 +92,7 @@ export class BackgroundRefresher {
       cfg.name,
       totalRows,
       Boolean(cfg.notifyOnIncrease),
+      orgLabel,
     );
     fireRowCountNotifications(increases, this.opts.workspaceState, this.opts.outputChannel);
     return increases.length > 0;

@@ -12,6 +12,7 @@ import {
   pruneCooldowns,
   clearAllCooldownsFor,
   clearRowCountBaseline,
+  orgLabelOf,
 } from './notifications';
 
 const HIDDEN_BUILTINS_KEY = 'monitoring.hiddenBuiltins';
@@ -47,9 +48,11 @@ function fireQueryNotifications(
   notifyOnIncrease: boolean,
   deps: MonitoringRoutesDeps,
 ): boolean {
-  const orgKey = deps.connectionManager.getCurrentOrg()?.username ?? '';
+  const org = deps.connectionManager.getCurrentOrg();
+  const orgKey = org?.username ?? '';
+  const orgLabel = orgLabelOf(org);
   fireBreachNotifications(
-    checkThresholds(configId, configName, datasets, valueFields, orgKey),
+    checkThresholds(configId, configName, datasets, valueFields, orgKey, orgLabel),
     deps.workspaceState,
   );
   const increases = checkRowCountIncrease(
@@ -58,6 +61,7 @@ function fireQueryNotifications(
     configName,
     totalRows,
     notifyOnIncrease,
+    orgLabel,
   );
   fireRowCountNotifications(increases, deps.workspaceState, deps.outputChannel);
   return increases.length > 0;

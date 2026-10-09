@@ -80,6 +80,16 @@ function formatValueForNotification(value: number, format?: string): string {
   return value.toLocaleString();
 }
 
+/** What a notification shows for the org: the alias when there is one, else the username. */
+export function orgLabelOf(org: { alias?: string; username: string } | null): string {
+  return org ? org.alias || org.username : '';
+}
+
+/** `[Config · org]`, or `[Config]` when no org is known. */
+function notificationTag(configName: string, orgLabel: string): string {
+  return orgLabel ? `[${configName} · ${orgLabel}]` : `[${configName}]`;
+}
+
 export interface ThresholdBreach {
   message: string;
   cooldownKey: string;
@@ -91,6 +101,7 @@ export function checkThresholds(
   datasets: Array<{ data: number[] }>,
   valueFields: MonitoringValueField[],
   orgKey = '',
+  orgLabel = '',
 ): ThresholdBreach[] {
   const now = Date.now();
   const breaches: ThresholdBreach[] = [];
@@ -111,7 +122,7 @@ export function checkThresholds(
     const formatted = formatValueForNotification(worst, vf.format);
     const conditionWord = condition === 'above' ? 'exceeded' : 'fell below';
     breaches.push({
-      message: `[${configName}] ${vf.label || vf.field} ${conditionWord} threshold of ${vf.threshold} (current: ${formatted})`,
+      message: `${notificationTag(configName, orgLabel)} ${vf.label || vf.field} ${conditionWord} threshold of ${vf.threshold} (current: ${formatted})`,
       cooldownKey,
     });
   }
@@ -165,6 +176,7 @@ export function checkRowCountIncrease(
   configName: string,
   totalRows: number,
   notifyOnIncrease: boolean,
+  orgLabel = '',
 ): RowCountIncrease[] {
   let perOrg = previousRowCounts.get(configId);
   if (!perOrg) {
@@ -177,7 +189,7 @@ export function checkRowCountIncrease(
   const delta = totalRows - prev;
   return [
     {
-      message: `[${configName}] ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`,
+      message: `${notificationTag(configName, orgLabel)} ${delta} new record${delta === 1 ? '' : 's'} (${prev} → ${totalRows})`,
       cooldownKey: `${configId}:${ROW_COUNT_KEY_PART}:${orgKey}`,
     },
   ];

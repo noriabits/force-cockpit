@@ -270,6 +270,37 @@ describe('notifications', () => {
     });
   });
 
+  describe('org label in messages', () => {
+    it('orgLabelOf prefers the alias, falls back to the username, and is empty with no org', async () => {
+      const { orgLabelOf } = await load();
+      expect(orgLabelOf({ alias: 'uat', username: 'a@b.com' })).toBe('uat');
+      expect(orgLabelOf({ username: 'a@b.com' })).toBe('a@b.com');
+      expect(orgLabelOf(null)).toBe('');
+    });
+
+    it('tags a threshold breach and a row-count increase with the org', async () => {
+      const { checkThresholds, checkRowCountIncrease } = await load();
+      const [breach] = checkThresholds(
+        'c',
+        'Cases',
+        [{ data: [150] }],
+        [vf({ threshold: 100 })],
+        'a@b.com',
+        'uat',
+      );
+      expect(breach.message.startsWith('[Cases · uat] ')).toBe(true);
+      checkRowCountIncrease('c', 'a@b.com', 'Cases', 5, true, 'uat');
+      const [inc] = checkRowCountIncrease('c', 'a@b.com', 'Cases', 7, true, 'uat');
+      expect(inc.message.startsWith('[Cases · uat] 2 new records')).toBe(true);
+    });
+
+    it('keeps the plain [Config] tag when no org label is known', async () => {
+      const { checkThresholds } = await load();
+      const [breach] = checkThresholds('c', 'Cases', [{ data: [150] }], [vf({ threshold: 100 })]);
+      expect(breach.message.startsWith('[Cases] ')).toBe(true);
+    });
+  });
+
   describe('per-org snooze keys', () => {
     it('a threshold snoozed in one org still fires in another', async () => {
       const mod = await load();
