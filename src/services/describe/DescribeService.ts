@@ -30,6 +30,25 @@ export interface DescribeField {
   sortable: boolean;
   /** Usable in `GROUP BY`. */
   groupable: boolean;
+  /**
+   * Writable by the CURRENT user (FLS + field type). The Record Detail's
+   * edit gate. Absent on a projection cached before this field existed, which
+   * is why Record Detail always reads `describeSObjectFresh`.
+   */
+  updateable?: boolean;
+  /** A formula / roll-up — never writable, whatever `updateable` says. */
+  calculated?: boolean;
+  /** Writable on insert by the current user. */
+  createable?: boolean;
+  /** An auto-number — system-assigned, never writable. */
+  autoNumber?: boolean;
+  /**
+   * Field-level security applies to it. False for audit/system fields, Id and
+   * required fields, which every user can always read. Together with
+   * `updateable`/`createable` this tells "read-only for YOU" from "read-only by
+   * nature" (the Record Detail's FLS highlight).
+   */
+  permissionable?: boolean;
 }
 
 export interface DescribeGlobalProjection {
@@ -154,6 +173,11 @@ export class DescribeService {
         filterable: f.filterable ?? false,
         sortable: f.sortable ?? false,
         groupable: f.groupable ?? false,
+        updateable: f.updateable ?? false,
+        calculated: f.calculated ?? false,
+        createable: f.createable ?? false,
+        autoNumber: f.autoNumber ?? false,
+        permissionable: f.permissionable ?? false,
       })),
     };
     this.sobjectCache.set(key, projection);

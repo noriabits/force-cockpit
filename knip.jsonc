@@ -7,10 +7,11 @@
   "entry": [
     "src/extension.ts",
 
-    // The six browser bundles. KEEP IN STEP WITH `BUNDLES` in scripts/build.mjs.
+    // The seven browser bundles. KEEP IN STEP WITH `BUNDLES` in scripts/build.mjs.
     "src/features/utils/yaml-scripts/view/index.js",
     "src/features/monitoring/dashboard/view/index.js",
     "src/features/soql/query-editor/view/index.js",
+    "src/features/soql/record-detail/view/index.tsx",
     "src/webview/rest-call/index.tsx",
     "src/features/debug-logs/explorer/view/index.js",
     "src/features/overview/ask-ai/view/index.js",

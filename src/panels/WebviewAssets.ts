@@ -66,6 +66,7 @@ export class WebviewAssets {
     'media/modules/storage-bars.js',
     'dist/webview/rest-call.js',
     'media/modules/tabs.js',
+    'media/modules/sub-tabs.js',
     'media/modules/utils-subtab.js',
     'media/modules/accordion.js',
     'media/modules/filter.js',

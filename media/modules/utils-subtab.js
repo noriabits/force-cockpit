@@ -4,22 +4,17 @@
 
 (function () {
   // ── Sub-tab switching ───────────────────────────────────────────────────
-  const utilsSubTabBar = document.querySelector('.utils-sub-tab-bar');
+  const win = /** @type {any} */ (window);
+  const utilsSubTabBar = /** @type {HTMLElement | null} */ (
+    document.querySelector('.utils-sub-tab-bar')
+  );
   if (utilsSubTabBar) {
-    utilsSubTabBar.addEventListener('click', (e) => {
-      const btn = /** @type {HTMLElement} */ (e.target);
-      if (!btn.classList.contains('utils-sub-tab') || btn.classList.contains('active')) return;
-      const subTabId = btn.getAttribute('data-utils-tab');
-      if (!subTabId) return;
-      utilsSubTabBar
-        .querySelectorAll('.utils-sub-tab')
-        .forEach((t) => t.classList.remove('active'));
-      btn.classList.add('active');
-      document
-        .querySelectorAll('.utils-sub-tab-panel')
-        .forEach((p) => p.classList.remove('active'));
-      const panel = document.getElementById('utils-sub-tab-' + subTabId);
-      if (panel) panel.classList.add('active');
+    win.__createSubTabs({
+      bar: utilsSubTabBar,
+      tabClass: 'utils-sub-tab',
+      tabAttr: 'data-utils-tab',
+      panelClass: 'utils-sub-tab-panel',
+      panelPrefix: 'utils-sub-tab-',
     });
   }
 

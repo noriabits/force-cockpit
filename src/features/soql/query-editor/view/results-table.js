@@ -18,6 +18,8 @@ import { markExpandableCell, toggleCellExpansion } from '../../../shared/view/ta
  */
 const EXPANDABLE_LENGTH = 75;
 
+const DETAIL_LABEL = 'Show every field of this record (editable)';
+
 /**
  * @typedef {Object} ResultsTableCtx
  * @property {HTMLElement} thead
@@ -83,7 +85,14 @@ export function createResultsTable(ctx) {
   function cellHtml(cell) {
     if (cell == null) return '<em style="opacity:0.5">null</em>';
     if (isSalesforceRecordId(cell)) {
-      return `<a href="#" class="query-record-link" data-record-id="${escapeHtml(cell)}">${escapeHtml(cell)}</a>`;
+      const id = escapeHtml(cell);
+      // 🔍 sits after the link and only shows on row hover (view.css): a plain
+      // click keeps opening the record in Salesforce, as it always has.
+      return (
+        `<a href="#" class="query-record-link" data-record-id="${id}">${id}</a>` +
+        `<button type="button" class="query-record-detail" data-record-id="${id}" ` +
+        `data-tooltip="${DETAIL_LABEL}" aria-label="${DETAIL_LABEL}">🔍</button>`
+      );
     }
     // JSON.stringify output of relationship objects/subquery arrays. Re-wrap via
     // String() because isSalesforceRecordId's `value is string` predicate narrows
@@ -291,6 +300,13 @@ export function createResultsTable(ctx) {
       event.preventDefault();
       const recordId = target.getAttribute('data-record-id');
       if (recordId) vscode.postMessage({ type: 'openRecord', recordId });
+      return;
+    }
+    if (target.classList.contains('query-record-detail')) {
+      // Defined by the Record Detail's own bundle (another sub-tab of this
+      // tab); it switches to that sub-tab itself.
+      const recordId = target.getAttribute('data-record-id');
+      if (recordId) /** @type {any} */ (window).__showRecordDetail?.(recordId);
       return;
     }
     // An expanded cell is taller than it was, so the shared copy button is now

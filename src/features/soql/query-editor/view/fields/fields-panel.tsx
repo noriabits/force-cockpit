@@ -56,6 +56,7 @@ import { batch, computed, effect, signal } from '@preact/signals';
 import { queryObjectName } from '../tab-name';
 import { filterAndRankByMatch } from '../autocomplete/match-rank';
 import { addFieldEdit, removeFieldEdit, selectedFieldSet } from './select-clause';
+import { FLAG_COLUMNS, FlagCells, FlagHeaders } from '../../../../shared/view/field-flags';
 import { buildRowModel, type DescribeField, type DescribeObject, type Row } from './field-rows';
 
 const win = window as unknown as {
@@ -66,32 +67,6 @@ const win = window as unknown as {
 const MAX_OBJECT_ROWS = 200;
 /** One nesting level's indent, in px. */
 const INDENT_PX = 14;
-
-type FlagKey =
-  | 'required'
-  | 'custom'
-  | 'unique'
-  | 'externalId'
-  | 'filterable'
-  | 'sortable'
-  | 'groupable';
-
-/**
- * The boolean-flag columns, one source of truth for both the header row
- * (`FlagTh`) and every field row (`FieldRow`) — mapping over the same array
- * for both is what keeps the header and the cells from drifting out of sync
- * on a column add/reorder, rather than two hand-written lists of `<th>`s and
- * `<td>`s that have to be edited in lockstep.
- */
-const FLAG_COLUMNS: { key: FlagKey; header: string; tooltip: string }[] = [
-  { key: 'required', header: 'Req', tooltip: 'Required — cannot be left blank' },
-  { key: 'custom', header: 'Custom', tooltip: 'Custom field' },
-  { key: 'unique', header: 'Uniq', tooltip: 'Unique' },
-  { key: 'externalId', header: 'ExtId', tooltip: 'External Id' },
-  { key: 'filterable', header: 'Filt', tooltip: 'Usable in a SOQL WHERE clause' },
-  { key: 'sortable', header: 'Sort', tooltip: 'Usable in SOQL ORDER BY' },
-  { key: 'groupable', header: 'Grp', tooltip: 'Usable in SOQL GROUP BY' },
-];
 
 interface SObjectSummary {
   name: string;
@@ -417,27 +392,10 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
           </div>
         </td>
         <td class="query-fields-type">{row.field.type}</td>
-        {FLAG_COLUMNS.map((col) => (
-          <td key={col.key} class="query-fields-flag">
-            {row.field[col.key] ? '✓' : ''}
-          </td>
-        ))}
+        <FlagCells field={row.field} />
         {/* Last: a long value here must not push any other column to the right. */}
         <td class="query-fields-help">{row.field.inlineHelpText}</td>
       </tr>
-    );
-  }
-
-  /** A boolean-flag column header, e.g. Req/Custom/Filt — the abbreviation's full meaning rides the tooltip. */
-  function FlagTh({ label, tooltip }: { label: string; tooltip: string }) {
-    const ref = useRef<HTMLTableCellElement>(null);
-    useLayoutEffect(() => {
-      if (ref.current) win.__setTooltip(ref.current, tooltip);
-    }, [tooltip]);
-    return (
-      <th class="query-fields-th-flag" ref={ref}>
-        {label}
-      </th>
     );
   }
 
@@ -503,9 +461,7 @@ export function createFieldsPanel(ctx: FieldsPanelCtx) {
             <tr>
               <th class="query-fields-th-name">Name</th>
               <th class="query-fields-th-type">Type</th>
-              {FLAG_COLUMNS.map((col) => (
-                <FlagTh key={col.key} label={col.header} tooltip={col.tooltip} />
-              ))}
+              <FlagHeaders />
               {/* Last: a long value must not push any other column to the right. */}
               <th class="query-fields-th-help">Help Text</th>
             </tr>

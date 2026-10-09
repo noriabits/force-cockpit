@@ -41,6 +41,11 @@ function makeMock(overrides: Partial<ConnectionManager> = {}): ConnectionManager
           filterable: false,
           sortable: false,
           groupable: true,
+          updateable: true,
+          calculated: true,
+          createable: true,
+          autoNumber: true,
+          permissionable: true,
         },
       ],
     }),
@@ -114,6 +119,23 @@ describe('DescribeService', () => {
       sortable: false,
       groupable: false,
     });
+  });
+
+  it('projects the write/FLS flags, defaulting each to false', async () => {
+    const svc = new DescribeService(makeMock());
+    const result = await svc.describeSObject('Account');
+    const flags = {
+      updateable: true,
+      calculated: true,
+      createable: true,
+      autoNumber: true,
+      permissionable: true,
+    };
+    const industry = result.fields.find((f) => f.name === 'Industry');
+    expect(industry).toMatchObject(flags);
+    // Not writable unless describe says so — the Record Detail's edit gate.
+    const id = result.fields.find((f) => f.name === 'Id');
+    expect(id).toMatchObject(Object.fromEntries(Object.keys(flags).map((k) => [k, false])));
   });
 
   it('caches describeSObject per org + name', async () => {

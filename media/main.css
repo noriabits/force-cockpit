@@ -190,10 +190,13 @@ body {
   display: block;
 }
 
-/* Utils sub-tabs — shared with the Plugins tab's per-plugin sub-tabs, which
-   render the same shape from WebviewAssets._collectPluginAssets. The selectors
-   are paired rather than the plugin bar getting its own copy of the rules. */
+/* Sub-tab bars — Scripts (utils), SOQL (Query | Record Detail) and the
+   Plugins tab's per-plugin sub-tabs, which WebviewAssets._collectPluginAssets
+   renders in the same shape. One switcher drives all three
+   (media/modules/sub-tabs.js); the selectors are paired rather than each bar
+   getting its own copy of the rules. */
 .utils-sub-tab-bar,
+.soql-sub-tab-bar,
 .plugin-sub-tab-bar {
   display: flex;
   border-bottom: 1px solid var(--vscode-panel-border);
@@ -203,6 +206,7 @@ body {
 }
 
 .utils-sub-tab,
+.soql-sub-tab,
 .plugin-sub-tab {
   padding: 6px 14px;
   font-size: 12px;
@@ -220,22 +224,26 @@ body {
 }
 
 .utils-sub-tab:hover,
+.soql-sub-tab:hover,
 .plugin-sub-tab:hover {
   color: var(--vscode-foreground);
 }
 
 .utils-sub-tab.active,
+.soql-sub-tab.active,
 .plugin-sub-tab.active {
   color: var(--vscode-foreground);
   border-bottom-color: var(--vscode-focusBorder);
 }
 
 .utils-sub-tab-panel,
+.soql-sub-tab-panel,
 .plugin-sub-tab-panel {
   display: none;
 }
 
 .utils-sub-tab-panel.active,
+.soql-sub-tab-panel.active,
 .plugin-sub-tab-panel.active {
   display: block;
 }
@@ -1316,9 +1324,28 @@ td.fc-cell-expanded {
 .fc-tooltip--visible {
   opacity: 1;
 }
-/* Modifier for long-form content (e.g. a full table cell value) where a
+/* Modifier for long-form content (e.g. the Record Detail's FLS explanation) where a
    single-line tooltip would run off-screen. Opt in via `data-tooltip-wrap`. */
 .fc-tooltip--wrap {
   white-space: normal;
   max-width: 360px;
+}
+
+/* ── Describe flag columns (shared) ─────────────────────────────────────────
+   Rendered by src/features/shared/view/field-flags.tsx for both the SOQL field
+   browser and the Record Detail, so the rules live here rather than in
+   either feature's view.css. */
+/* The boolean-flag column headers (Req/Custom/Uniq/ExtId/Filt/Sort/Grp) — narrow and
+   uniform, since each holds only a checkmark or nothing. `white-space: nowrap`
+   is a safety net: a two-word label (the original "Ext Id") wraps at its
+   space onto a second line at this width, growing the sticky header taller
+   than every other one — a single-word abbreviation has no such break point. */
+.query-fields-th-flag {
+  width: 46px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.query-fields-flag {
+  text-align: center;
 }

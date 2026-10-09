@@ -92,6 +92,21 @@ describe('results table long values', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'openRecord', recordId });
     expect(cells[0].classList.contains('fc-cell-expanded')).toBe(false);
   });
+
+  it('hands a record id to the Record Detail from its 🔍, without opening the browser', () => {
+    const recordId = '001000000000001AAA';
+    const showDetail = vi.fn();
+    (window as unknown as { __showRecordDetail?: unknown }).__showRecordDetail = showDetail;
+    const { tbody, vscode } = setup([{ Id: recordId }]);
+
+    click(tbody.querySelector('.query-record-detail') as HTMLElement);
+
+    expect(showDetail).toHaveBeenCalledWith(recordId);
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'openRecord' }),
+    );
+    delete (window as unknown as { __showRecordDetail?: unknown }).__showRecordDetail;
+  });
 });
 
 describe('results table paging', () => {

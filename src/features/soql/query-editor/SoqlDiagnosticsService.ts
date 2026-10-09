@@ -2,6 +2,7 @@ import type { ConnectionManager } from '../../../salesforce/connection';
 import type { DescribeService } from '../../../services/describe/DescribeService';
 import { parseSoqlError, fromObjectOfQuery } from './soqlErrorParser';
 import { suggestNames } from './nameSuggest';
+import { FieldAccessService } from '../../../services/permissions/FieldAccessService';
 
 /**
  * Extra findings appended below the verbatim Salesforce error in the SOQL tab's
@@ -16,35 +17,8 @@ export interface SoqlDiagnostic {
   grantedBy?: string[];
 }
 
-/** One field as the Tooling API's FieldDefinition reports it (not FLS-filtered). */
-interface FieldDefinitionRow extends Record<string, unknown> {
-  QualifiedApiName: string;
-  Label: string | null;
-  DataType: string | null;
-}
-
-/**
- * One FieldPermissions row, standard (non-Tooling) API. `Parent` is the owning
- * PermissionSet. A `PermissionSetGroupId` on THAT record (not on the group itself)
- * means it is the hidden "aggregate" PermissionSet Salesforce auto-generates to
- * represent a Permission Set Group's combined access — `PermissionSetGroup` is
- * only populated in that case.
- */
-interface FieldPermissionRow extends Record<string, unknown> {
-  PermissionsRead: boolean;
-  Parent: {
-    Name: string;
-    IsOwnedByProfile: boolean;
-    PermissionSetGroupId: string | null;
-    PermissionSetGroup: { MasterLabel: string } | null;
-  };
-}
-
 /** API names are interpolated into SOQL string literals — validate, never escape. */
 const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/;
-
-/** Cap on how many permission-set names are listed in one diagnostic. */
-const MAX_GRANTS_SHOWN = 15;
 
 /**
  * Explains *why* a SOQL query failed, beyond what Salesforce says.
@@ -74,17 +48,14 @@ const MAX_GRANTS_SHOWN = 15;
  * your user") for the one case (FLS was just revoked) this feature exists to catch.
  */
 export class SoqlDiagnosticsService {
-  /** Full field lists from the Tooling API, keyed `${orgId}:${entity}`. */
-  private fieldDefinitionCache = new Map<string, FieldDefinitionRow[]>();
+  /** FieldDefinition (the full, non-FLS-filtered field list) + FieldPermissions grants. */
+  private readonly fieldAccess: FieldAccessService;
 
   constructor(
     private readonly connectionManager: ConnectionManager,
     private readonly describeService: DescribeService,
-  ) {}
-
-  /** Same trick as DescribeService: an org switch misses naturally, no invalidation hook. */
-  private orgKey(): string {
-    return this.connectionManager.getCurrentOrg()?.orgId ?? 'none';
+  ) {
+    this.fieldAccess = new FieldAccessService(connectionManager);
   }
 
   async diagnose(soql: string, errorMessage: string): Promise<SoqlDiagnostic[]> {
@@ -123,16 +94,15 @@ export class SoqlDiagnosticsService {
       ];
     }
 
-    const all = await this.allFields(entity);
+    const all = await this.fieldAccess.fieldDefinitions(entity);
 
     if (all) {
       const match = all.find((f) => f.QualifiedApiName.toLowerCase() === field.toLowerCase());
       if (match) {
         const describedAs = [match.Label, match.DataType].filter(Boolean).join(', ');
-        const grants = await this.fieldPermissionGrants(entity, match.QualifiedApiName);
-        const grantedBy = grants
-          ?.map((g) => this.describeGrantSource(g))
-          .slice(0, MAX_GRANTS_SHOWN);
+        const byField = await this.fieldAccess.grants(entity, [match.QualifiedApiName], 'read');
+        const grants = byField ? (byField.get(match.QualifiedApiName.toLowerCase()) ?? []) : null;
+        const grantedBy = grants ?? undefined;
 
         let adminAction: string;
         if (!grants) {
@@ -186,68 +156,6 @@ export class SoqlDiagnosticsService {
     } catch {
       return [];
     }
-  }
-
-  /**
-   * Every field defined on the entity, FLS or not. `null` when the Tooling query is
-   * unavailable (missing setup permission, no connection, unknown entity).
-   */
-  private async allFields(entity: string): Promise<FieldDefinitionRow[] | null> {
-    if (!SAFE_IDENTIFIER.test(entity)) return null;
-
-    const key = `${this.orgKey()}:${entity.toLowerCase()}`;
-    const cached = this.fieldDefinitionCache.get(key);
-    if (cached) return cached;
-
-    try {
-      const result = await this.connectionManager.toolingQuery<FieldDefinitionRow>(
-        `SELECT QualifiedApiName, Label, DataType FROM FieldDefinition ` +
-          `WHERE EntityDefinition.QualifiedApiName = '${entity}' LIMIT 2000`,
-      );
-      const rows = (result.records ?? []).filter((r) => !!r.QualifiedApiName);
-      if (rows.length === 0) return null;
-      this.fieldDefinitionCache.set(key, rows);
-      return rows;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Which permission sets / permission set groups grant Read on `entity.field`.
-   * `null` when the lookup itself failed (missing setup permission, no
-   * connection) — distinct from `[]`, which means the query succeeded and
-   * genuinely found no grant. Standard (non-Tooling) query — `FieldPermissions`
-   * isn't exposed over the Tooling API.
-   */
-  private async fieldPermissionGrants(
-    entity: string,
-    field: string,
-  ): Promise<FieldPermissionRow[] | null> {
-    if (!SAFE_IDENTIFIER.test(entity) || !SAFE_IDENTIFIER.test(field)) return null;
-
-    try {
-      const result = await this.connectionManager.query<FieldPermissionRow>(
-        `SELECT Parent.Name, Parent.IsOwnedByProfile, Parent.PermissionSetGroupId, ` +
-          `Parent.PermissionSetGroup.MasterLabel, PermissionsRead ` +
-          `FROM FieldPermissions ` +
-          `WHERE SObjectType = '${entity}' AND Field = '${entity}.${field}' ` +
-          `AND Parent.IsOwnedByProfile = false AND PermissionsRead = true ` +
-          `ORDER BY Parent.Name LIMIT 200`,
-      );
-      return result.records ?? [];
-    } catch {
-      return null;
-    }
-  }
-
-  /** "Sales_Ops_Extended (Permission Set)" / "Field_Access (Permission Set Group)". */
-  private describeGrantSource(row: FieldPermissionRow): string {
-    if (row.Parent.PermissionSetGroupId) {
-      const label = row.Parent.PermissionSetGroup?.MasterLabel ?? row.Parent.Name;
-      return `${label} (Permission Set Group)`;
-    }
-    return `${row.Parent.Name} (Permission Set)`;
   }
 
   // ── Relationships ───────────────────────────────────────────────────────────

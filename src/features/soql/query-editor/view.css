@@ -323,6 +323,26 @@
   text-decoration: underline;
 }
 
+/* 🔍 → Record Detail. Takes its space permanently (visibility, not display)
+   so hovering a row never reflows the cell; revealed for the whole row so it
+   can be reached without first hovering the exact Id. */
+.query-record-detail {
+  visibility: hidden;
+  margin-left: 4px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+#results-table tr:hover .query-record-detail,
+.query-record-detail:focus-visible {
+  visibility: visible;
+}
+
 /* SOQL query error box: the verbatim Salesforce message, then any diagnostics
    worked out host-side. The raw message keeps .error-box's pre-wrap so its caret
    line and column marker still line up; the diagnostics below it read as prose. */
@@ -636,17 +656,6 @@
   width: 80px;
 }
 
-/* The boolean-flag columns (Req/Custom/Uniq/ExtId/Filt/Sort/Grp) — narrow and
-   uniform, since each holds only a checkmark or nothing. `white-space: nowrap`
-   is a safety net: a two-word label (the original "Ext Id") wraps at its
-   space onto a second line at this width, growing the sticky header taller
-   than every other one — a single-word abbreviation has no such break point. */
-.query-fields-th-flag {
-  width: 46px;
-  text-align: center;
-  white-space: nowrap;
-}
-
 /* Last column, deliberately: a long Help Text value must not push any other
    column to the right — see the .query-fields-table comment above. Its width
    is intentionally smaller than before now that seven more columns share the
@@ -658,10 +667,6 @@
 .query-fields-table td {
   padding: 2px 4px;
   vertical-align: middle;
-}
-
-.query-fields-flag {
-  text-align: center;
 }
 
 .query-fields-tr:hover {

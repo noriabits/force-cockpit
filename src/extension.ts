@@ -12,6 +12,7 @@ import { createMonitoringDashboardFeature } from './features/monitoring/dashboar
 import { debugLogsFeature } from './features/debug-logs/explorer/index';
 import { askAiFeature } from './features/overview/ask-ai/index';
 import { soqlFeature } from './features/soql/query-editor/index';
+import { recordDetailFeature } from './features/soql/record-detail/index';
 import { Logger } from '@salesforce/core';
 import { loadConfig } from './utils/config';
 import { ensureUserFolders } from './utils/workspaceSetup';
@@ -150,6 +151,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const allFeatures = [
     ...featureRegistry,
     soqlFeature,
+    recordDetailFeature,
     yamlScriptsFeature,
     monitoringFeature.factory,
     executionLogsFeature,

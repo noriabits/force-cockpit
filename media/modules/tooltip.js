@@ -35,11 +35,12 @@
   function show(target) {
     const text = target.getAttribute('data-tooltip');
     if (!text) return;
+    // Wrap only: long-form text (e.g. the Record Detail's field-level security
+    // explanation) that a single-line tooltip would cut off. It used to ALSO
+    // suppress the tooltip unless the target itself was clipped — a rule for the
+    // results-table cells, which have since moved to click-to-expand. Folding a
+    // visibility rule into a styling opt-in silenced the first unclipped caller.
     const wrap = target.hasAttribute('data-tooltip-wrap');
-    // For long-form cell content, only bother popping a tooltip that's actually
-    // clipped — once a column widens enough to show everything, a tooltip
-    // repeating the same visible text is just noise.
-    if (wrap && target.scrollWidth <= target.clientWidth) return;
     const el = ensureEl();
     el.textContent = text;
     el.classList.toggle('fc-tooltip--wrap', wrap);

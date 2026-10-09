@@ -245,11 +245,21 @@
           <p class="card-description">
             Write and run SOQL queries against the connected org, with keyword highlighting,
             multiple query tabs, autocomplete, recent + saved history, a filterable and sortable
-            results table, CSV/JSON export, and FLS-aware error diagnostics.
+            results table, CSV/JSON export, and FLS-aware error diagnostics. See and edit every
+            field of a single record in Record Detail.
           </p>
         </section>
 
-        <!-- features:soql -->
+        <div class="soql-sub-tab-bar" id="soql-sub-tab-bar">
+          <button class="soql-sub-tab active" data-soql-tab="query">⚡ Query</button>
+          <button class="soql-sub-tab" data-soql-tab="record-detail">🔎 Record Detail</button>
+        </div>
+        <div class="soql-sub-tab-panel active" id="soql-sub-tab-query">
+          <!-- features:soql -->
+        </div>
+        <div class="soql-sub-tab-panel" id="soql-sub-tab-record-detail">
+          <!-- features:soql-record-detail -->
+        </div>
       </div>
       <!-- ═══════════════════ TAB: Monitoring ═══════════════════ -->
       <div class="tab-content" id="tab-monitoring" role="tabpanel">

@@ -17,28 +17,18 @@
   const vscode = win.__vscode;
 
   // ── Sub-tab switching ────────────────────────────────────────────────────
-  // Deliberately a second copy of utils-subtab.js's first block rather than a
-  // shared factory: it is ~15 lines and there are two consumers. If a third
-  // sub-tab bar appears, extract then.
+  // The switching itself is the shared sub-tabs.js; what is plugin-specific is
+  // that this bar is server-rendered with nothing pre-marked active.
   const bar = document.getElementById('plugin-sub-tab-bar');
   const emptyState = document.getElementById('plugins-empty-state');
 
-  function activate(/** @type {string} */ id) {
-    if (!bar) return;
-    bar.querySelectorAll('.plugin-sub-tab').forEach((t) => t.classList.remove('active'));
-    bar
-      .querySelector('.plugin-sub-tab[data-plugin-tab="' + CSS.escape(id) + '"]')
-      ?.classList.add('active');
-    document.querySelectorAll('.plugin-sub-tab-panel').forEach((p) => p.classList.remove('active'));
-    document.getElementById('plugin-sub-tab-' + id)?.classList.add('active');
-  }
-
   if (bar) {
-    bar.addEventListener('click', (e) => {
-      const btn = /** @type {HTMLElement} */ (e.target);
-      if (!btn.classList.contains('plugin-sub-tab') || btn.classList.contains('active')) return;
-      const id = btn.getAttribute('data-plugin-tab');
-      if (id) activate(id);
+    const { activate } = win.__createSubTabs({
+      bar,
+      tabClass: 'plugin-sub-tab',
+      tabAttr: 'data-plugin-tab',
+      panelClass: 'plugin-sub-tab-panel',
+      panelPrefix: 'plugin-sub-tab-',
     });
 
     const first = bar.querySelector('.plugin-sub-tab');

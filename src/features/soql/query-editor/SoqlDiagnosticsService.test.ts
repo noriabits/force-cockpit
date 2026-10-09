@@ -15,6 +15,8 @@ function field(name: string, extra: Record<string, unknown> = {}) {
 /** A FieldPermissions row granted via a standalone Permission Set. */
 function permissionSetGrant(name: string) {
   return {
+    // The grant lookup is batched and groups rows by Field, so every row names one.
+    Field: 'QuoteLineItem.AssetReferenceId__c',
     PermissionsRead: true,
     Parent: {
       Name: name,
@@ -28,6 +30,7 @@ function permissionSetGrant(name: string) {
 /** A FieldPermissions row granted via a Permission Set Group's aggregate permission set. */
 function permissionSetGroupGrant(groupLabel: string) {
   return {
+    Field: 'QuoteLineItem.AssetReferenceId__c',
     PermissionsRead: true,
     Parent: {
       Name: `X${Math.random()}`, // the aggregate's own name is never shown to the user
@@ -181,7 +184,7 @@ describe('SoqlDiagnosticsService', () => {
       const soql = query.mock.calls[0][0] as string;
       expect(soql).toContain('FROM FieldPermissions');
       expect(soql).toContain("SObjectType = 'QuoteLineItem'");
-      expect(soql).toContain("Field = 'QuoteLineItem.AssetReferenceId__c'");
+      expect(soql).toContain("Field IN ('QuoteLineItem.AssetReferenceId__c')");
       expect(soql).toContain('Parent.IsOwnedByProfile = false');
       expect(soql).toContain('PermissionsRead = true');
     });

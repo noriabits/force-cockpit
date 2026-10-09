@@ -39,6 +39,10 @@ const BUNDLES = [
     entry: 'src/features/soql/query-editor/view/index.js',
     out: 'dist/features/soql/query-editor/view.js',
   },
+  {
+    entry: 'src/features/soql/record-detail/view/index.tsx',
+    out: 'dist/features/soql/record-detail/view.js',
+  },
   { entry: 'src/webview/rest-call/index.tsx', out: 'dist/webview/rest-call.js' },
   {
     entry: 'src/features/debug-logs/explorer/view/index.js',

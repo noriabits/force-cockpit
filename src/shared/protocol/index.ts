@@ -2,3 +2,4 @@
 // `src/shared/protocol` on both sides; never reach into the files directly.
 export * from './messages';
 export * from './monitoring';
+export * from './recordDetail';

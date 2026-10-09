@@ -56,7 +56,7 @@ If the panel doesn't pick up an org change automatically (e.g. the file watcher 
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overview**   | Org info card, storage usage bars (Data Storage and File Storage), and an **Ask the AI** multi-turn chat card (with saved conversation history) for ad-hoc questions                                                                                    |
 | **Scripts**    | Your own YAML-defined scripts (Apex, shell, JS, AI-assisted, REST), organized into folders — plus two built-in utilities (Clone User, Reactivate OmniScript)                                                                                            |
-| **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, a browsable fields side panel, Tooling toggle, explained errors) with a filterable, sortable results table                                                                        |
+| **SOQL**       | SOQL query editor (keyword highlighting, tabs, history, autocomplete, a browsable fields side panel, Tooling toggle, explained errors) with a filterable, sortable results table, plus a **Record Detail** to view and edit every field of one record   |
 | **Monitoring** | SOQL-powered Chart.js dashboards loaded from YAML config files                                                                                                                                                                                          |
 | **REST**       | Call any REST API or Apex REST endpoint on the connected org, with request tabs, custom headers, request history/saved requests, and a color-coded status + headers + clickable-record-Id response                                                      |
 | **Debug Logs** | Set trace flags on any user (including the Automated Process user), then read the resulting Apex logs: filtered by category, summarised against the governor limits, with detected issues, an execution tree, a rated query-plan table, and AI analysis |
@@ -388,7 +388,7 @@ Check **Private** when creating or editing a script to save it to `force-cockpit
 
 ## SOQL Tab
 
-The SOQL tab provides a full-featured query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`).
+The SOQL tab has two sub-tabs: **⚡ Query**, a full-featured query editor (run with **Run Query** or `Cmd`/`Ctrl`+`Enter`), and **🔎 [Record Detail](#record-detail)**, which shows one record in full and lets you edit it.
 
 The editor supports:
 
@@ -420,7 +420,7 @@ The results table supports:
 - **Sort** — click any column header to sort; click again to reverse.
 - **Copy a column** — click the **⧉** button on a column header to pick a copy format for that column's values: **one per line** (`a`⏎`b`), **comma-separated** (`a,b`), **quoted list** (`'a', 'b'`) or **IN-clause** (`('a', 'b')`, ready to paste after a `WHERE … IN`). Every format copies the current view — so it respects the filter and the sort — with duplicates and blanks dropped.
 - **Copy a cell** — hover any cell and a **⧉** button appears at its left edge; one click copies that cell's full value, including the part cut off by the column width.
-- **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser.
+- **Open records** — any Salesforce record Id in a cell renders as a link that opens the record in your browser. Hover the row and a **🔍** appears next to the Id: click it to open that record in the [Record Detail](#record-detail) instead.
 - **Export** — **Export CSV** / **Export JSON** writes the current (filtered and sorted) view to a timestamped `query-result-…` file in your workspace root and opens it in the editor.
 
 ---
@@ -443,6 +443,19 @@ Either way, it works against your connected org:
 The proposed query appears with **▶ Run query**, which drops it into the current tab and runs it exactly as if you had typed it — including ticking **Tooling API** for you when the query needs it. The conversation above shows each check as it happens, so you can see exactly what was run against your org and what came back.
 
 Everything the assistant can do here is read-only: it looks up schema and runs `SELECT` queries, and can never modify data. Note that the sample rows described above are sent to the language model along with your question, the same way any data it queries itself is. Requires GitHub Copilot (see [AI Scripts](#ai-scripts) for model setup); **New chat** starts a fresh conversation, and switching orgs clears it automatically.
+
+### Record Detail
+
+The **🔎 Record Detail** sub-tab shows a single record with **every field your user can read**, including the ones missing from its page layout, and lets you edit it without leaving VS Code.
+
+- **Open a record** — paste a record Id (15 or 18 characters) and press **Show** (or `Enter`), or click the **🔍** next to any Id in the Query results. The object is worked out from the Id itself.
+- **Read it** — one row per field: label, API name, type, value, the same Required/Custom/Unique/External Id/Filter/Sort/Group flags as the field browser, and Help Text. Type in the filter box to narrow the fields by label, API name, type or value. **↗ Open in Salesforce** opens the record in your browser.
+- **Follow lookups** — a lookup's value (e.g. `OwnerId`) is a link that opens the related record here; **← Back** returns to where you came from.
+- **See what field-level security hides** — a field you could edit if you had the permission is marked **🔒 No edit access**, and fields you can't read at all are listed too, marked **🔒 No read access** (name and type only — their value can't be fetched). Hover the badge to see which permission sets or permission set groups would give you that access, or that none currently does. The header counts both. Fields that are read-only for everyone — formulas, auto-numbers, audit fields like Created Date — aren't marked. Listing hidden fields and naming permission sets need the **View Setup and Configuration** permission; without it you still see the read-only markers.
+- **Edit it** — fields you're allowed to change become inputs: a dropdown for picklists, a checkbox for booleans, date and date-time pickers, and text boxes for everything else. Formula fields and fields you can't write stay read-only. Changed rows are highlighted.
+- **Save safely** — **Review changes** shows each field's value before and after; **Confirm save** then sends **only the fields you changed**. Clearing a field sets it to empty (`null`) in Salesforce. On a production org or a protected sandbox you're asked to confirm first, and if Salesforce rejects the save (a validation rule, a required field) its own error message is shown and your edits are kept so you can fix them. Moving to another record with unsaved changes asks before discarding them.
+
+Related lists, creating and deleting records, and bulk edits aren't supported.
 
 ## Monitoring Tab
 

@@ -25,7 +25,16 @@ type ServiceSpec<S> =
 export function defineFeature<S>(
   options: {
     id: string;
+    /** Which `<!-- features:{tab} -->` placeholder in main.html the view lands in. */
     tab: string;
+    /**
+     * The `dist/features/{dir}/{id}` folder, when it differs from `tab`. A
+     * sub-tab gets its own placeholder through a distinct `tab` value
+     * (`soql-record-detail`), while its source — and therefore the folder
+     * copy-feature-assets writes to — stays under its parent tab
+     * (`src/features/soql/record-detail/`).
+     */
+    dir?: string;
     routes: (
       service: S,
       ctx: FeatureContext,
@@ -52,7 +61,7 @@ export function defineFeature<S>(
     const service = options.create
       ? options.create(ctx, onDispose)
       : new options.Service(ctx.connectionManager);
-    const base = path.join('dist', 'features', options.tab, options.id);
+    const base = path.join('dist', 'features', options.dir ?? options.tab, options.id);
     const dispose = options.dispose;
     if (dispose) onDispose(() => dispose(service));
     return {

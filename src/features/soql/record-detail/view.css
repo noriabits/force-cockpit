@@ -1,0 +1,244 @@
+/* Record Detail (SOQL tab → 🔎 Record Detail sub-tab). The flag-column
+   rules (.query-fields-th-flag / .query-fields-flag) are shared and live in
+   media/main.css. */
+
+.rec-detail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rec-detail-id-wrap {
+  flex: 1;
+  min-width: 0;
+  max-width: 360px;
+}
+
+.rec-detail-hint {
+  margin: 12px 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.rec-detail-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rec-detail-title {
+  font-weight: 600;
+}
+
+.rec-detail-subtle {
+  color: var(--vscode-descriptionForeground);
+  font-weight: normal;
+}
+
+.rec-detail-id {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+
+.rec-detail-open {
+  margin-left: auto;
+}
+
+.rec-detail-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rec-detail-filter {
+  flex: 1;
+  min-width: 0;
+}
+
+.rec-detail-count {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.rec-detail-table-wrap {
+  margin-top: 8px;
+  overflow: auto;
+  max-height: 70vh;
+}
+
+/* Fixed px columns, not width: 100% — same reasoning as the SOQL field
+   browser's table: stretched columns leave a short value far from its
+   neighbour. Help Text is last so a long one never pushes a column right. */
+.rec-detail-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.rec-detail-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--vscode-editorWidget-background);
+  text-align: left;
+  padding: 2px 4px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.rec-detail-th-label {
+  width: 170px;
+}
+
+.rec-detail-th-name {
+  width: 180px;
+}
+
+.rec-detail-th-type {
+  width: 80px;
+}
+
+.rec-detail-th-value {
+  width: 280px;
+}
+
+.rec-detail-th-help {
+  width: 180px;
+}
+
+.rec-detail-table td {
+  padding: 2px 4px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-detail-tr:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+/* Field-level security: writable by nature, but not for this user. A left
+   accent rather than a fill, so it never competes with the dirty-row tint. */
+.rec-detail-tr--fls-readonly td:first-child {
+  box-shadow: inset 3px 0 0 var(--vscode-editorWarning-foreground);
+}
+
+/* Hidden entirely: name and type only, so the row reads as absent. */
+.rec-detail-tr--fls-hidden {
+  color: var(--vscode-disabledForeground);
+}
+
+.rec-detail-tr--fls-hidden td:first-child {
+  box-shadow: inset 3px 0 0 var(--vscode-editorError-foreground);
+}
+
+.rec-detail-fls-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: help;
+  color: var(--vscode-editorWarning-foreground);
+  border: 1px solid var(--vscode-editorWarning-foreground);
+}
+
+.rec-detail-tr--fls-hidden .rec-detail-fls-badge {
+  color: var(--vscode-editorError-foreground);
+  border-color: var(--vscode-editorError-foreground);
+}
+
+.rec-detail-fls-summary {
+  font-size: 11px;
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.rec-detail-tr--dirty {
+  background-color: var(--vscode-diffEditor-insertedLineBackground, rgba(155, 185, 85, 0.15));
+}
+
+.rec-detail-name,
+.rec-detail-type {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-descriptionForeground);
+}
+
+.rec-detail-value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rec-detail-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+}
+
+.rec-detail-textarea {
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.rec-detail-follow {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-textLink-foreground);
+  white-space: nowrap;
+}
+
+.rec-detail-savebar {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  background: var(--vscode-editorWidget-background);
+  align-items: center;
+}
+
+.rec-detail-dirty-count {
+  font-size: 12px;
+}
+
+.rec-detail-review-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rec-detail-review {
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.rec-detail-review th,
+.rec-detail-review td {
+  text-align: left;
+  padding: 2px 10px 2px 0;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.rec-detail-before {
+  color: var(--vscode-descriptionForeground);
+  text-decoration: line-through;
+}
+
+.rec-detail-after {
+  color: var(--vscode-foreground);
+}

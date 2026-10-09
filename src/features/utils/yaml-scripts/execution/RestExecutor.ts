@@ -3,6 +3,7 @@ import type {
   RestCallResult,
   RestCallService,
 } from '../../../../services/rest/RestCallService';
+import { describeRestFailure } from '../../../../services/rest/describeRestFailure';
 import { throwIfAborted } from '../../../../utils/abort';
 import type { ExecuteScriptResult, YamlScript } from '../types';
 
@@ -70,7 +71,7 @@ export class RestExecutor {
         success,
         message: success
           ? `Request "${script.name}" returned ${result.status} ${result.statusText}.`
-          : describeFailure(result),
+          : describeRestFailure(result),
         debugLog: log.join('\n'),
         outputs: buildOutputs(result),
       };
@@ -123,23 +124,6 @@ function formatBody(body: unknown): string {
   } catch {
     return String(body);
   }
-}
-
-/**
- * Salesforce reports errors as `[{ message, errorCode }]`. Surfacing that message
- * verbatim is the difference between "Request failed: 400 Bad Request" and
- * "REQUIRED_FIELD_MISSING: Required fields are missing: [Name]".
- */
-function describeFailure(result: RestCallResult): string {
-  const status = `${result.status} ${result.statusText}`.trim();
-  const first = Array.isArray(result.body) ? result.body[0] : result.body;
-  if (first && typeof first === 'object') {
-    const record = first as Record<string, unknown>;
-    const message = typeof record.message === 'string' ? record.message : '';
-    const code = typeof record.errorCode === 'string' ? record.errorCode : '';
-    if (message) return code ? `${status} — ${code}: ${message}` : `${status} — ${message}`;
-  }
-  return `Request failed: ${status}`;
 }
 
 /**
