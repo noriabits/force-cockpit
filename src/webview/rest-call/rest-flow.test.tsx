@@ -282,24 +282,14 @@ describe('REST tab flow', () => {
     expect($('.action-cancel-btn')).toBeNull();
   });
 
-  // PRE-EXISTING DEFECT, pinned so the migration neither inherits it silently nor
-  // "fixes" it by accident. `dispatchSend` assigns `tab.opId` directly (it must —
-  // the tab is captured, and `setActiveOpId` targets whichever tab is active),
-  // but it does so AFTER `settleRun`'s renderBar and never re-renders. So the pill
-  // of a run that has just started shows no `⋯` until the next unrelated render.
-  // The Send button is painted correctly, so only the background-run marker is
-  // affected. Fix = one repaint in dispatchSend; deliberately NOT done here,
-  // because a test-only commit must not change behaviour.
-  it('DEFECT: a freshly dispatched run does not repaint its own pill', async () => {
+  // Regression: `dispatchSend` used to assign `tab.opId` after `settleRun`'s
+  // renderBar and never repaint, so a just-started run showed no `⋯` on its own
+  // pill until the next unrelated render.
+  it('marks a freshly dispatched run on its own pill', async () => {
     await mountRestTab();
     loadEmptyState();
 
     sendGet('/E1');
-    expect($$('.query-tab--running')).toHaveLength(0); // should be 1
-
-    // Any later render picks it up, which is why this is invisible in practice
-    // the moment the user touches anything.
-    click(btnByText('+'));
     expect($$('.query-tab--running')).toHaveLength(1);
   });
 

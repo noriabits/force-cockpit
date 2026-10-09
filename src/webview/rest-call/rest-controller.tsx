@@ -20,6 +20,7 @@
 
 import { signal, type Signal } from '@preact/signals';
 import { createTabStrip } from '../../features/shared/view/tab-strip';
+import { createTabRunner } from '../../features/shared/view/tab-runner';
 import { createHeadersEditor } from '../../features/shared/view/headers-editor';
 import { createRestCallHistory, type HeaderEntry, type RestHistoryEntry } from './history';
 import { createResponseView, type RestResponseData } from './response-view';
@@ -80,9 +81,12 @@ export function createRestController(state: RestState) {
   let responseView: ReturnType<typeof createResponseView>;
   let history: ReturnType<typeof createRestCallHistory>;
 
-  let opSeq = 0;
-  /** Requests in flight, by opId — the record history is written from once one settles. */
-  const pendingRuns = new Map<string, RestHistoryEntry>();
+  /** Requests in flight, by opId — history is written from the request AS SENT. */
+  const runs = createTabRunner<Record<string, unknown>, RestHistoryEntry>({
+    tabs: () => tabs,
+    vscode,
+    prefix: 'rest',
+  });
 
   /** The request as the live form holds it right now. Blank header rows dropped. */
   const getCurrent = (): RestHistoryEntry => ({
@@ -104,30 +108,9 @@ export function createRestController(state: RestState) {
     state.runningOpId.value = tab?.opId ?? null;
   }
 
-  function stopRun(opId: string | null | undefined) {
-    if (!opId) return;
-    pendingRuns.delete(opId);
-    vscode.postMessage({ type: 'cancelOperation', opId });
-    vscode.postMessage({ type: 'operationEnded', opId });
-  }
-
   function stopAllRuns() {
-    for (const opId of tabs.getRunningOpIds()) stopRun(opId);
-    tabs.clearAllOpIds();
+    runs.stopAll();
     syncSendState(tabs.getActive());
-  }
-
-  /**
-   * The tab a reply belongs to, or null when it has none — closed, cancelled or
-   * superseded — in which case the reply is dropped. The operation is ended
-   * either way, so the host does not stay busy over a reply nobody wanted.
-   */
-  function ownerOf(msg: { data?: { opId?: string } }) {
-    const opId = msg.data?.opId;
-    const tab = tabs.findByOpId(opId);
-    if (opId) vscode.postMessage({ type: 'operationEnded', opId });
-    if (!tab) return null;
-    return { tab, opId: opId as string };
   }
 
   /**
@@ -136,15 +119,9 @@ export function createRestController(state: RestState) {
    * this runs the user may have edited the form or switched to another tab.
    */
   function dispatchSend(tab: Record<string, unknown>, request: RestHistoryEntry) {
-    const opId = 'rest-' + ++opSeq;
+    runs.start(tab, request, (opId) => vscode.postMessage({ type: 'restCall', ...request, opId }));
     if (tab === tabs.getActive()) responseView.hideResponse();
-    tabs.settleRun(tab, null, null);
-    pendingRuns.set(opId, request);
-    tab.opId = opId;
     syncSendState(tabs.getActive());
-    vscode.postMessage({ type: 'restCall', ...request, opId });
-    // Lets the host count this as busy, so switching orgs mid-request warns first.
-    vscode.postMessage({ type: 'operationStarted', opId });
   }
 
   function send() {
@@ -169,7 +146,7 @@ export function createRestController(state: RestState) {
 
   function cancelActiveRun() {
     const activeTab = tabs.getActive();
-    stopRun(tabs.getActiveOpId());
+    runs.stop(tabs.getActiveOpId());
     tabs.setActiveOpId(null);
     syncSendState(activeTab);
   }
@@ -232,7 +209,7 @@ export function createRestController(state: RestState) {
         renderTabOutput(tab);
         syncSendState(tab);
       },
-      onTabClosed: (tab) => stopRun(tab.opId),
+      onTabClosed: (tab) => runs.stop(tab.opId),
     });
 
     history = createRestCallHistory({
@@ -260,25 +237,22 @@ export function createRestController(state: RestState) {
   /** The host reply handlers, registered by index.tsx once the tree is mounted. */
   const handlers = {
     restCallResult(msg: { data?: RestResponseData & { opId?: string } }) {
-      const owner = ownerOf(msg);
+      const owner = runs.claim(msg);
       if (!owner) return;
-      const { tab, opId } = owner;
+      const { tab, payload: sent } = owner;
       tabs.settleRun(tab, msg.data, null);
       // Record what was actually sent, not what the form holds now — the user may
       // have edited it, or switched to another tab entirely, while this was in flight.
-      const run = pendingRuns.get(opId);
-      pendingRuns.delete(opId);
-      if (run) history.recordRun(run);
+      if (sent) history.recordRun(sent);
       if (tab !== tabs.getActive()) return;
       responseView.showResponse(msg.data as RestResponseData);
       syncSendState(tab);
     },
     restCallError(msg: { data?: { opId?: string; message: string } }) {
-      const owner = ownerOf(msg);
+      const owner = runs.claim(msg);
       if (!owner) return;
-      const { tab, opId } = owner;
+      const { tab } = owner;
       tabs.settleRun(tab, null, msg.data!.message);
-      pendingRuns.delete(opId);
       if (tab !== tabs.getActive()) return;
       responseView.showError(msg.data!.message);
       syncSendState(tab);

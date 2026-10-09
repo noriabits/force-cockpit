@@ -9,10 +9,9 @@
 // `computed` (the strip's tab list is a plain array, not reactive) — so every
 // site that changes which run is visible calls `syncRunState`.
 //
-// Run tracking is hand-rolled, not `win.__startAction`: that binds one opId to
-// one button for the op's lifetime, but Execute is shared and reassigned across
-// tabs. opIds are `apex-N`, disjoint from `op-N`, `soql-N`, `rest-N`, `detail-N`
-// and `plugin-N`.
+// Run tracking is the shared tab runner (shared/view/tab-runner.ts), as in the
+// REST tab. opIds are `apex-N`, disjoint from `op-N`, `soql-N`, `rest-N`,
+// `detail-N` and `plugin-N`.
 //
 // TWO NON-PREACT COLLABORATORS: the history dropdown (its own render root) and
 // the Debug Logs tab's imperative log viewer, which owns the static log card in
@@ -29,6 +28,7 @@ import type {
   SavedApexSnippet,
 } from '../../../../shared/protocol';
 import { createTabStrip } from '../../../shared/view/tab-strip';
+import { createTabRunner } from '../../../shared/view/tab-runner';
 import { copyTextWithFeedback, openContentInEditor } from '../../../shared/view/output-actions';
 import { RECOMMENDED_PRESET_ID } from '../../explorer/debugLevelPresets';
 import { createLogViewer } from '../../explorer/view/log-viewer';
@@ -102,9 +102,8 @@ export function createApexController(state: ApexViewState) {
   let viewer: ReturnType<typeof createLogViewer> | null = null;
   let textarea: HTMLTextAreaElement;
 
-  let opSeq = 0;
   /** Code in flight, by opId — what history records once the run settles. */
-  const pendingRuns = new Map<string, string>();
+  const runs = createTabRunner<StripTab, string>({ tabs: () => tabs, vscode, prefix: 'apex' });
 
   const groups = () => (state.userDebugOnly.value ? USER_DEBUG_GROUPS : []);
 
@@ -137,30 +136,9 @@ export function createApexController(state: ApexViewState) {
     state.runningOpId.value = tab?.opId ?? null;
   }
 
-  function stopRun(opId: string | null | undefined) {
-    if (!opId) return;
-    pendingRuns.delete(opId);
-    vscode.postMessage({ type: 'cancelOperation', opId });
-    vscode.postMessage({ type: 'operationEnded', opId });
-  }
-
   function stopAllRuns() {
-    for (const opId of tabs.getRunningOpIds()) stopRun(opId);
-    tabs.clearAllOpIds();
+    runs.stopAll();
     syncRunState(tabs.getActive());
-  }
-
-  /**
-   * The tab a reply belongs to, or null when it has none — closed, cancelled or
-   * superseded — in which case the reply is dropped. The operation is ended
-   * either way, so the host does not stay busy over a reply nobody wanted.
-   */
-  function ownerOf(msg: { data?: { opId?: string } }) {
-    const opId = msg.data?.opId;
-    const tab = tabs.findByOpId(opId) as StripTab | undefined;
-    if (opId) vscode.postMessage({ type: 'operationEnded', opId });
-    if (!tab) return null;
-    return { tab, opId: opId as string };
   }
 
   /**
@@ -169,22 +147,17 @@ export function createApexController(state: ApexViewState) {
    * user may have edited the editor or switched tabs.
    */
   function dispatch(tab: StripTab, code: string, presetId: string) {
-    const opId = 'apex-' + ++opSeq;
-    tabs.settleRun(tab, null, null);
+    runs.start(tab, code, (opId) => {
+      const request: ExecuteAnonymousApexMessage = {
+        type: 'executeAnonymousApex',
+        opId,
+        code,
+        presetId,
+      };
+      vscode.postMessage(request);
+    });
     if (tab === tabs.getActive()) renderTabOutput(tab);
-    pendingRuns.set(opId, code);
-    // Through the strip, not `tab.opId =`, so the pill repaints with its ⋯ now.
-    tabs.setActiveOpId(opId, tab);
     syncRunState(tabs.getActive());
-    const request: ExecuteAnonymousApexMessage = {
-      type: 'executeAnonymousApex',
-      opId,
-      code,
-      presetId,
-    };
-    vscode.postMessage(request);
-    // Lets the host count this as busy, so switching orgs mid-run warns first.
-    vscode.postMessage({ type: 'operationStarted', opId });
   }
 
   function execute() {
@@ -214,7 +187,7 @@ export function createApexController(state: ApexViewState) {
     const tab = tabs.getActive() as StripTab;
     const opId = tabs.getActiveOpId();
     if (!opId) return;
-    stopRun(opId);
+    runs.stop(opId);
     tabs.settleRun(tab, null, { cancelled: true });
     renderTabOutput(tab);
     syncRunState(tab);
@@ -270,7 +243,7 @@ export function createApexController(state: ApexViewState) {
         renderTabOutput(tab);
         syncRunState(tab);
       },
-      onTabClosed: (tab: StripTab) => stopRun(tab.opId),
+      onTabClosed: (tab: StripTab) => runs.stop(tab.opId),
     });
 
     history = createApexHistory({
@@ -295,24 +268,21 @@ export function createApexController(state: ApexViewState) {
   /** The host reply handlers, registered by index.tsx once the tree is mounted. */
   const handlers = {
     anonymousApexExecuted(msg: { data?: AnonymousApexOutcome & { opId?: string } }) {
-      const owner = ownerOf(msg);
+      const owner = runs.claim(msg);
       if (!owner) return;
-      const { tab, opId } = owner;
+      const { tab, payload: code } = owner;
       tabs.settleRun(tab, msg.data, null);
       // Record what actually ran, not what the editor holds now.
-      const code = pendingRuns.get(opId);
-      pendingRuns.delete(opId);
       if (code !== undefined) history.recordRun(code);
       if (tab !== tabs.getActive()) return;
       renderTabOutput(tab, true);
       syncRunState(tab);
     },
     anonymousApexError(msg: { data?: { opId?: string; message: string } }) {
-      const owner = ownerOf(msg);
+      const owner = runs.claim(msg);
       if (!owner) return;
-      const { tab, opId } = owner;
+      const { tab } = owner;
       tabs.settleRun(tab, null, { message: msg.data!.message });
-      pendingRuns.delete(opId);
       if (tab !== tabs.getActive()) return;
       renderTabOutput(tab);
       syncRunState(tab);
