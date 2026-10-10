@@ -33,6 +33,7 @@ import type {
 } from '../../../../shared/protocol';
 import { createTabStrip } from '../../../shared/view/tab-strip';
 import { createTabRunner } from '../../../shared/view/tab-runner';
+import { buildComparison } from './record-compare';
 import { buildChanges, type RawValue } from './record-edits';
 import { dirtyCountOf, recordBaseName, sameRecordId } from './record-tab-name';
 
@@ -105,13 +106,98 @@ export function createRecordDetailController(state: RecordDetailState) {
 
   const dirtyCount = computed(() => dirtyCountOf(state.record.value, state.edits.value));
 
+  // ── Compare mode ─────────────────────────────────────────────────────────────
+  // Lines up 2–4 loaded records of ONE object. The signal bag mirrors only the
+  // ACTIVE tab, but Compare reads EVERY tab, so `tabsVersion` is bumped by `paint`
+  // (everything that changes a tab already calls it) and read by the computeds
+  // below — components never touch it, so no one can "clean up" the subscription.
+  // Known gap, accepted: dragging the active pill and renaming a tab call only
+  // `renderBar`, so a chip label can be stale until the next paint.
+  const MAX_COMPARED = 4;
+  const compare = signal<{
+    objectName: string;
+    /** Key prefix of the anchor Id — how an UNLOADED tab's object is guessed. */
+    keyPrefix: string;
+    /** The ticked tabs, by OBJECT identity: tabs carry no id and ⧉ Clone copies recordId. */
+    selected: DetailTab[];
+    onlyDifferences: boolean;
+    filter: string;
+  } | null>(null);
+  const tabsVersion = signal(0);
+
+  const keyPrefixOf = (recordId: string) =>
+    /^[a-zA-Z0-9]{15,18}$/.test(recordId.trim()) ? recordId.trim().slice(0, 3) : '';
+  const isLoading = (t: DetailTab) => !!t.opId && t.runKind === 'load';
+  const liveTabs = (): DetailTab[] => (tabs ? (tabs.getTabs() as DetailTab[]) : []);
+
+  /** Loaded and of this object, or unloaded and of this key prefix. */
+  function isCandidate(t: DetailTab, objectName: string, keyPrefix: string) {
+    if (t.results) return t.results.objectName === objectName;
+    return keyPrefixOf(t.recordId) === keyPrefix;
+  }
+
+  const canCompare = computed(() => {
+    void tabsVersion.value;
+    const rec = activeTab()?.results;
+    if (!rec) return false;
+    const prefix = rec.id.slice(0, 3);
+    return liveTabs().some((t) => t !== activeTab() && isCandidate(t, rec.objectName, prefix));
+  });
+
+  const compareView = computed(() => {
+    void tabsVersion.value;
+    const c = compare.value;
+    if (!c) return null;
+    const live = liveTabs();
+    // A pure derivation — never written back from a render (that would loop).
+    const selected = c.selected.filter((t) => live.includes(t));
+    const chips = live
+      .filter((t) => selected.includes(t) || isCandidate(t, c.objectName, c.keyPrefix))
+      .map((tab) => {
+        const rec = tab.results;
+        const wrong = !!rec && rec.objectName !== c.objectName;
+        const failed = !!tab.error && !isLoading(tab);
+        return {
+          tab,
+          name: tab.name,
+          selected: selected.includes(tab),
+          loading: isLoading(tab),
+          failed,
+          wrongObject: wrong ? rec.objectLabel : null,
+          error: failed ? tab.error : null,
+        };
+      });
+    const columns = selected.filter(
+      (t) => t.results && t.results.objectName === c.objectName && !t.error,
+    );
+    const comparison = buildComparison(
+      columns.map((t) => ({ name: t.name, record: t.results as RecordDetailData })),
+      { onlyDifferences: c.onlyDifferences, filter: c.filter },
+    );
+    return {
+      objectName: c.objectName,
+      onlyDifferences: c.onlyDifferences,
+      filter: c.filter,
+      chips,
+      /** 1:1 with `comparison.columns`. */
+      columnTabs: columns,
+      comparison,
+      atCap: selected.length >= MAX_COMPARED,
+    };
+  });
+
+  function exitCompare() {
+    compare.value = null;
+  }
+
   const currentOrgId = () => win().__currentOrg?.orgId ?? null;
   const activeTab = () => tabs.getActive() as DetailTab | undefined;
 
   /** Mirror `tab` into the signal bag. A no-op for a tab that is not on screen. */
   function paint(tab: DetailTab | undefined) {
-    if (!tab || tab !== activeTab()) return;
     batch(() => {
+      tabsVersion.value++; // some tab changed; the compare pane reads them all
+      if (!tab || tab !== activeTab()) return;
       state.idInput.value = tab.idDraft ?? tab.recordId;
       state.record.value = tab.results;
       state.edits.value = tab.edits ?? {};
@@ -132,15 +218,20 @@ export function createRecordDetailController(state: RecordDetailState) {
     paint(tab);
   }
 
-  function loadTab(tab: DetailTab) {
+  function loadTab(tab: DetailTab, opts?: { keepOutcome?: boolean }) {
     const recordId = tab.recordId.trim();
     if (!recordId) return;
     Object.assign(tab, { runKind: 'load', edits: {}, review: null, notice: '', idDraft: recordId });
     // `start` clears the tab's previous record and failure (settleRun), so the
     // record on screen goes the moment another is asked for — leaving it up would
     // show the PREVIOUS record, values and editors under the new request.
-    runs.start(tab, recordId, (opId) =>
-      post<LoadRecordDetailMessage>({ type: 'loadRecordDetail', opId, recordId }),
+    // `keepOutcome` is for a Compare reload: it refreshes what is on screen, so
+    // blanking every column for the round trip would be wrong there.
+    runs.start(
+      tab,
+      recordId,
+      (opId) => post<LoadRecordDetailMessage>({ type: 'loadRecordDetail', opId, recordId }),
+      opts?.keepOutcome ? { keepOutcome: true } : undefined,
     );
     paint(tab);
   }
@@ -175,6 +266,9 @@ export function createRecordDetailController(state: RecordDetailState) {
    * the active one only while that is still blank.
    */
   function open(rawId: string) {
+    // Up front: opening the active tab's own Id falls through to a re-load that
+    // would blank a compared column, and `switchTo` is a no-op there.
+    exitCompare();
     const recordId = (rawId || '').trim();
     if (!recordId) return void patchActive({ error: L().errorNoId });
     if (!win().__orgConnected) return void patchActive({ error: L().errorNotConnected });
@@ -269,15 +363,73 @@ export function createRecordDetailController(state: RecordDetailState) {
   /** Org edges and `cancelAllOperations`: every reply in flight belonged to the old org. */
   function stopAllRuns() {
     runs.stopAll();
+    exitCompare(); // half-loaded columns with no run behind them help no one
     paint(activeTab());
   }
 
   /** Both org edges: the tabs belong to the org that is gone. Connect also re-hydrates. */
   function resetForOrg(connected: boolean) {
     runs.stopAll();
+    exitCompare();
     hydratedFor = null;
     tabs.load({});
     if (connected) post({ type: 'loadRecordDetailState' });
+  }
+
+  /** ⇄ Compare: the active tab first, then loaded same-object tabs, never the same record twice. */
+  function openCompare() {
+    const active = activeTab();
+    const rec = active?.results;
+    if (!active || !rec) return;
+    const picks = [active];
+    for (const t of liveTabs()) {
+      const same = t.results?.objectName === rec.objectName;
+      const dup = picks.some((p) => sameRecordId(p.recordId, t.recordId));
+      if (picks.length < MAX_COMPARED && t !== active && same && !dup) picks.push(t);
+    }
+    compare.value = {
+      objectName: rec.objectName,
+      keyPrefix: rec.id.slice(0, 3),
+      selected: picks,
+      onlyDifferences: true,
+      filter: '',
+    };
+  }
+
+  function toggleCompareTab(tab: DetailTab) {
+    const c = compare.value;
+    if (!c) return;
+    if (c.selected.includes(tab)) {
+      compare.value = { ...c, selected: c.selected.filter((t) => t !== tab) };
+      if (isLoading(tab)) {
+        runs.stop(tab.opId);
+        tabs.setActiveOpId(null, tab);
+        tab.runKind = null;
+      }
+      return paint(tab);
+    }
+    if (c.selected.length >= MAX_COMPARED) return;
+    compare.value = { ...c, selected: [...c.selected, tab] };
+    if (!tab.results)
+      loadTab(tab); // idle or failed: fetch it through the runner
+    else paint(tab);
+  }
+
+  /** Re-fetch every compared record, columns staying up; one confirm if any is dirty. */
+  function reloadCompare() {
+    const picked = (compare.value?.selected ?? []).filter((t) => liveTabs().includes(t));
+    const go = () =>
+      picked.filter((t) => !isLoading(t)).forEach((t) => loadTab(t, { keepOutcome: true }));
+    const dirty = picked.some((t) => dirtyCountOf(t.results, t.edits ?? {}) > 0);
+    if (dirty) win().__confirmAction(L().confirmReloadDirty, go);
+    else go();
+  }
+
+  /** A column header: leave Compare AND focus that tab (`switchTo` is a no-op for the active one). */
+  function focusCompareTab(tab: DetailTab) {
+    exitCompare();
+    const index = tabs.findIndex((t: DetailTab) => t === tab);
+    if (index >= 0) tabs.switchTo(index);
   }
 
   function attach(els: { tabBarEl: HTMLElement }) {
@@ -298,6 +450,7 @@ export function createRecordDetailController(state: RecordDetailState) {
       baseNameFor: (tab: DetailTab) => recordBaseName(tab, L().blankTabName),
       isPristine: (tab: DetailTab) => !tab.recordId.trim(),
       onActivate: (tab: DetailTab) => {
+        exitCompare(); // every way the shown tab changes lands here
         maybeLoad(tab);
         paint(tab);
       },
@@ -403,6 +556,19 @@ export function createRecordDetailController(state: RecordDetailState) {
     confirmSave,
     cancel,
     cloneActiveTab: () => tabs.cloneActive(),
+    canCompare,
+    compareView,
+    openCompare,
+    exitCompare,
+    toggleCompareTab,
+    reloadCompare,
+    focusCompareTab,
+    setCompareOnlyDifferences: (onlyDifferences: boolean) => {
+      if (compare.value) compare.value = { ...compare.value, onlyDifferences };
+    },
+    setCompareFilter: (filter: string) => {
+      if (compare.value) compare.value = { ...compare.value, filter };
+    },
     onOrgConnected: () => resetForOrg(true),
     onOrgDisconnected: () => resetForOrg(false),
   };

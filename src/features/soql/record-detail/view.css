@@ -248,3 +248,84 @@
 .rec-detail-after {
   color: var(--vscode-foreground);
 }
+
+/* Compare mode (record-compare.tsx). The table reuses .rec-detail-table, whose
+   fixed px widths are per NAMED column and cannot survive a variable column
+   count — so the modifier switches to auto layout, and lets cells wrap: the
+   truncated tail of a value is exactly what differs. */
+.rec-detail-cmp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rec-detail-cmp-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rec-detail-cmp-chip[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rec-detail-cmp-chip--on {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-color: transparent;
+}
+
+.rec-detail-cmp-chip--loading {
+  font-style: italic;
+}
+
+.rec-detail-cmp-chip--excluded {
+  color: var(--vscode-editorError-foreground);
+  border-color: var(--vscode-editorError-foreground);
+}
+
+.rec-detail-cmp-summary {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.rec-detail-cmp-only {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rec-detail-table--cmp {
+  table-layout: auto;
+  width: 100%;
+}
+
+.rec-detail-table--cmp td {
+  white-space: normal;
+  word-break: break-word;
+  vertical-align: top;
+}
+
+.rec-detail-cmp-head {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.rec-detail-tr--cmp-differs td:first-child {
+  box-shadow: inset 3px 0 0 var(--vscode-editorWarning-foreground);
+}
+
+.rec-detail-cmp-cell--differs {
+  background-color: var(--vscode-diffEditor-removedLineBackground, rgba(255, 0, 0, 0.15));
+}

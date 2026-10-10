@@ -457,9 +457,11 @@ The **🔎 Record Detail** sub-tab shows a record with **every field your user c
 - **Edit it** — fields you're allowed to change become inputs: a dropdown for picklists, a checkbox for booleans, date and date-time pickers, and text boxes for everything else. Formula fields and fields you can't write stay read-only. Changed rows are highlighted.
 - **Save safely** — **Review changes** shows each field's value before and after; **Confirm save** then sends **only the fields you changed**. Clearing a field sets it to empty (`null`) in Salesforce. On a production org or a protected sandbox you're asked to confirm first, and if Salesforce rejects the save (a validation rule, a required field) its own error message is shown and your edits are kept so you can fix them. Unsaved changes are never discarded silently: re-loading the same record, or closing its tab, asks first.
 
+- **Compare** — **⇄ Compare** (in the record header) lines up to four records of the same object in one table. The record you're on plus other loaded ones of that object are picked for you; tick or untick others from the chips above the table. Tabs restored from your last session that look like the same object are listed too and load when you tick them — if one can't be loaded (deleted, or no longer visible to you) its chip says why and it's left out of the table. **Only differences** is on by default and the first column is the baseline the others are highlighted against. Click a column header to jump to that record's tab, **↻ Reload** to re-fetch them all. Compare is read-only.
+
 Your tabs are remembered **per org**, so reopening the panel — or switching back from another org — brings back the records you had open. They come back empty and load as you click them, and nothing you'd edited is kept.
 
-Related lists, creating and deleting records, bulk edits, and comparing two records aren't supported.
+Related lists, creating and deleting records, bulk edits, and comparing records of different objects aren't supported.
 
 ## Apex Tab
 

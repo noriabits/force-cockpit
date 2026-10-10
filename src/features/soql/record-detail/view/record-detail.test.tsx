@@ -726,4 +726,195 @@ describe('Record Detail', () => {
       expect($<HTMLInputElement>('.rec-detail-id-input').value).toBe(ACCOUNT_ID);
     });
   });
+
+  describe('compare', () => {
+    const THIRD_ID = '001000000000003AAC';
+    const FOURTH_ID = '001000000000004AAD';
+    const FIFTH_ID = '001000000000005AAE';
+
+    /** An Account with its own Id and Name — `account()` cannot override `id`. */
+    const acct = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+      ...account({ Id: id, Name: name, ...extra }),
+      id,
+    });
+
+    /** Open `rec` in a tab of its own and answer its load. */
+    function openRecord(rec: RecordDetailData) {
+      act(() => w.__showRecordDetail(rec.id));
+      deliver('recordDetailLoaded', { ...rec, opId: lastPost('loadRecordDetail').opId });
+    }
+
+    const compareBtn = () => $<HTMLButtonElement>('.rec-detail-compare');
+    const chips = () => $$('.rec-detail-cmp-chip').map((c) => (c.textContent || '').trim());
+    const headers = () => $$('.rec-detail-cmp-head').map((h) => (h.textContent || '').trim());
+    const comparedRows = () =>
+      $$('.rec-detail-table--cmp tbody tr').map((tr) => tr.querySelector('td')?.textContent || '');
+
+    it('is disabled with one record and enabled once a second of the object is loaded', () => {
+      loadRecord(account());
+      expect(compareBtn().getAttribute('aria-disabled')).toBe('true');
+      openRecord(globex());
+      expect(compareBtn().getAttribute('aria-disabled')).toBe('false');
+    });
+
+    it('does not count a record of another object', () => {
+      loadRecord(account());
+      openRecord(user());
+      click(clickTabAndReturn('Acme'));
+      expect(compareBtn().getAttribute('aria-disabled')).toBe('true');
+    });
+
+    function clickTabAndReturn(name: string) {
+      const label = $$('.query-tab-label').find((el) => (el.textContent || '').trim() === name);
+      return label as Element;
+    }
+
+    it('shows only the differing fields by default, and all of them when asked', () => {
+      loadRecord(account());
+      openRecord(globex());
+      click(compareBtn());
+      expect(headers()).toEqual(['Globex', 'Acme']);
+      expect(comparedRows().some((r) => r.startsWith('Name'))).toBe(true);
+      expect(comparedRows().some((r) => r.startsWith('Industry'))).toBe(false);
+
+      click($<HTMLInputElement>('.rec-detail-cmp-only input'));
+      expect(comparedRows().some((r) => r.startsWith('Industry'))).toBe(true);
+    });
+
+    it('lists a restored idle tab, and loads it when ticked', () => {
+      deliverState(
+        [
+          { recordId: ACCOUNT_ID, name: 'Acme' },
+          { recordId: OTHER_ID, name: 'Globex' },
+        ],
+        0,
+      );
+      deliver('recordDetailLoaded', { ...account(), opId: lastPost('loadRecordDetail').opId });
+      // Only one tab is loaded, yet the idle Account is already a candidate.
+      expect(compareBtn().getAttribute('aria-disabled')).toBe('false');
+      click(compareBtn());
+      expect(chips()).toEqual(['✓ Acme', 'Globex']);
+
+      click($$('.rec-detail-cmp-chip')[1]);
+      expect(lastPost('loadRecordDetail').recordId).toBe(OTHER_ID);
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+      expect(headers()).toEqual(['Acme', 'Globex']);
+    });
+
+    it('leaves a ticked record that fails to load out of the table, with its message', () => {
+      deliverState(
+        [
+          { recordId: ACCOUNT_ID, name: 'Acme' },
+          { recordId: OTHER_ID, name: 'Gone' },
+        ],
+        0,
+      );
+      deliver('recordDetailLoaded', { ...account(), opId: lastPost('loadRecordDetail').opId });
+      click(compareBtn());
+      click($$('.rec-detail-cmp-chip')[1]);
+      deliver('loadRecordDetailError', {
+        opId: lastPost('loadRecordDetail').opId,
+        message: 'NOT_FOUND: gone',
+      });
+
+      const bad = $('.rec-detail-cmp-chip--excluded');
+      expect(bad).not.toBeNull();
+      expect(tooltips.get(bad.parentElement as Element)).toContain('NOT_FOUND: gone');
+      // One loaded record is not a comparison: the table gives way to the notice.
+      expect(headers()).toEqual([]);
+      expect($('.rec-detail-cmp-note')?.textContent).toContain('at least two');
+    });
+
+    it('leaves a ticked record that turns out to be another object out of the table', () => {
+      deliverState(
+        [
+          { recordId: ACCOUNT_ID, name: 'Acme' },
+          { recordId: '001000000000009AAZ', name: 'Odd' },
+        ],
+        0,
+      );
+      deliver('recordDetailLoaded', { ...account(), opId: lastPost('loadRecordDetail').opId });
+      click(compareBtn());
+      click($$('.rec-detail-cmp-chip')[1]);
+      deliver('recordDetailLoaded', { ...user(), opId: lastPost('loadRecordDetail').opId });
+
+      expect($('.rec-detail-cmp-chip--excluded')).not.toBeNull();
+      expect(headers()).toEqual([]);
+      expect($('.rec-detail-cmp-note')).not.toBeNull();
+    });
+
+    it('caps the comparison at four records', () => {
+      loadRecord(account());
+      openRecord(globex());
+      openRecord(acct(THIRD_ID, 'Initech'));
+      openRecord(acct(FOURTH_ID, 'Umbrella'));
+      openRecord(acct(FIFTH_ID, 'Hooli'));
+      click(compareBtn());
+      expect(headers()).toHaveLength(4);
+      const fifth = $$('.rec-detail-cmp-chip').filter(
+        (c) => c.getAttribute('aria-disabled') === 'true',
+      );
+      expect(fifth).toHaveLength(1);
+      click(fifth[0]);
+      expect(headers()).toHaveLength(4);
+    });
+
+    it('never compares a record with a clone of itself', () => {
+      loadRecord(account());
+      click(btnByText('⧉ Clone'));
+      deliver('recordDetailLoaded', { ...account(), opId: lastPost('loadRecordDetail').opId });
+      openRecord(globex());
+      click(compareBtn());
+      expect(headers()).toHaveLength(2);
+    });
+
+    it('focuses a column header’s tab and exits — including the active one', () => {
+      loadRecord(account());
+      openRecord(globex()); // Globex is active
+      click(compareBtn());
+      click($$('.rec-detail-cmp-head')[1]); // Acme
+      expect($('.rec-detail-cmp')).toBeNull();
+      expect(activeTabName()).toBe('Acme');
+
+      click(compareBtn());
+      click($$('.rec-detail-cmp-head')[0]); // the active tab's own column
+      expect($('.rec-detail-cmp')).toBeNull();
+      expect(activeTabName()).toBe('Acme');
+    });
+
+    it('exits on a tab switch and on an org edge', () => {
+      loadRecord(account());
+      openRecord(globex());
+      click(compareBtn());
+      clickTab('Acme');
+      expect($('.rec-detail-cmp')).toBeNull();
+
+      click(compareBtn());
+      expect($('.rec-detail-cmp')).not.toBeNull();
+      featureHandlers['record-detail'].onOrgConnected();
+      expect($('.rec-detail-cmp')).toBeNull();
+    });
+
+    it('reloads every compared record behind one confirm, keeping the columns up', () => {
+      const asks: string[] = [];
+      loadRecord(account());
+      openRecord(globex());
+      setValue(row('Name').querySelector('input') as HTMLInputElement, 'Globex Inc');
+      click(compareBtn());
+
+      w.__confirmAction = (prompt: string) => {
+        asks.push(prompt); // declined
+      };
+      const before = postsOf('loadRecordDetail').length;
+      click(btnByText('↻ Reload'));
+      expect(asks).toHaveLength(1);
+      expect(postsOf('loadRecordDetail')).toHaveLength(before);
+
+      w.__confirmAction = (_p: string, ok: () => void) => ok();
+      click(btnByText('↻ Reload'));
+      expect(postsOf('loadRecordDetail')).toHaveLength(before + 2);
+      // The round trip does not blank the table.
+      expect(headers()).toEqual(['Globex', 'Acme']);
+    });
+  });
 });

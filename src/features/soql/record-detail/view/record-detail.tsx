@@ -9,7 +9,6 @@
 //
 // The paste button must stay IMMEDIATELY after the Id input: paste-buttons.js
 // resolves its target as `previousElementSibling`.
-import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import type {
   FieldAccessNote,
@@ -22,10 +21,11 @@ import { accessSummary, accessTooltip } from './access-note';
 import type { RecordDetailController, RecordDetailState } from './record-detail-controller';
 import { displayValue, isDirty, toRawValue } from './record-edits';
 import { FieldValue } from './field-editor';
+import { RecordCompare } from './record-compare-pane';
+import { Tooltip } from './tooltip';
 
 interface CockpitWindow {
   __vscode: { postMessage: (msg: unknown) => void };
-  __setTooltip: (el: Element, text: string) => void;
   RecordDetailLabels: Record<string, string>;
 }
 const win = () => window as unknown as CockpitWindow;
@@ -58,31 +58,6 @@ function matchesFilter(row: Row, rec: RecordDetailData, query: string): boolean 
   const { field } = row;
   const value = row.kind === 'field' ? displayValue(row.field, rec.values[field.name]) : '';
   return [field.label, field.name, field.type, value].some((s) => s.toLowerCase().includes(q));
-}
-
-function Tooltip({
-  text,
-  wrap,
-  class: className,
-  children,
-}: {
-  text: string;
-  /** Long text: let the tooltip wrap (`.fc-tooltip--wrap`) instead of running off-screen. */
-  wrap?: boolean;
-  class?: string;
-  children: ComponentChildren;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    win().__setTooltip(ref.current, text);
-    if (wrap) ref.current.setAttribute('data-tooltip-wrap', '');
-  }, [text, wrap]);
-  return (
-    <span ref={ref} class={className}>
-      {children}
-    </span>
-  );
 }
 
 /** 🔒 No edit access / 🔒 No read access — the reason and who would lift it ride the tooltip. */
@@ -137,7 +112,7 @@ function Toolbar({ state, controller }: Props) {
   );
 }
 
-function RecordHeader({ state }: Props) {
+function RecordHeader({ state, controller }: Props) {
   const rec = state.record.value;
   // Nothing loaded in this tab (never asked, loading, or the load failed).
   if (!rec) return null;
@@ -150,6 +125,16 @@ function RecordHeader({ state }: Props) {
       {accessSummary(rec.access, L()) && (
         <span class="rec-detail-fls-summary">{accessSummary(rec.access, L())}</span>
       )}
+      <Tooltip text={controller.canCompare.value ? '' : L().compareOnlyOne}>
+        <button
+          type="button"
+          class="btn btn-ghost rec-detail-compare"
+          aria-disabled={!controller.canCompare.value}
+          onClick={() => controller.canCompare.value && controller.openCompare()}
+        >
+          {L().compare}
+        </button>
+      </Tooltip>
       <button
         type="button"
         class="btn btn-ghost rec-detail-open"
@@ -356,13 +341,21 @@ export function RecordDetail({ state, controller }: Props) {
   return (
     <section class="card">
       <div class="query-tab-bar rec-detail-tab-bar" ref={tabBar} />
-      <Toolbar state={state} controller={controller} />
-      {state.error.value && <div class="error-box rec-detail-error">{state.error.value}</div>}
-      {state.notice.value && <div class="success-box rec-detail-notice">{state.notice.value}</div>}
-      {showHint && <p class="rec-detail-hint">{L().hint}</p>}
-      <RecordHeader state={state} controller={controller} />
-      <SaveBar state={state} controller={controller} />
-      <FieldTable state={state} controller={controller} />
+      {controller.compareView.value ? (
+        <RecordCompare controller={controller} />
+      ) : (
+        <>
+          <Toolbar state={state} controller={controller} />
+          {state.error.value && <div class="error-box rec-detail-error">{state.error.value}</div>}
+          {state.notice.value && (
+            <div class="success-box rec-detail-notice">{state.notice.value}</div>
+          )}
+          {showHint && <p class="rec-detail-hint">{L().hint}</p>}
+          <RecordHeader state={state} controller={controller} />
+          <SaveBar state={state} controller={controller} />
+          <FieldTable state={state} controller={controller} />
+        </>
+      )}
     </section>
   );
 }

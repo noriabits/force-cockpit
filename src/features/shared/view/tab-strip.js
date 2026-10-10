@@ -753,5 +753,7 @@ export function createTabStrip(ctx) {
     getRunningOpIds,
     clearAllOpIds,
     settleRun,
+    /** Every tab, in bar order. A shallow copy — the tab OBJECTS are live and must not be mutated. */
+    getTabs: () => tabs.slice(),
   };
 }
