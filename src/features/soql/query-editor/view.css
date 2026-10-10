@@ -789,3 +789,95 @@
   font-size: 11px;
   padding: 2px 6px;
 }
+
+/* 📊 Chart pane (visualize/chart-pane.tsx) */
+.query-chart-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.query-chart-header,
+.query-chart-controls,
+.query-chart-pin-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.query-chart-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.query-chart-control .text-input {
+  width: auto;
+  min-width: 120px;
+}
+
+.query-chart-values {
+  flex-wrap: wrap;
+}
+
+.query-chart-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+
+.query-chart-pin-form {
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background-color: var(--vscode-editorWidget-background);
+}
+
+.query-chart-pin-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.query-chart-canvas {
+  position: relative;
+  height: 340px;
+  min-width: 0;
+}
+
+.query-chart-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 0;
+}
+
+.query-chart-metric-number {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--vscode-foreground);
+}
+
+.query-chart-metric-label,
+.query-chart-note,
+.query-chart-empty {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.query-chart-pin-saved {
+  font-size: 12px;
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground));
+}
+
+.query-chart-pin-error {
+  font-size: 12px;
+  color: var(--vscode-errorForeground);
+}

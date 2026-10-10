@@ -2,7 +2,7 @@
 // config's value fields, decide whether there is data and produce the formatted
 // number + label strings. DOM-free so it can be unit-tested; the DOM writing
 // stays in the view (renderMetricInEl). Mirrors format-value.ts / table-sort.ts.
-import { formatValue } from './format-value';
+import { formatValue } from '../../../shared/view/chart/format-value';
 
 interface MetricDataset {
   label?: string;

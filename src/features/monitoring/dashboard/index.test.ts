@@ -249,6 +249,33 @@ describe('monitoring snooze persistence', () => {
     expect(savedData).toHaveProperty('other:0');
   });
 
+  it('forwards createOnly to the service, and false when the message omits it', async () => {
+    const createFeature = await loadFactory();
+    const cm = {
+      query: vi.fn(),
+      getCurrentOrg: () => ({ username: 'test@org.com' }),
+      getSandboxName: () => null,
+    } as any;
+    const ctx = fakeFeatureContext({ workspaceState: makeMemento() as any, connectionManager: cm });
+    const { factory } = createFeature(ctx);
+    const feature = factory(ctx);
+
+    const mockService = (await import('./MonitoringDashboardService')).MonitoringDashboardService;
+    const serviceInstance = (mockService as any).mock.results.at(-1).value;
+    serviceInstance.saveConfig.mockReturnValue({ id: 'soql/pinned', name: 'P', valueFields: [] });
+
+    const saveHandler = feature.routes['saveMonitoringConfig']!.handler;
+    await saveHandler({ config: { id: '' }, isPrivate: true, createOnly: true });
+    expect(serviceInstance.saveConfig).toHaveBeenLastCalledWith({ id: '' }, true, {
+      createOnly: true,
+    });
+
+    await saveHandler({ config: { id: 'a/b' }, isPrivate: false });
+    expect(serviceInstance.saveConfig).toHaveBeenLastCalledWith({ id: 'a/b' }, false, {
+      createOnly: false,
+    });
+  });
+
   it('prunes cooldowns for out-of-bounds field indexes on save', async () => {
     const futureTime = Date.now() + 3_600_000;
     const memento = makeMemento({

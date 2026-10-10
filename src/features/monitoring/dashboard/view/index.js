@@ -9,6 +9,7 @@ import { applyListFilter } from '../../../shared/view/list-filter';
 import { createChartRenderer } from './chart-rendering';
 import { createTableRenderer } from './table-rendering';
 import { createEditForm, drainOpenEditForms, resolveReply } from './edit-form';
+import { createPinnedCards, isPinReply } from './pinned-card';
 import { createDragOrder } from './drag-order';
 import { createQueryRunner } from './query-runner';
 import { createRefreshScheduler } from './refresh-scheduler';
@@ -121,6 +122,20 @@ import { hasNotifications } from '../notification-config';
   });
   const { loadConfigs, onConfigsLoaded, onDeleteResult, onDeleteError, showLoadError } =
     configLoader;
+  const pinnedCards = createPinnedCards({
+    grid,
+    getConfigs: () => configs,
+    buildViewCard,
+    triggerQuery,
+    getConnected: () => connected,
+    isPanelVisible: () => monitoringPanel.offsetParent !== null,
+    afterInsert: () => {
+      // A new folder only becomes a category pill when the bar is rebuilt;
+      // `render()` never fires onChange, so the current filter survives.
+      filterBar.render();
+      applyFilters();
+    },
+  });
 
   // ── Init ───────────────────────────────────────────────────────────────────
   addBtn.textContent = L.btnAddChart;
@@ -146,6 +161,7 @@ import { hasNotifications } from '../notification-config';
     (entries) => {
       if (entries[0].isIntersecting) {
         chartInstances.forEach((/** @type {any} */ chart) => chart.resize());
+        pinnedCards.flushPending();
         if (connected && pendingInitialLoad) {
           pendingInitialLoad = false;
           for (const cfg of configs) {
@@ -240,6 +256,7 @@ import { hasNotifications } from '../notification-config';
     chartInstances.forEach((/** @type {any} */ chart) => chart.destroy());
     chartInstances.clear();
     clearAllRefreshTimers();
+    pinnedCards.clearPending();
 
     grid.innerHTML = '';
 
@@ -363,6 +380,13 @@ import { hasNotifications } from '../notification-config';
    *   minted — echoed by `MessageRouter._dispatchFeatureRoute`.
    */
   function onSaveResult(data) {
+    // A chart pinned from the SOQL tab: no form here owns it, and the fallback
+    // below would rebuild the grid — see pinned-card.js.
+    if (isPinReply(data)) {
+      if (data.config) pinnedCards.insert(data.config);
+      else loadConfigs();
+      return;
+    }
     const reply = resolveReply(grid, data && data.requestId);
     const saved = data && data.config;
 
@@ -430,6 +454,8 @@ import { hasNotifications } from '../notification-config';
 
   /** @param {any} data */
   function onSaveError(data) {
+    // The SOQL tab shows a failed pin beside its own form.
+    if (isPinReply(data)) return;
     // Falls back to the grid-level box when nothing is waiting on this id — the
     // form was cancelled or rebuilt away — so the message is never swallowed.
     const reply = data && resolveReply(grid, data.requestId);

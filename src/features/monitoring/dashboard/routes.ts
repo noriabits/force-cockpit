@@ -143,7 +143,9 @@ export function buildMonitoringRoutes(deps: MonitoringRoutesDeps): Record<string
     },
     saveMonitoringConfig: {
       handler: async (msg) => {
-        const saved = service.saveConfig(msg.config as MonitoringConfig, msg.isPrivate as boolean);
+        const saved = service.saveConfig(msg.config as MonitoringConfig, msg.isPrivate as boolean, {
+          createOnly: Boolean(msg.createOnly),
+        });
         pruneCooldowns(
           saved.id,
           saved.valueFields,

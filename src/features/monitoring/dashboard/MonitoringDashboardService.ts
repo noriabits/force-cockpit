@@ -17,6 +17,24 @@ export type {
   MonitoringValueField,
 } from './types';
 
+/**
+ * Read a field by API path. A non-aggregate query returns a relationship as a
+ * nested record (`{ Owner: { Name: 'Ana' } }`), so `labelField: Owner.Name` read
+ * as a flat key would be blank on every row — exactly the column name the SOQL
+ * tab shows for it, and what a chart pinned from there carries. Aggregate
+ * results are already flat (`Name`, `expr0`), and a flat key is tried first so
+ * an alias that happens to contain a dot still wins.
+ */
+function readField(record: Record<string, unknown>, fieldPath: string): unknown {
+  if (fieldPath in record) return record[fieldPath];
+  let value: unknown = record;
+  for (const part of fieldPath.split('.')) {
+    if (value === null || typeof value !== 'object') return undefined;
+    value = (value as Record<string, unknown>)[part];
+  }
+  return value;
+}
+
 export class MonitoringDashboardService {
   private readonly parser = new MonitoringConfigParser();
   private readonly repo: MonitoringConfigRepository;
@@ -48,10 +66,10 @@ export class MonitoringDashboardService {
     const result = await this.connectionManager.query(soql);
     const records = (result.records ?? []) as Record<string, unknown>[];
 
-    const labels = records.map((r) => String(r[labelField] ?? ''));
+    const labels = records.map((r) => String(readField(r, labelField) ?? ''));
     const datasets = valueFields.map((vf) => ({
       label: vf.label,
-      data: records.map((r) => Number(r[vf.field] ?? 0)),
+      data: records.map((r) => Number(readField(r, vf.field) ?? 0)),
     }));
 
     return {
@@ -80,7 +98,7 @@ export class MonitoringDashboardService {
 
     const rows = records.map((r) =>
       fields.map((f) => {
-        const v = r[f];
+        const v = readField(r, f);
         return v === null || v === undefined ? '' : String(v);
       }),
     );
@@ -93,8 +111,12 @@ export class MonitoringDashboardService {
     };
   }
 
-  saveConfig(config: MonitoringConfig, isPrivate = false): MonitoringConfig {
-    return this.repo.saveConfig(config, isPrivate);
+  saveConfig(
+    config: MonitoringConfig,
+    isPrivate = false,
+    options: { createOnly?: boolean } = {},
+  ): MonitoringConfig {
+    return this.repo.saveConfig(config, isPrivate, options);
   }
 
   deleteConfig(id: string, isPrivate: boolean): void {

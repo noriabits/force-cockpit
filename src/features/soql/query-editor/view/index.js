@@ -19,6 +19,7 @@ import { createFieldsPanel } from './fields/fields-panel';
 import { MAX_RESULT_ROWS } from '../ai/requestMessage';
 import { canLoadMore, describeResultSize } from './paging';
 import { createQueryPaging } from './query-paging';
+import { createChartPane } from './visualize/chart-pane';
 
 const win = /** @type {any} */ (window);
 const vscode = win.__vscode;
@@ -102,6 +103,23 @@ const table = createResultsTable({
   counterEl,
   vscode,
   escapeHtml: win.__escapeHtml,
+  onViewChanged: () => chartPane.refresh(),
+});
+
+// 📊 Chart / 📌 Pin to Monitoring. Declared before `tabs`, whose construction
+// can already paint a result (and so call onViewChanged above).
+const chartPane = createChartPane({
+  mountEl: /** @type {HTMLElement} */ (document.getElementById('query-chart-pane')),
+  toggleBtn: /** @type {HTMLButtonElement} */ (document.getElementById('btn-query-chart')),
+  tableWrapperEl: /** @type {HTMLElement} */ (queryResults.querySelector('.table-wrapper')),
+  getView: () => table.getView(),
+  getRunContext: () => {
+    // The query that PRODUCED the rows — echoed onto the result — never the editor.
+    const tab = tabs.getActive();
+    const run = tab?.results;
+    return run ? { soql: run.soql, useToolingApi: !!run.useToolingApi, tabName: tab.name } : null;
+  },
+  isConnected: () => !!win.__orgConnected,
 });
 
 const errorView = createQueryErrorView({ errorEl: queryError });
@@ -344,6 +362,7 @@ win.__clearQueryResults = () => {
   describeCache.clear();
   aiPanel.onOrgChanged();
   fieldsPanel.onOrgChanged();
+  chartPane.reset();
 };
 
 // Runs alongside action-tracker.js's own handler — __onMessage keeps a Set of
@@ -522,6 +541,7 @@ win.__registerFeature('soql-query-editor', {
   onOrgConnected() {
     aiPanel.onOrgChanged();
     fieldsPanel.onOrgChanged();
+    chartPane.reset();
   },
 });
 
@@ -532,6 +552,7 @@ btnClearQuery.addEventListener('click', () => {
   hideResults();
   tabs.setActiveResults(null);
   fieldsPanel.syncFromQuery();
+  chartPane.reset();
 });
 
 btnCloneQuery.addEventListener('click', () => tabs.cloneActive());

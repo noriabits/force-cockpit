@@ -165,6 +165,7 @@
       <span class="query-match-count" id="query-match-count"></span>
       <span class="results-meta" id="results-meta"></span>
       <span class="query-toolbar-spacer"></span>
+      <button class="btn btn-ghost" id="btn-query-chart">📊 Chart</button>
       <button class="btn btn-ghost" id="btn-export-csv">Export CSV</button>
       <button class="btn btn-ghost" id="btn-export-json">Export JSON</button>
     </div>
@@ -174,6 +175,8 @@
         <tbody id="results-tbody"></tbody>
       </table>
     </div>
+    <!-- 📊 Chart pane: an empty mount container, rendered by visualize/chart-pane.tsx -->
+    <div id="query-chart-pane" class="query-chart-pane" style="display: none"></div>
   </div>
 
   <div id="query-error" class="error-box" style="display: none"></div>

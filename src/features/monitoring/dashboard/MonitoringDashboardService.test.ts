@@ -256,6 +256,40 @@ chartType: bar`,
 
       expect(result.datasets[0].data).toEqual([0]);
     });
+
+    it('reads a dotted relationship path from a nested record', async () => {
+      // A non-aggregate query returns Owner.Name nested — the column name the
+      // SOQL tab shows, and what a chart pinned from there carries.
+      const mockQuery = vi.fn().mockResolvedValue({
+        records: [
+          { attributes: { type: 'Opportunity' }, Owner: { Name: 'Ana' }, Amount: 5 },
+          { attributes: { type: 'Opportunity' }, Owner: null, Amount: 7 },
+        ],
+        totalSize: 2,
+      });
+
+      const service = makeService({}, makeMock({ query: mockQuery }));
+      const result = await service.runQuery('id', 'SELECT ...', 'Owner.Name', [
+        { field: 'Amount', label: 'Amount' },
+      ]);
+
+      expect(result.labels).toEqual(['Ana', '']);
+      expect(result.datasets[0].data).toEqual([5, 7]);
+    });
+
+    it('prefers a flat key containing a dot over walking the path', async () => {
+      const mockQuery = vi.fn().mockResolvedValue({
+        records: [{ 'Owner.Name': 'Flat', Owner: { Name: 'Nested' }, Cnt: 1 }],
+        totalSize: 1,
+      });
+
+      const service = makeService({}, makeMock({ query: mockQuery }));
+      const result = await service.runQuery('id', 'SELECT ...', 'Owner.Name', [
+        { field: 'Cnt', label: 'Count' },
+      ]);
+
+      expect(result.labels).toEqual(['Flat']);
+    });
   });
 
   describe('runTableQuery', () => {
@@ -286,6 +320,20 @@ chartType: bar`,
       ]);
 
       expect(result.rows).toEqual([['', '']]);
+    });
+
+    it('reads dotted relationship paths for every column', async () => {
+      const mockQuery = vi.fn().mockResolvedValue({
+        records: [{ Account: { Owner: { Name: 'Ana' } }, Amount: 100 }],
+        totalSize: 1,
+      });
+
+      const service = makeService({}, makeMock({ query: mockQuery }));
+      const result = await service.runTableQuery('id', 'SELECT ...', 'Account.Owner.Name', [
+        { field: 'Amount', label: 'Amount' },
+      ]);
+
+      expect(result.rows).toEqual([['Ana', '100']]);
     });
   });
 

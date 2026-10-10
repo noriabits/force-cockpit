@@ -63,6 +63,16 @@ export interface SaveMonitoringConfigMessage extends CorrelatedMessage {
    *  derived id. There is no separate `previousSource` field. */
   config: MonitoringConfigPayload;
   isPrivate: boolean;
+  /** Refuse to replace a file already at the target path. Set by a chart pinned
+   *  from the SOQL tab, which is always new; the edit form never sets it, since
+   *  saving onto its own file is how an edit works. */
+  createOnly?: boolean;
+  /** Who posted the save. Echoed onto the reply like the rest of the request, so
+   *  the monitoring webview — which receives every save reply — can tell a pin
+   *  from one of its own forms: a pin's card is inserted in place (the grid
+   *  rebuild its unowned-reply fallback does would tear out open edit forms),
+   *  and a pin's error is left to the SOQL tab, which shows it beside the form. */
+  origin?: 'soql-pin';
 }
 
 export interface DeleteMonitoringConfigMessage extends CorrelatedMessage {

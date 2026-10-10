@@ -5,7 +5,7 @@
 // wrapper / chart canvas), and the status + error-box area. Owns no state — the
 // renderers, drag wiring, refresh scheduler and the edit/refresh callbacks are
 // injected via ctx so it never reaches into the orchestrator's scope.
-import { CHART_TYPES_WITH_CANVAS } from './chart-rendering';
+import { CHART_TYPES_WITH_CANVAS } from '../../../shared/view/chart/chart-config';
 
 /**
  * @typedef {Object} CardBuilderCtx

@@ -160,6 +160,26 @@ describe('MonitoringConfigRepository', () => {
       ).toThrow(/already exists in the private folder/);
     });
 
+    it('createOnly refuses to overwrite an existing chart and leaves its file untouched', () => {
+      writeConfig(userPath, 'orders', 'my-chart.yaml', VALID_YAML);
+      expect(() => repo.saveConfig(baseConfig(), false, { createOnly: true })).toThrow(
+        /already exists in "orders"/,
+      );
+      const content = fs.readFileSync(path.join(userPath, 'orders', 'my-chart.yaml'), 'utf8');
+      expect(content).toBe(VALID_YAML);
+    });
+
+    it('createOnly saves normally when nothing is at the target path', () => {
+      const saved = repo.saveConfig(baseConfig(), true, { createOnly: true });
+      expect(saved.id).toBe('orders/my-chart');
+      expect(fs.existsSync(path.join(privatePath, 'orders', 'my-chart.yaml'))).toBe(true);
+    });
+
+    it('without createOnly, saving onto an existing file overwrites it (the edit path)', () => {
+      writeConfig(userPath, 'orders', 'my-chart.yaml', VALID_YAML);
+      expect(() => repo.saveConfig(baseConfig())).not.toThrow();
+    });
+
     it('exempts the config own old file during a privacy move (own-old-file)', () => {
       const saved = repo.saveConfig(baseConfig());
       // Toggling private with the same id must not be blocked by the duplicate check

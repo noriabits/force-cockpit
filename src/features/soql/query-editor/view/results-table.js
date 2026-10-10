@@ -29,13 +29,16 @@ const DETAIL_LABEL = 'Show every field of this record (editable)';
  * @property {HTMLElement} counterEl
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {(str: any) => string} escapeHtml
+ * @property {() => void} [onViewChanged] Called whenever what `getView()` returns
+ *   may have changed — new data, a filter keystroke, a sort, a clear. The 📊 Chart
+ *   pane hangs off this so it follows the table.
  */
 
 /**
  * @param {ResultsTableCtx} ctx
  */
 export function createResultsTable(ctx) {
-  const { thead, tbody, meta, filterInput, counterEl, vscode, escapeHtml } = ctx;
+  const { thead, tbody, meta, filterInput, counterEl, vscode, escapeHtml, onViewChanged } = ctx;
 
   /** @type {string[]} */
   let cols = [];
@@ -202,6 +205,7 @@ export function createResultsTable(ctx) {
 
     const loaded = complete ? '' : ' loaded';
     counterEl.textContent = q ? `${ordered.length} of ${rows.length}${loaded}` : '';
+    onViewChanged?.();
   }
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -233,6 +237,7 @@ export function createResultsTable(ctx) {
       tbody.innerHTML = '';
       // SELECT COUNT() returns no rows but a real totalSize.
       meta.textContent = totalSize > 0 ? `Count: ${totalSize}` : 'Query returned 0 records.';
+      onViewChanged?.();
       return;
     }
 

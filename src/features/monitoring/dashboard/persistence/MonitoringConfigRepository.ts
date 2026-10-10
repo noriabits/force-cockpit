@@ -19,8 +19,22 @@ interface RepositoryPaths {
 export class MonitoringConfigRepository {
   constructor(private readonly paths: RepositoryPaths) {}
 
-  saveConfig(config: MonitoringConfig, isPrivate = false): MonitoringConfig {
+  /**
+   * `createOnly` refuses to replace a file already at the target path. The edit
+   * form never sets it — saving onto its own file is how an edit works — but a
+   * chart pinned from the SOQL tab is always new, and without the guard a name
+   * colliding with an existing chart would silently overwrite it.
+   */
+  saveConfig(
+    config: MonitoringConfig,
+    isPrivate = false,
+    { createOnly = false }: { createOnly?: boolean } = {},
+  ): MonitoringConfig {
     const { basePath, slug, folder, id } = this.resolveSaveTarget(config, isPrivate);
+
+    if (createOnly && resolveYamlPath(basePath, folder, slug)) {
+      throw new Error(`A chart named "${config.name}" already exists in "${folder}".`);
+    }
 
     // Toggling the Private checkbox moves the config between shared/private
     const movingBetweenLocations =
