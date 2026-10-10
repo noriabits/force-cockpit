@@ -3,7 +3,8 @@ import { cloneName, deriveName, shouldRevertToAuto } from './tab-naming';
 import { resolveDropTarget } from './tab-drop-target';
 
 /**
- * The tab bar shared by the SOQL query tabs, the REST request tabs and the Apex tabs. Owns the
+ * The tab bar shared by the SOQL query tabs, the REST request tabs, the Apex tabs and the
+ * Record Detail's record tabs. Owns the
  * tab list, the active index, each tab's in-memory outcome, and each tab's
  * in-flight run — everything that is the same whatever a tab actually holds.
  *
@@ -30,6 +31,37 @@ import { resolveDropTarget } from './tab-drop-target';
 const REORDER_DEADZONE_PX = 6;
 
 /**
+ * Replace a pill's label with a text input for a rename, and report the trimmed
+ * value on commit (blur or Enter) or nothing on Escape. Module scope rather than
+ * a closure: it needs no tab state, and the factory below is at its line budget.
+ * @param {HTMLElement} label
+ * @param {string} current
+ * @param {{ onCommit: (name: string) => void, onCancel: () => void }} handlers
+ */
+function swapLabelForInput(label, current, { onCommit, onCancel }) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'query-tab-rename';
+  input.value = current;
+  // Selecting/typing in the rename input must never be read as a drag start.
+  const pill = label.parentElement;
+  if (pill) /** @type {HTMLElement} */ (pill).draggable = false;
+  label.replaceWith(input);
+  input.focus();
+  input.select();
+
+  input.addEventListener('blur', () => onCommit(input.value.trim()));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      onCancel();
+    }
+  });
+}
+
+/**
  * @typedef {Object} StripTab
  * @property {string} name
  * @property {boolean} autoName  Whether `name` tracks the tab's content automatically.
@@ -47,9 +79,9 @@ const REORDER_DEADZONE_PX = 6;
  * @property {HTMLElement} tabBarEl
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {import('../../../shared/protocol').TabPersistType} persistType
- *   Message type the tab list is persisted under. Narrowed to the three real names
- *   ('saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs') because this is the one place a
- *   message type is posted from a VARIABLE — the protocol union cannot see it.
+ *   Message type the tab list is persisted under. Narrowed to the four real names
+ *   ('saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs' | 'saveRecordDetailTabs') because this
+ *   is the one place a message type is posted from a VARIABLE — the protocol union cannot see it.
  * @property {() => any} newPayload  Payload for a brand-new tab.
  * @property {(record: any) => any} payloadOf  The persisted payload fields of a tab/record.
  * @property {() => any} readUI  Payload as the live controls currently hold it.
@@ -61,6 +93,12 @@ const REORDER_DEADZONE_PX = 6;
  * @property {string} addTooltip  Tooltip for the `+` button.
  * @property {(tab: any) => void} onActivate  Render the activated tab's outcome (or clear).
  * @property {(tab: any) => void} onTabClosed  Cancel the closed tab's run, if it had one.
+ * @property {(tab: any, proceed: () => void) => void} [beforeClose]  Veto hook: called instead of
+ *   closing, and closes only if it calls `proceed` (the Record Detail asks before discarding a
+ *   tab's unsaved edits). Omitted everywhere else, which closes immediately as it always did.
+ * @property {() => Record<string, unknown>} [persistContext]  Extra fields merged into the persist
+ *   message — the Record Detail stamps the orgId its tabs belong to, so a persist racing an org
+ *   switch is dropped by the host rather than written under the new org.
  */
 
 /** @param {TabStripCtx} ctx */
@@ -79,6 +117,8 @@ export function createTabStrip(ctx) {
     addTooltip,
     onActivate,
     onTabClosed,
+    beforeClose,
+    persistContext,
   } = ctx;
 
   /**
@@ -154,6 +194,7 @@ export function createTabStrip(ctx) {
         nameObject: t.nameObject,
       })),
       activeTab: activeIndex,
+      ...persistContext?.(),
     });
   }
 
@@ -293,38 +334,20 @@ export function createTabStrip(ctx) {
 
   /** @param {number} i @param {HTMLElement} label */
   function beginRename(i, label) {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'query-tab-rename';
-    input.value = tabs[i].name;
-    // Selecting/typing in the rename input must never be read as a drag start.
-    const pill = label.parentElement;
-    if (pill) /** @type {HTMLElement} */ (pill).draggable = false;
-    label.replaceWith(input);
-    input.focus();
-    input.select();
-
-    const commit = () => {
-      const name = input.value.trim();
-      // A non-empty name is a manual override; clearing it hands the tab back
-      // to auto-naming, re-derived below.
-      tabs[i].autoName = !name;
-      // Either way the tab stops tracking a saved entry's label: a typed name is
-      // the user's own and permanent, a cleared one hands back to the content.
-      tabs[i].nameObject = null;
-      if (name) tabs[i].name = name;
-      else tabs[i].name = deriveName(baseNameFor(tabs[i]), otherNames(i), tabs[i].name);
-      renderBar();
-      persist();
-    };
-    input.addEventListener('blur', commit);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        input.blur();
-      } else if (e.key === 'Escape') {
+    swapLabelForInput(label, tabs[i].name, {
+      onCommit: (name) => {
+        // A non-empty name is a manual override; clearing it hands the tab back
+        // to auto-naming, re-derived below.
+        tabs[i].autoName = !name;
+        // Either way the tab stops tracking a saved entry's label: a typed name is
+        // the user's own and permanent, a cleared one hands back to the content.
+        tabs[i].nameObject = null;
+        if (name) tabs[i].name = name;
+        else tabs[i].name = deriveName(baseNameFor(tabs[i]), otherNames(i), tabs[i].name);
         renderBar();
-      }
+        persist();
+      },
+      onCancel: renderBar,
     });
   }
 
@@ -393,9 +416,25 @@ export function createTabStrip(ctx) {
     persist();
   }
 
-  /** @param {number} i */
+  /**
+   * Close the tab at `i`, asking `beforeClose` first when the feature supplies one.
+   * The tab OBJECT is captured here and its index re-resolved in the callback: a
+   * confirmation is asynchronous, so by the time it is answered the tab may have
+   * moved (a drag, another close) or be gone.
+   * @param {number} i
+   */
   function closeTab(i) {
     if (tabs.length <= 1) return;
+    const tab = tabs[i];
+    if (!beforeClose) return doClose(i);
+    beforeClose(tab, () => {
+      const at = tabs.indexOf(tab);
+      if (at >= 0 && tabs.length > 1) doClose(at);
+    });
+  }
+
+  /** @param {number} i */
+  function doClose(i) {
     syncActiveFromUI();
     // Stop the closed tab's run before it disappears — otherwise its reply
     // would land with no owner and the toolbar would stay stuck on "Running…".
@@ -506,12 +545,15 @@ export function createTabStrip(ctx) {
   }
 
   /**
-   * Re-derive the active tab's name from its (just-synced) content, unless it
+   * Re-derive `tab`'s name from its content (the active tab by default), unless it
    * carries a manual name. Only re-renders the bar when the name actually changed,
    * so this stays cheap to call on every keystroke.
+   *
+   * Takes a tab because a name is not always known at edit time: the Record Detail
+   * only learns a record's name when its load lands, possibly in a background tab.
+   * @param {any} [tab]
    */
-  function refreshActiveName() {
-    const tab = active();
+  function refreshName(tab = active()) {
     if (!tab) return;
     // A label adopted from a saved entry only holds while the tab still matches
     // the base it was loaded for; past that the tab goes back to auto-naming.
@@ -521,7 +563,7 @@ export function createTabStrip(ctx) {
       tab.nameObject = null;
     }
     if (!tab.autoName) return;
-    const name = deriveName(baseNameFor(tab), otherNames(activeIndex), tab.name);
+    const name = deriveName(baseNameFor(tab), otherNames(tabs.indexOf(tab)), tab.name);
     if (name === tab.name) return;
     tab.name = name;
     renderBar();
@@ -545,7 +587,7 @@ export function createTabStrip(ctx) {
   /** Called when the user edits the active tab — keep the tab + storage in sync. */
   function onActiveEdited() {
     syncActiveFromUI();
-    refreshActiveName();
+    refreshName();
     persistDebounced();
   }
 
@@ -683,9 +725,21 @@ export function createTabStrip(ctx) {
   renderBar();
   loadActiveIntoUI();
 
+  /**
+   * Index of the first tab matching `pred`, or -1 — the Record Detail's
+   * dedup-by-record-Id (focus the tab that already holds a record instead of
+   * opening a second copy of it).
+   * @param {(tab: any) => boolean} pred
+   */
+  function findIndex(pred) {
+    return tabs.findIndex(pred);
+  }
+
   return {
     load,
     switchTo,
+    findIndex,
+    refreshName,
     cloneActive,
     getActive: active,
     setActiveResults,

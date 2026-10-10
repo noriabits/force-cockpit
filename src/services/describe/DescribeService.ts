@@ -49,6 +49,11 @@ export interface DescribeField {
    * nature" (the Record Detail's FLS highlight).
    */
   permissionable?: boolean;
+  /**
+   * The object's name field (`Name`, `CaseNumber`, `Subject`…). Record Detail
+   * names a record tab after its value. Absent on a projection cached before it existed.
+   */
+  nameField?: boolean;
 }
 
 export interface DescribeGlobalProjection {
@@ -178,6 +183,7 @@ export class DescribeService {
         createable: f.createable ?? false,
         autoNumber: f.autoNumber ?? false,
         permissionable: f.permissionable ?? false,
+        nameField: f.nameField ?? false,
       })),
     };
     this.sobjectCache.set(key, projection);

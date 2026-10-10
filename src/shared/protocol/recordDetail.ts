@@ -1,4 +1,4 @@
-// Fully-typed payloads for the Record Detail's two routes (SOQL tab →
+// Fully-typed payloads for the Record Detail's routes (SOQL tab →
 // 🔎 Record Detail sub-tab). Typed end to end from day one, as a new feature
 // should be; the rest of the protocol is migrated per feature (see
 // `monitoring.ts`).
@@ -29,6 +29,8 @@ export interface RecordDetailField {
   createable?: boolean;
   autoNumber?: boolean;
   permissionable?: boolean;
+  /** The object's name field (`Name`, `CaseNumber`, …) — what a record tab is named after. */
+  nameField?: boolean;
 }
 
 /**
@@ -88,4 +90,30 @@ export interface SaveRecordChangesMessage {
   objectName: string;
   recordId: string;
   changes: Record<string, unknown>;
+}
+
+/** One persisted record tab: the record it holds plus the shared tab strip's name fields. */
+export interface RecordDetailTab {
+  /** The 18-char Id once loaded; whatever was typed before that; `''` for a blank tab. */
+  recordId: string;
+  name: string;
+  autoName: boolean;
+  nameObject: string | null;
+}
+
+/**
+ * `recordDetailStateLoaded` — the CONNECTED org's tabs, stamped with the org they
+ * belong to so the webview can drop a reply that an org switch has overtaken.
+ *
+ * The persist going the other way (`saveRecordDetailTabs`) carries the same three
+ * fields plus that `orgId`, but has no interface of its own: the shared tab strip
+ * posts it from `ctx.persistType`, a variable, as it does for the other three
+ * strips (see `TabPersistType`). The webview stamps the orgId only once it knows
+ * whose tabs it is holding, and the host ignores a save without one — so a persist
+ * racing an org switch is dropped rather than written under the new org.
+ */
+export interface RecordDetailState {
+  orgId: string | null;
+  tabs: RecordDetailTab[];
+  activeTab: number;
 }

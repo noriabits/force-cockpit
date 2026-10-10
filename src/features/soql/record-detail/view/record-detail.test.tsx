@@ -39,7 +39,7 @@ function installGlobals() {
     );
   };
   w.__orgConnected = true;
-  w.__currentOrg = { sandboxName: null, isProtectedOrg: true };
+  w.__currentOrg = { orgId: ORG_ID, sandboxName: null, isProtectedOrg: true };
   w.__confirmIfSensitive = (_org: unknown, _label: string, onConfirmed: () => void) => {
     pendingConfirms.push(onConfirmed);
   };
@@ -56,7 +56,10 @@ async function mount() {
 
 // ── Fixture ──────────────────────────────────────────────────────────────────
 const ACCOUNT_ID = '001000000000001AAA';
+const ACCOUNT_ID_15 = '001000000000001';
+const OTHER_ID = '001000000000002AAB';
 const USER_ID = '005000000000001AAA';
+const ORG_ID = '00D000000000001EAA';
 
 function field(
   name: string,
@@ -96,7 +99,7 @@ function account(
     id: ACCOUNT_ID,
     fields: [
       field('Id', 'id', { updateable: false }),
-      field('Name', 'string'),
+      field('Name', 'string', { nameField: true }),
       field('Industry', 'picklist', { picklistValues: ['Tech', 'Retail'] }),
       field('AnnualRevenue', 'currency'),
       field('OwnerId', 'reference', { updateable: false, referenceTo: ['User'] }),
@@ -109,6 +112,24 @@ function account(
       OwnerId: USER_ID,
       ...values,
     },
+  };
+}
+
+/** A second Account, for the second tab. */
+function globex(): RecordDetailData {
+  return { ...account({ Name: 'Globex' }), id: OTHER_ID };
+}
+
+/** A record of another object with no name field — the Id-tail tab name. */
+function user(): RecordDetailData {
+  return {
+    objectName: 'User',
+    objectLabel: 'User',
+    id: USER_ID,
+    fields: [field('Id', 'id', { updateable: false })],
+    values: { Id: USER_ID },
+    access: {},
+    hiddenFields: [],
   };
 }
 
@@ -159,6 +180,33 @@ function loadRecord(rec: RecordDetailData, typed = rec.id) {
   click(btnByText('Show'));
   const { opId } = lastPost('loadRecordDetail');
   deliver('recordDetailLoaded', { ...rec, opId });
+}
+
+/** Tab labels, without the ` ⋯` the strip appends to a running tab. */
+const tabNames = () =>
+  $$('.query-tab-label').map((el) => (el.textContent || '').replace(/ ⋯$/, '').trim());
+const activeTabName = () =>
+  ($('.query-tab--active .query-tab-label')?.textContent || '').replace(/ ⋯$/, '').trim();
+
+function clickTab(name: string) {
+  const label = $$('.query-tab-label').find(
+    (el) => (el.textContent || '').replace(/ ⋯$/, '').trim() === name,
+  );
+  if (!label) throw new Error(`No tab named "${name}" (have: ${tabNames().join(', ')})`);
+  click(label);
+}
+
+/** The reply to the initial/hydration `loadRecordDetailState`, for this org by default. */
+function deliverState(
+  tabs: Array<{ recordId: string; name: string }>,
+  activeTab = 0,
+  orgId: string | null = ORG_ID,
+) {
+  deliver('recordDetailStateLoaded', {
+    orgId,
+    activeTab,
+    tabs: tabs.map((t) => ({ ...t, autoName: true, nameObject: null })),
+  });
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -217,6 +265,16 @@ describe('Record Detail', () => {
       expect($('.rec-detail-title')).toBeNull();
     });
 
+    it('reuses the blank tab after a failed attempt, instead of leaving it behind', () => {
+      click(btnByText('Show'));
+      expect($('.rec-detail-error').textContent).toBe('Enter a record Id.');
+
+      // Typing drops the stale message, so the tab is blank again and is reused.
+      loadRecord(account());
+      expect(tabNames()).toEqual(['Acme']);
+      expect($('.rec-detail-error')).toBeNull();
+    });
+
     it('refuses to load while disconnected', () => {
       w.__orgConnected = false;
       setValue($<HTMLInputElement>('.rec-detail-id-input'), ACCOUNT_ID);
@@ -236,26 +294,23 @@ describe('Record Detail', () => {
       expect($('.rec-detail-count').textContent).toBe('1 of 5');
     });
 
-    it('follows a lookup and comes back', () => {
+    it('follows a lookup into its own focused tab, leaving the first one loaded', () => {
       loadRecord(account());
       click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
 
       const follow = lastPost('loadRecordDetail');
       expect(follow.recordId).toBe(USER_ID);
-      deliver('recordDetailLoaded', {
-        objectName: 'User',
-        objectLabel: 'User',
-        id: USER_ID,
-        fields: [field('Id', 'id', { updateable: false })],
-        values: { Id: USER_ID },
-        access: {},
-        hiddenFields: [],
-        opId: follow.opId,
-      });
-      expect($('.rec-detail-id').textContent).toBe(USER_ID);
+      deliver('recordDetailLoaded', { ...user(), opId: follow.opId });
 
-      click(btnByText('← Back'));
-      expect(lastPost('loadRecordDetail').recordId).toBe(ACCOUNT_ID);
+      expect($('.rec-detail-id').textContent).toBe(USER_ID);
+      expect(tabNames()).toEqual(['Acme', 'User 001AAA']);
+      expect(activeTabName()).toBe('User 001AAA');
+
+      // The record we came from is still a tab — no reload to go back to it.
+      const before = postsOf('loadRecordDetail').length;
+      clickTab('Acme');
+      expect($('.rec-detail-id').textContent).toBe(ACCOUNT_ID);
+      expect(postsOf('loadRecordDetail')).toHaveLength(before);
     });
 
     it('opens the record in Salesforce on request', () => {
@@ -336,18 +391,34 @@ describe('Record Detail', () => {
       expect($('.rec-detail-dirty-count').textContent).toBe('1 unsaved change');
     });
 
-    it('asks before discarding unsaved edits to open another record', () => {
+    it('opens another record without asking — unsaved edits stay in their own tab', () => {
       let asked = 0;
-      w.__confirmAction = (_prompt: string, _ok: () => void) => {
+      w.__confirmAction = () => {
+        asked++;
+      };
+      loadRecord(account());
+      setValue(row('Name').querySelector('input') as HTMLInputElement, 'Changed');
+      click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
+      deliver('recordDetailLoaded', { ...user(), opId: lastPost('loadRecordDetail').opId });
+
+      expect(asked).toBe(0);
+      clickTab('Acme');
+      expect(row('Name').querySelector('input')?.value).toBe('Changed');
+    });
+
+    it('asks before re-loading the record on screen over unsaved edits', () => {
+      let asked = 0;
+      w.__confirmAction = () => {
         asked++; // declined
       };
       loadRecord(account());
       setValue(row('Name').querySelector('input') as HTMLInputElement, 'Changed');
       const before = postsOf('loadRecordDetail').length;
-      click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
+      click(btnByText('Show'));
 
       expect(asked).toBe(1);
       expect(postsOf('loadRecordDetail')).toHaveLength(before);
+      expect(row('Name').querySelector('input')?.value).toBe('Changed');
     });
   });
 
@@ -406,15 +477,245 @@ describe('Record Detail', () => {
     });
   });
 
-  describe('lifecycle', () => {
-    it('clears the record on both org edges', () => {
+  describe('record tabs', () => {
+    it('clears the record on screen the moment another is requested from 🔍', () => {
       loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+
+      // Before the reply: nothing of the previous record shows in the new tab.
+      expect($('.rec-detail-title')).toBeNull();
+      expect($('.rec-detail-id')).toBeNull();
+      expect($$('.rec-detail-name')).toEqual([]);
+
+      const { opId } = lastPost('loadRecordDetail');
+      deliver('recordDetailLoaded', { ...globex(), opId });
+      expect($('.rec-detail-id').textContent).toBe(OTHER_ID);
+    });
+
+    it('focuses the tab that already holds a record instead of opening a second one', () => {
+      loadRecord(account());
+      click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
+      deliver('recordDetailLoaded', { ...user(), opId: lastPost('loadRecordDetail').opId });
+      expect(tabNames()).toEqual(['Acme', 'User 001AAA']);
+
+      // The 15-char form of a record a tab already holds is the same record.
+      act(() => w.__showRecordDetail(ACCOUNT_ID_15));
+
+      expect(tabNames()).toEqual(['Acme', 'User 001AAA']);
+      expect(activeTabName()).toBe('Acme');
+      // Focused and re-fetched, never duplicated.
+      expect(lastPost('loadRecordDetail').recordId).toBe(ACCOUNT_ID);
+    });
+
+    it('reuses a blank tab, then opens each later record in its own tab', () => {
+      expect(tabNames()).toEqual(['Record']);
+      loadRecord(account());
+      expect(tabNames()).toEqual(['Acme']);
+
+      act(() => w.__showRecordDetail(OTHER_ID));
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+      expect(tabNames()).toEqual(['Acme', 'Globex']);
+    });
+
+    it('lands a background tab’s load in that tab, not the one on screen', () => {
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+      const pending = lastPost('loadRecordDetail');
+      // Back to the first tab while the second is still loading.
+      clickTab('Acme');
+      expect($('.rec-detail-id').textContent).toBe(ACCOUNT_ID);
+
+      deliver('recordDetailLoaded', { ...globex(), opId: pending.opId });
+
+      // The visible record is untouched; the background tab took the reply.
+      expect($('.rec-detail-id').textContent).toBe(ACCOUNT_ID);
+      expect(tabNames()).toEqual(['Acme', 'Globex']);
+      clickTab('Globex');
+      expect($('.rec-detail-id').textContent).toBe(OTHER_ID);
+    });
+
+    it('marks a tab still loading in the background', () => {
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+      clickTab('Acme');
+
+      expect($$('.query-tab-label').map((el) => el.textContent)).toEqual(['Acme', `${OTHER_ID} ⋯`]);
+    });
+
+    it('keeps each tab’s own edits and filter across a switch', () => {
+      loadRecord(account());
+      setValue(row('Name').querySelector('input') as HTMLInputElement, 'Acme Corp');
+      setValue($<HTMLInputElement>('.rec-detail-filter'), 'owner');
+
+      act(() => w.__showRecordDetail(OTHER_ID));
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+      expect($('.rec-detail-dirty-count')).toBeNull();
+      expect($<HTMLInputElement>('.rec-detail-filter').value).toBe('');
+
+      clickTab('Acme');
+      expect($('.rec-detail-dirty-count').textContent).toBe('1 unsaved change');
+      // The filter is this tab's too, so only the matching row is on screen.
+      expect($<HTMLInputElement>('.rec-detail-filter').value).toBe('owner');
+      expect($$('.rec-detail-name').map((c) => c.textContent)).toEqual(['OwnerId']);
+
+      setValue($<HTMLInputElement>('.rec-detail-filter'), '');
+      expect(row('Name').querySelector('input')?.value).toBe('Acme Corp');
+    });
+
+    it('asks before closing a tab with unsaved edits, and keeps it when declined', () => {
+      const asks: string[] = [];
+      w.__confirmAction = (prompt: string) => {
+        asks.push(prompt); // declined
+      };
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+      setValue(row('Name').querySelector('input') as HTMLInputElement, 'Globex Inc');
+
+      click($$('.query-tab--active .query-tab-close')[0]);
+      // Its own wording — closing discards the tab, not just the edits.
+      expect(asks).toEqual(['This tab has unsaved changes. Close it and discard them?']);
+      expect(tabNames()).toEqual(['Acme', 'Globex']);
+
+      // Accepted this time.
+      w.__confirmAction = (_p: string, ok: () => void) => ok();
+      click($$('.query-tab--active .query-tab-close')[0]);
+      expect(tabNames()).toEqual(['Acme']);
+    });
+
+    it('closes a clean tab with no question asked', () => {
+      let asked = 0;
+      w.__confirmAction = () => {
+        asked++;
+      };
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+
+      click($$('.query-tab--active .query-tab-close')[0]);
+      expect(asked).toBe(0);
+      expect(tabNames()).toEqual(['Acme']);
+    });
+
+    it('names a tab after the record, falling back to the object and Id tail', () => {
+      loadRecord(account());
+      expect(tabNames()).toEqual(['Acme']);
+
+      act(() => w.__showRecordDetail(USER_ID));
+      deliver('recordDetailLoaded', { ...user(), opId: lastPost('loadRecordDetail').opId });
+      // User has no name field in this fixture.
+      expect(tabNames()).toEqual(['Acme', 'User 001AAA']);
+    });
+
+    it('keeps a saved record visible while the PATCH is in flight, and renames the tab', () => {
+      loadRecord(account());
+      setValue(row('Name').querySelector('input') as HTMLInputElement, 'Acme Corp');
+      click(btnByText('Review changes'));
+      click(btnByText('Confirm save'));
+      act(() => pendingConfirms[0]());
+
+      // Unlike a load, a save does not blank the record it is saving.
+      expect($('.rec-detail-id').textContent).toBe(ACCOUNT_ID);
+
+      deliver('recordChangesSaved', {
+        ...account({ Name: 'Acme Corp' }),
+        opId: lastPost('saveRecordChanges').opId,
+      });
+      expect(tabNames()).toEqual(['Acme Corp']);
+    });
+  });
+
+  describe('persistence', () => {
+    it('persists nothing under an org until that org’s tabs have been loaded', () => {
+      loadRecord(account());
+      expect(postsOf('saveRecordDetailTabs').every((p) => p.orgId === undefined)).toBe(true);
+
+      deliverState([]);
+      loadRecord(globex());
+      expect(lastPost('saveRecordDetailTabs').orgId).toBe(ORG_ID);
+    });
+
+    it('persists the record tabs with their names once hydrated', () => {
+      deliverState([]);
+      loadRecord(account());
+
+      expect(lastPost('saveRecordDetailTabs')).toMatchObject({
+        orgId: ORG_ID,
+        activeTab: 0,
+        tabs: [{ recordId: ACCOUNT_ID, name: 'Acme', autoName: true, nameObject: null }],
+      });
+    });
+
+    it('restores tabs idle: only the activated one loads', () => {
+      deliverState(
+        [
+          { recordId: ACCOUNT_ID, name: 'Acme' },
+          { recordId: OTHER_ID, name: 'Globex' },
+        ],
+        0,
+      );
+
+      expect(tabNames()).toEqual(['Acme', 'Globex']);
+      // One request, for the restored active tab — not one per tab.
+      expect(postsOf('loadRecordDetail')).toHaveLength(1);
+      expect(lastPost('loadRecordDetail').recordId).toBe(ACCOUNT_ID);
+
+      clickTab('Globex');
+      expect(postsOf('loadRecordDetail')).toHaveLength(2);
+      expect(lastPost('loadRecordDetail').recordId).toBe(OTHER_ID);
+    });
+
+    it('drops a state reply for an org that is no longer connected', () => {
+      deliverState([{ recordId: ACCOUNT_ID, name: 'Acme' }], 0, '00Dsomeotherorg');
+
+      expect(tabNames()).toEqual(['Record']);
+      expect(postsOf('loadRecordDetail')).toEqual([]);
+    });
+
+    it('keeps work the user already started over the stored tabs', () => {
+      loadRecord(account());
+      deliverState([{ recordId: OTHER_ID, name: 'Globex' }], 0);
+
+      expect(tabNames()).toEqual(['Acme']);
+      // And from now on that is what is persisted for this org.
+      expect(lastPost('saveRecordDetailTabs')).toMatchObject({
+        orgId: ORG_ID,
+        tabs: [{ recordId: ACCOUNT_ID }],
+      });
+    });
+  });
+
+  describe('lifecycle', () => {
+    it('asks for the connected org’s tabs when the panel opens', () => {
+      expect(postsOf('loadRecordDetailState')).toHaveLength(1);
+    });
+
+    it('clears every tab on both org edges, and reloads the new org’s tabs on connect', () => {
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+      deliver('recordDetailLoaded', { ...globex(), opId: lastPost('loadRecordDetail').opId });
+
       featureHandlers['record-detail'].onOrgConnected();
       expect($('.rec-detail-title')).toBeNull();
+      expect(tabNames()).toEqual(['Record']);
+      expect(postsOf('loadRecordDetailState')).toHaveLength(2);
 
       loadRecord(account());
       featureHandlers['record-detail'].onOrgDisconnected();
       expect($('.rec-detail-title')).toBeNull();
+      expect(tabNames()).toEqual(['Record']);
+      // Disconnecting asks for nothing — there is no org to read tabs for.
+      expect(postsOf('loadRecordDetailState')).toHaveLength(2);
+    });
+
+    it('drops a reply that arrives after an org edge, and still ends its operation', () => {
+      loadRecord(account());
+      const pending = lastPost('loadRecordDetail');
+      featureHandlers['record-detail'].onOrgDisconnected();
+
+      deliver('recordDetailLoaded', { ...account(), opId: pending.opId });
+      expect($('.rec-detail-title')).toBeNull();
+      expect(postsOf('operationEnded').filter((p) => p.opId === pending.opId)).toHaveLength(2);
     });
 
     it('__showRecordDetail switches to SOQL → Record Detail and loads the Id', () => {

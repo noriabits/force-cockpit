@@ -1,5 +1,11 @@
 // The Record Detail's UI. Everything it does goes through the controller
-// (record-detail-controller.tsx); this file only renders the signal bag.
+// (record-detail-controller.tsx); this file only renders the signal bag, which
+// mirrors whichever record tab is active.
+//
+// ONE UNCONTROLLED LEAF: `.query-tab-bar` — tab-strip.js owns its children
+// outright, so it is rendered with no children and no `style` prop, and the
+// strip is built in a useLayoutEffect (never useEffect) so it exists before
+// index.tsx registers the host handlers and asks for the persisted tabs.
 //
 // The paste button must stay IMMEDIATELY after the Id input: paste-buttons.js
 // resolves its target as `previousElementSibling`.
@@ -98,9 +104,9 @@ function Toolbar({ state, controller }: Props) {
           class="text-input rec-detail-id-input"
           placeholder={L().idPlaceholder}
           value={state.idInput.value}
-          onInput={(e) => (state.idInput.value = e.currentTarget.value)}
+          onInput={(e) => controller.setIdDraft(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') controller.loadInput();
+            if (e.key === 'Enter') controller.showInput();
           }}
         />
         <button type="button" class="paste-btn" tabIndex={-1} title="Paste from clipboard">
@@ -111,9 +117,16 @@ function Toolbar({ state, controller }: Props) {
         type="button"
         class={loading ? 'btn btn-primary running' : 'btn btn-primary'}
         disabled={loading}
-        onClick={() => controller.loadInput()}
+        onClick={() => controller.showInput()}
       >
         {L().show}
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost rec-detail-clone"
+        onClick={() => controller.cloneActiveTab()}
+      >
+        {L().cloneTab}
       </button>
       {loading && (
         <button type="button" class="btn btn-ghost" onClick={() => controller.cancel()}>
@@ -124,21 +137,12 @@ function Toolbar({ state, controller }: Props) {
   );
 }
 
-function RecordHeader({ state, controller }: Props) {
+function RecordHeader({ state }: Props) {
   const rec = state.record.value;
+  // Nothing loaded in this tab (never asked, loading, or the load failed).
   if (!rec) return null;
-  const hasBack = state.backStack.value.length > 0;
   return (
     <div class="rec-detail-header">
-      {hasBack && (
-        <button
-          type="button"
-          class="btn btn-ghost rec-detail-back"
-          onClick={() => controller.back()}
-        >
-          {L().back}
-        </button>
-      )}
       <span class="rec-detail-title">
         {rec.objectLabel} <span class="rec-detail-subtle">({rec.objectName})</span>
       </span>
@@ -183,7 +187,7 @@ function FieldRow({ field, ...props }: Props & { field: RecordDetailField }) {
             original={original}
             raw={raw}
             onChange={(next) => props.controller.setEdit(field.name, next)}
-            onFollow={(id) => props.controller.follow(id)}
+            onFollow={(id) => props.controller.open(id)}
           />
           {note && <FlsBadge note={note} />}
         </span>
@@ -229,7 +233,7 @@ function FieldTable({ state, controller }: Props) {
           class="text-input rec-detail-filter"
           placeholder={L().filterPlaceholder}
           value={state.filter.value}
-          onInput={(e) => (state.filter.value = e.currentTarget.value)}
+          onInput={(e) => controller.setFilter(e.currentTarget.value)}
         />
         <span class="rec-detail-count">
           {visible.length} of {rows.length}
@@ -316,7 +320,7 @@ function SaveBar({ state, controller }: Props) {
               {L().cancel}
             </button>
           ) : (
-            <button type="button" class="btn btn-ghost" onClick={() => (state.review.value = null)}>
+            <button type="button" class="btn btn-ghost" onClick={() => controller.backToEditing()}>
               {L().backToEditing}
             </button>
           )}
@@ -342,8 +346,16 @@ function SaveBar({ state, controller }: Props) {
 
 export function RecordDetail({ state, controller }: Props) {
   const showHint = !state.record.value && !state.loadingOpId.value && !state.error.value;
+  const tabBar = useRef<HTMLDivElement>(null);
+  // useLayoutEffect, NEVER useEffect: index.tsx registers the host handlers and
+  // posts loadRecordDetailState right after render() returns, and both need the
+  // strip to exist by then.
+  useLayoutEffect(() => {
+    if (tabBar.current) controller.attach({ tabBarEl: tabBar.current });
+  }, []);
   return (
     <section class="card">
+      <div class="query-tab-bar rec-detail-tab-bar" ref={tabBar} />
       <Toolbar state={state} controller={controller} />
       {state.error.value && <div class="error-box rec-detail-error">{state.error.value}</div>}
       {state.notice.value && <div class="success-box rec-detail-notice">{state.notice.value}</div>}

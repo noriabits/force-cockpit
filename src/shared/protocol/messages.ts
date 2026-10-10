@@ -78,6 +78,7 @@ export type WebviewToHostType =
   | 'loadMonitoringConfigs'
   | 'loadQueryState'
   | 'loadRecordDetail'
+  | 'loadRecordDetailState'
   | 'loadRestCallState'
   | 'loadYamlScripts'
   | 'notifyApexLogFailure'
@@ -116,6 +117,7 @@ export type WebviewToHostType =
   | 'saveMonitoringPositions'
   | 'saveQueryTabs'
   | 'saveRecordChanges'
+  | 'saveRecordDetailTabs'
   | 'saveRestCallSavedRequests'
   | 'saveRestCallTabs'
   | 'saveSavedQueries'
@@ -249,6 +251,10 @@ export type HostToWebviewType =
   | 'reactivateOmniscriptResult'
   | 'recordChangesSaved'
   | 'recordDetailLoaded'
+  | 'recordDetailStateError'
+  | 'recordDetailStateLoaded'
+  | 'recordDetailTabsError'
+  | 'recordDetailTabsSaved'
   | 'refreshOrgDone'
   | 'releaseInfo'
   | 'reloadYamlScripts'
@@ -327,13 +333,13 @@ export interface ErrorPayload {
 }
 
 /**
- * The three tab strips persist through the shared `createTabStrip`, which posts
+ * The four tab strips persist through the shared `createTabStrip`, which posts
  * `{ type: ctx.persistType }` — a *variable*, not a literal. Narrowing it here
  * keeps that one dynamic post inside the union instead of escaping it.
  */
 export type TabPersistType = Extract<
   WebviewToHostType,
-  'saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs'
+  'saveQueryTabs' | 'saveRestCallTabs' | 'saveApexTabs' | 'saveRecordDetailTabs'
 >;
 
 // NOTE: no runtime constants are exported here on purpose. The webview message

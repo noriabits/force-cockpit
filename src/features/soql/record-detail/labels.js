@@ -3,12 +3,15 @@ window.RecordDetailLabels = {
   idPlaceholder: 'Record Id (15 or 18 characters)',
   show: 'Show',
   cancel: '✕ Cancel',
-  back: '← Back',
+  cloneTab: '⧉ Clone',
+  blankTabName: 'Record',
+  newTabTooltip: 'New record tab',
   openInSalesforce: '↗ Open in Salesforce',
   filterPlaceholder: 'Filter fields by label, API name, type or value…',
   hint:
     'Paste a record Id to see every field you can read — including ones missing from the page ' +
-    'layout — and edit the ones you can write. Or click 🔍 next to an Id in the Query results.',
+    'layout — and edit the ones you can write. Or click 🔍 next to an Id in the Query results. ' +
+    'Each record opens in its own tab, and your tabs come back next time you open this org.',
   oneChange: '1 unsaved change',
   manyChanges: '{n} unsaved changes',
   reviewChanges: 'Review changes',
@@ -18,6 +21,7 @@ window.RecordDetailLabels = {
   backToEditing: 'Back to editing',
   confirmSave: 'Save {n} field change(s) to this record?',
   confirmDiscard: 'You have unsaved changes on this record. Discard them?',
+  confirmCloseDirty: 'This tab has unsaved changes. Close it and discard them?',
   empty: '(empty)',
   saved: 'Saved.',
   errorNoId: 'Enter a record Id.',

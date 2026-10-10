@@ -9,7 +9,7 @@
 // switches to the SOQL tab and this sub-tab before loading, so it works from
 // wherever it is called.
 import { render } from 'preact';
-import { on } from '../../../shared/view/host';
+import { on, post } from '../../../shared/view/host';
 import { createRecordDetailController, createRecordDetailState } from './record-detail-controller';
 import { RecordDetail } from './record-detail';
 
@@ -18,6 +18,7 @@ interface CockpitWindow {
   __activateTab: (tabId: string) => void;
   __activateSubTab: (barId: string, id: string) => void;
   __showRecordDetail?: (id: string) => void;
+  __orgConnected?: boolean;
 }
 const win = window as unknown as CockpitWindow;
 
@@ -33,18 +34,23 @@ if (mount) {
   on('loadRecordDetailError', handlers.loadRecordDetailError);
   on('recordChangesSaved', handlers.recordChangesSaved);
   on('saveRecordChangesError', handlers.saveRecordChangesError);
-  on('cancelAllOperations', () => controller.cancel());
+  on('recordDetailStateLoaded', handlers.recordDetailStateLoaded);
+  on('cancelAllOperations', handlers.cancelAllOperations);
 
-  // The record on screen belongs to the org it was read from. An org-to-org
-  // switch fires only the connect edge, so both edges reset.
+  // A record tab belongs to the org it was read from (an Id means nothing in
+  // another org), so both edges clear the strip — an org-to-org switch fires
+  // only the connect edge — and the connect edge loads that org's own tabs.
   win.__registerFeature('record-detail', {
-    onOrgConnected: () => controller.reset(),
-    onOrgDisconnected: () => controller.reset(),
+    onOrgConnected: () => controller.onOrgConnected(),
+    onOrgDisconnected: () => controller.onOrgDisconnected(),
   });
+
+  // Already connected when the panel opened: nothing will fire the connect edge.
+  if (win.__orgConnected) post({ type: 'loadRecordDetailState' });
 
   win.__showRecordDetail = (id: string) => {
     win.__activateTab('soql');
     win.__activateSubTab('soql-sub-tab-bar', 'record-detail');
-    controller.loadFromElsewhere(id);
+    controller.open(id);
   };
 }

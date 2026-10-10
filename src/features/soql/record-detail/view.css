@@ -1,6 +1,12 @@
 /* Record Detail (SOQL tab → 🔎 Record Detail sub-tab). The flag-column
    rules (.query-fields-th-flag / .query-fields-flag) are shared and live in
-   media/main.css. */
+   media/main.css, as are every .query-tab* pill style the record tab bar
+   renders (see "Tab strip (shared…)" there). */
+
+/* Only the bar's placement is ours — the pills inside it are the shared strip's. */
+.rec-detail-tab-bar {
+  margin-bottom: 10px;
+}
 
 .rec-detail-toolbar {
   display: flex;
