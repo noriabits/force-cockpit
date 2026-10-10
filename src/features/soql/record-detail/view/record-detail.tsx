@@ -124,21 +124,29 @@ function Toolbar({ state, controller }: Props) {
   );
 }
 
+function BackButton({ state, controller }: Props) {
+  if (state.backStack.value.length === 0) return null;
+  return (
+    <button type="button" class="btn btn-ghost rec-detail-back" onClick={() => controller.back()}>
+      {L().back}
+    </button>
+  );
+}
+
 function RecordHeader({ state, controller }: Props) {
   const rec = state.record.value;
-  if (!rec) return null;
-  const hasBack = state.backStack.value.length > 0;
+  // No record yet (loading, or the load failed): keep ← Back reachable on its own.
+  if (!rec) {
+    if (state.loadingOpId.value || state.backStack.value.length === 0) return null;
+    return (
+      <div class="rec-detail-header">
+        <BackButton state={state} controller={controller} />
+      </div>
+    );
+  }
   return (
     <div class="rec-detail-header">
-      {hasBack && (
-        <button
-          type="button"
-          class="btn btn-ghost rec-detail-back"
-          onClick={() => controller.back()}
-        >
-          {L().back}
-        </button>
-      )}
+      <BackButton state={state} controller={controller} />
       <span class="rec-detail-title">
         {rec.objectLabel} <span class="rec-detail-subtle">({rec.objectName})</span>
       </span>

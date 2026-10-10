@@ -102,8 +102,16 @@ export function createRecordDetailController(state: RecordDetailState) {
     cancel();
     const opId = begin();
     navFrom.set(opId, nav);
+    // The record on screen goes the moment another is asked for. Leaving it up
+    // until the reply lands showed the PREVIOUS record under the new request —
+    // its Id, its values, even its editors — for the whole round trip. Safe to
+    // drop here: every caller has already passed `guardUnsaved`, and `follow`
+    // captured the record it leaves (for Back) before calling this.
     batch(() => {
       state.loadingOpId.value = opId;
+      state.record.value = null;
+      state.edits.value = {};
+      state.review.value = null;
       state.error.value = '';
       state.notice.value = '';
     });
@@ -242,9 +250,13 @@ export function createRecordDetailController(state: RecordDetailState) {
     loadRecordDetailError(msg: HostMessage<{ opId?: string; message?: string }>) {
       const opId = claim(msg, state.loadingOpId.value);
       if (!opId) return;
+      const nav = navFrom.get(opId);
       navFrom.delete(opId);
       batch(() => {
         state.loadingOpId.value = null;
+        // The record left behind is already off screen (load() clears it), so a
+        // failed lookup must still leave a way back to it.
+        if (nav?.from) state.backStack.value = [...state.backStack.value, nav.from];
         state.error.value = msg.data?.message ?? L().errorUnknown;
       });
     },

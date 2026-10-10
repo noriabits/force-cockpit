@@ -406,6 +406,43 @@ describe('Record Detail', () => {
     });
   });
 
+  describe('switching records', () => {
+    const OTHER_ID = '001000000000002AAA';
+
+    it('clears the record on screen the moment another is requested from 🔍', () => {
+      loadRecord(account());
+      act(() => w.__showRecordDetail(OTHER_ID));
+
+      // Before the reply: nothing of the previous record is left showing.
+      expect($('.rec-detail-title')).toBeNull();
+      expect($('.rec-detail-id')).toBeNull();
+      expect($$('.rec-detail-name')).toEqual([]);
+
+      const { opId } = lastPost('loadRecordDetail');
+      deliver('recordDetailLoaded', { ...account(), id: OTHER_ID, opId });
+      expect($('.rec-detail-id').textContent).toBe(OTHER_ID);
+    });
+
+    it('clears the record on screen while a lookup loads', () => {
+      loadRecord(account());
+      click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
+
+      expect($('.rec-detail-title')).toBeNull();
+      expect($$('.rec-detail-name')).toEqual([]);
+    });
+
+    it('keeps a way back when a lookup fails', () => {
+      loadRecord(account());
+      click(row('OwnerId').querySelector('.rec-detail-follow') as Element);
+      const { opId } = lastPost('loadRecordDetail');
+      deliver('loadRecordDetailError', { opId, message: '404 Not Found — NOT_FOUND: gone' });
+
+      expect($('.rec-detail-error').textContent).toContain('NOT_FOUND');
+      click(btnByText('← Back'));
+      expect(lastPost('loadRecordDetail').recordId).toBe(ACCOUNT_ID);
+    });
+  });
+
   describe('lifecycle', () => {
     it('clears the record on both org edges', () => {
       loadRecord(account());
