@@ -232,6 +232,29 @@
   opacity: 0.55;
 }
 
+.dbg-match-row td {
+  padding-top: 0;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+.dbg-match-badge {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.dbg-match-line {
+  font-family: var(--vscode-editor-font-family);
+}
+
 .dbg-col-check {
   width: 24px;
 }

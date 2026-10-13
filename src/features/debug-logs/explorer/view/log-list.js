@@ -16,6 +16,9 @@ const TAIL_INTERVAL_MS = 8000;
  *   getVisible: () => boolean,
  *   onOpenLog: (logId: string) => void,
  *   onStateChange: (patch: any) => void,
+ *   contentSearch?: {
+ *     matchOf: (id: string) => { count: number, firstLine: string, firstLineNo: number } | null,
+ *   },
  * }} ctx
  */
 export function createLogList(ctx) {
@@ -89,7 +92,9 @@ export function createLogList(ctx) {
     const rows = [];
     for (const log of logs) {
       if (errorsOnly.checked && !isFailure(log)) continue;
-      if (!matchesText(log)) continue;
+      // After an Enter, a row whose BODY contains the text counts as a match
+      // too (content-search-bar.js); otherwise the text filters columns only.
+      if (!matchesText(log) && !ctx.contentSearch?.matchOf(log.id)) continue;
       if (isEmpty(log)) {
         hiddenCount++;
         if (!showHiddenAnyway) continue;
@@ -195,12 +200,15 @@ export function createLogList(ctx) {
         td.textContent = value ?? '';
         tr.appendChild(td);
       }
-      tr.addEventListener('click', () => {
+      const open = () => {
         openLogId = log.id;
         ctx.onOpenLog(log.id);
         render();
-      });
+      };
+      tr.addEventListener('click', open);
       tbody.appendChild(tr);
+      const match = ctx.contentSearch?.matchOf(log.id);
+      if (match) tbody.appendChild(buildMatchRow(match, tr.className, open));
     }
 
     countEl.textContent = logs.length ? `${sorted.length} of ${logs.length}` : '';
@@ -208,6 +216,30 @@ export function createLogList(ctx) {
     emptyEl.textContent = ctx.getConnected() ? labels.noLogs : labels.notConnected;
     renderHiddenChip();
     updateDeleteButton();
+  }
+
+  /**
+   * The line under a row that matched "Search inside logs": how many lines hit
+   * and the first of them. Built with text nodes — the line is raw log text.
+   * @param {{ count: number, firstLine: string, firstLineNo: number }} match
+   * @param {string} rowClass
+   * @param {() => void} open
+   */
+  function buildMatchRow(match, rowClass, open) {
+    const tr = document.createElement('tr');
+    tr.className = `${rowClass} dbg-match-row`;
+    const td = document.createElement('td');
+    td.colSpan = COLUMNS.length + 1;
+    const badge = document.createElement('span');
+    badge.className = 'dbg-match-badge';
+    badge.textContent = labels.matchLines(match.count);
+    const line = document.createElement('span');
+    line.className = 'dbg-match-line';
+    line.textContent = `${match.firstLineNo}: ${match.firstLine}`;
+    td.append(badge, line);
+    tr.appendChild(td);
+    tr.addEventListener('click', open);
+    return tr;
   }
 
   function renderHiddenChip() {
@@ -340,6 +372,8 @@ export function createLogList(ctx) {
   });
 
   return {
+    /** Re-render — the content search narrowed or widened the rows. */
+    refresh: render,
     applyState(/** @type {any} */ state) {
       errorsOnly.checked = !!state.errorsOnly;
       hideEmpty.checked = !!state.hideEmptyLogs;

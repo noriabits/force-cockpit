@@ -2,6 +2,7 @@
 // modules and the shared body cache. Holds no vscode imports so it can be
 // exercised with a mocked ConnectionManager.
 import type { ConnectionManager } from '../../../salesforce/connection';
+import { throwIfAborted } from '../../../utils/abort';
 import { ApexLogApi } from './api/ApexLogApi';
 import { EntityLookupApi } from './api/EntityLookupApi';
 import { TraceFlagApi } from './api/TraceFlagApi';
@@ -10,6 +11,7 @@ import { findPreset } from './debugLevelPresets';
 import { LogBodyCache } from './LogBodyCache';
 import { analyzeLog } from './parsing/analyzeLog';
 import { isEmptyByContent, resolveNoiseOptions } from './parsing/logNoise';
+import { searchBody, type BodySearchHit } from './parsing/logSearch';
 import type {
   ApexLogRow,
   CategoryLevels,
@@ -22,6 +24,11 @@ import type {
 
 /** How many bodies the tier-2 noise check fetches at once. */
 const CLASSIFY_CONCURRENCY = 4;
+
+/** One log whose body contains the searched text. */
+export interface LogSearchMatch extends BodySearchHit {
+  id: string;
+}
 
 export interface OpenedLog {
   logId: string;
@@ -70,11 +77,16 @@ export class DebugLogsService {
     return this.logs.listLogs(limit);
   }
 
-  async getBody(logId: string): Promise<string> {
+  /**
+   * `cache: false` reads the cache but does not fill it — a search sweeps up
+   * to 200 bodies and would otherwise evict the ones the viewer and the AI
+   * analyzer are using (the cache holds 25).
+   */
+  async getBody(logId: string, options: { cache?: boolean } = {}): Promise<string> {
     const cached = this.bodies.get(logId);
     if (cached !== undefined) return cached;
     const body = await this.logs.getBody(logId);
-    this.bodies.set(logId, body);
+    if (options.cache !== false) this.bodies.set(logId, body);
     return body;
   }
 
@@ -108,6 +120,38 @@ export class DebugLogsService {
       );
       out.push(...results);
     }
+    return out;
+  }
+
+  /**
+   * Which of these logs contain `query` (case-insensitive). The webview sends
+   * the list in small batches so results show up as they are found and a
+   * cancel is simply not asking again; `signal` stops this batch early.
+   */
+  async searchLogBodies(
+    logIds: string[],
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<LogSearchMatch[]> {
+    const out: LogSearchMatch[] = [];
+    if (!query.trim()) return out;
+    for (let i = 0; i < logIds.length; i += CLASSIFY_CONCURRENCY) {
+      throwIfAborted(signal);
+      const batch = logIds.slice(i, i + CLASSIFY_CONCURRENCY);
+      const hits = await Promise.all(
+        batch.map(async (id) => {
+          try {
+            const hit = searchBody(await this.getBody(id, { cache: false }), query);
+            return hit ? { id, ...hit } : null;
+          } catch {
+            // A body we cannot read (deleted meanwhile) is simply not a match.
+            return null;
+          }
+        }),
+      );
+      for (const hit of hits) if (hit) out.push(hit);
+    }
+    throwIfAborted(signal);
     return out;
   }
 
