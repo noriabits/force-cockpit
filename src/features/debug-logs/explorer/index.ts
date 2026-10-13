@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { FeatureModuleFactory } from '../../FeatureModule';
+import { NO_REPLY, type FeatureModuleFactory } from '../../FeatureModule';
 import { LogAnalyzer } from './ai/LogAnalyzer';
 import { DebugLogsService } from './DebugLogsService';
 import { createDebugLogsStateStore, type DebugLogsState } from './DebugLogsStateStore';
@@ -89,6 +89,24 @@ export const debugLogsFeature: FeatureModuleFactory = (ctx) => {
         }),
         successType: 'apexLogsClassified',
         errorType: 'apexLogsClassifyError',
+      },
+      searchApexLogBodies: {
+        handler: async (msg, signal) => {
+          try {
+            const matches = await service.searchLogBodies(
+              (msg.logIds as string[]) ?? [],
+              String(msg.query ?? ''),
+              signal,
+            );
+            return signal?.aborted ? NO_REPLY : { matches };
+          } catch (err) {
+            // A cancelled search posts nothing; the webview already moved on.
+            if (signal?.aborted) return NO_REPLY;
+            throw err;
+          }
+        },
+        successType: 'apexLogsSearched',
+        errorType: 'apexLogsSearchError',
       },
       openApexLog: {
         handler: async (msg) => {

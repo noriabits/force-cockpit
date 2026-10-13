@@ -62,9 +62,19 @@
       id="dbg-log-filter"
       data-no-generic-filter
       spellcheck="false"
-      placeholder="Filter logs…"
+      placeholder="Filter logs… (Enter also searches inside them)"
+      data-tooltip="Typing filters the columns. Press Enter to also search the content of every listed log"
     />
     <span class="query-match-count" id="dbg-log-count"></span>
+    <button
+      type="button"
+      class="btn btn-ghost"
+      id="dbg-content-search-cancel"
+      style="display: none"
+    >
+      ✕ Cancel
+    </button>
+    <span class="status-hint" id="dbg-content-search-status"></span>
     <label class="dbg-check" data-tooltip="Show only logs that ended with an exception">
       <input type="checkbox" id="dbg-errors-only" /> Errors only
     </label>

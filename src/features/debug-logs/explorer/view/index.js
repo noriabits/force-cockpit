@@ -3,6 +3,7 @@
 // (trace flags, log list, log viewer, AI analysis) and routes host messages to
 // them. Bundled by esbuild into dist/features/debug-logs/explorer/view.js.
 import { createAiPanel } from './ai-panel';
+import { createContentSearchBar } from './content-search-bar';
 import { createLogList } from './log-list';
 import { createLogViewer } from './log-viewer';
 import { createTraceFlagPanel } from './trace-flag-panel';
@@ -32,14 +33,30 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     onStateChange: saveState,
   });
 
+  const contentSearch = createContentSearchBar({
+    labels,
+    vscode,
+    getConnected: () => connected,
+    getLogIds: () => logs.map((log) => log.id),
+    onChange: () => logList.refresh(),
+  });
+
+  /** The search text a log is being opened under, so the viewer can jump to it. */
+  let openSearch = { logId: '', query: '' };
+
   const logList = createLogList({
     labels,
     vscode,
     escapeHtml,
     getConnected: () => connected,
     getVisible: () => visible,
-    onOpenLog: (logId) => vscode.postMessage({ type: 'openApexLog', logId }),
+    onOpenLog: (logId) => {
+      const query = contentSearch.matchOf(logId) ? contentSearch.getQuery() : '';
+      openSearch = { logId, query };
+      vscode.postMessage({ type: 'openApexLog', logId });
+    },
     onStateChange: saveState,
+    contentSearch,
   });
 
   const logViewer = createLogViewer({ escapeHtml });
@@ -106,6 +123,7 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     apexLogsLoaded: (data) => {
       logs = data.logs ?? [];
       logList.setLogs(logs);
+      contentSearch.paint(); // a tailed log may not have been searched
       // The setup call can fail on a slow connect — retry it with the list.
       if (!setupLoaded && connected) vscode.postMessage({ type: 'loadDebugLogsSetup' });
     },
@@ -130,10 +148,13 @@ import { createTraceFlagPanel } from './trace-flag-panel';
       // An analysis belongs to the log it was run on — drop it when a
       // different log is opened (and cancel a run still streaming).
       aiPanel.resetFor(data.logId);
-      logViewer.show(data, row);
+      const search = openSearch.logId === data.logId ? openSearch.query : '';
+      logViewer.show(data, row, { search });
       logList.setOpenLog(data.logId);
     },
     apexLogOpenError: (data) => logViewer.showError(data.message),
+    apexLogsSearched: (data) => contentSearch.onResult(data),
+    apexLogsSearchError: (data) => contentSearch.onError(data),
 
     traceFlagStarted: applyTraceFlags,
     traceFlagExtended: applyTraceFlags,
@@ -165,11 +186,15 @@ import { createTraceFlagPanel } from './trace-flag-panel';
     setupLoaded = false;
     logs = [];
     tracePanel.reset();
+    contentSearch.reset();
     logList.reset();
     logList.stopTail();
     logViewer.hide();
     aiPanel.hide();
   }
+
+  // Every in-flight op is being cancelled (an org switch the user confirmed).
+  win.__onMessage('cancelAllOperations', () => contentSearch.stop());
 
   win.__registerFeature('debug-logs', {
     onOrgConnected(/** @type {any} */ data) {

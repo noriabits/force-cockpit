@@ -35,6 +35,16 @@ window.DebugLogsLabels = {
   hiddenAsEmpty: (n) => `${n} hidden as empty`,
   show: 'Show',
   checkingContents: 'Checking log contents…',
+  searchHint: 'Enter to also search inside the logs',
+  searchProgress: (scanned, total, matched) =>
+    `Searching… ${scanned} of ${total} logs · ${matched} match${matched === 1 ? '' : 'es'}`,
+  searchDone: (matched, total) =>
+    `${matched} of ${total} log${total === 1 ? '' : 's'} contain${matched === 1 ? 's' : ''} this text inside`,
+  searchStopped: (scanned, total, matched) =>
+    `Stopped after ${scanned} of ${total} logs · ${matched} match${matched === 1 ? '' : 'es'}`,
+  searchFailed: (message) => `Search failed: ${message}`,
+  searchNotScanned: (n) => `${n} newer log${n === 1 ? '' : 's'} not searched — search again`,
+  matchLines: (n) => `${n} line${n === 1 ? '' : 's'}`,
   deleteSelected: (n) => (n > 0 ? `Delete (${n})` : 'Delete'),
   deletingLogs: (n) => `Deleting ${n} log${n === 1 ? '' : 's'}…`,
 

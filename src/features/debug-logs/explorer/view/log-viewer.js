@@ -398,9 +398,11 @@ export function createLogViewer(ctx) {
     /**
      * @param {any} data  the `apexLogOpened` payload (or an Apex run's `log`)
      * @param {any} logRow the matching list row, for the metadata line; null for none
-     * @param {{ title?: string, scroll?: boolean }} [options]
+     * @param {{ title?: string, scroll?: boolean, search?: string }} [options]
      *   `scroll: false` keeps the page where it is
      *   (a tab switch re-showing a stored log should not jump the view).
+     *   `search` pre-fills the search box and jumps to the first match (a log
+     *   opened from the list's "Search inside logs").
      */
     show(data, logRow, options = {}) {
       opened = data;
@@ -418,6 +420,10 @@ export function createLogViewer(ctx) {
       renderChips();
       setMode('log');
       if (options.scroll !== false) card.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      if (options.search) {
+        searchInput.value = options.search;
+        runSearch();
+      }
     },
     hide() {
       card.style.display = 'none';
