@@ -30,6 +30,8 @@ import {
 
   /** @type {Map<string, string>} Maps opId → scriptId for in-flight executions */
   const opIdToScriptId = new Map();
+  /** @type {Map<string, string>} Maps scriptId → opId of its most recent run */
+  const latestOpByScript = new Map();
   /** @type {Map<string, string>} Maps opId → accumulated log text (memory-based, not DOM) */
   const scriptLogContent = new Map();
   /** @type {Map<string, () => void>} */
@@ -118,6 +120,7 @@ import {
     labels: L,
     vscode: win.__vscode,
     opIdToScriptId,
+    latestOpByScript,
     getConnected: () => connected,
     getCurrentOrgData: () => currentOrgData,
     startAction: (btn, onCancel) => win.__startAction(btn, onCancel),
@@ -248,6 +251,10 @@ import {
     const updater = executeStateUpdaters.get(data.scriptId);
     if (updater) updater();
 
+    // A superseded run (cancelled, then re-run) must not paint its outcome over
+    // the run now on screen.
+    if (data.opId && latestOpByScript.get(data.scriptId) !== data.opId) return;
+
     if (data.cancelled) {
       statusHint.textContent = L.statusCancelled;
       return;
@@ -304,7 +311,7 @@ import {
   function handleScriptLogChunk(data) {
     const { opId, chunk } = data;
     const scriptId = opIdToScriptId.get(opId);
-    if (!scriptId) return;
+    if (!scriptId || latestOpByScript.get(scriptId) !== opId) return;
     const accordion = /** @type {HTMLElement | null} */ (
       scriptsList.querySelector(`[data-script-id="${CSS.escape(scriptId)}"]`)
     );

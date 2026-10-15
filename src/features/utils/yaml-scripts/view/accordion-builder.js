@@ -412,6 +412,10 @@ export function createAccordionBuilder(ctx) {
     const hasInputs = script.inputs && script.inputs.length > 0;
 
     function updateExecuteState() {
+      // `__startAction` marks the button `running` until the result arrives. An
+      // input change or org event mid-run must not re-enable it: a second run
+      // would let the first one's late result paint over it.
+      if (executeBtn.classList.contains('running')) return;
       const orgOk = needsOrg ? getConnected() : true;
       if (!hasInputs) {
         executeBtn.disabled = !orgOk;

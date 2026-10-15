@@ -13,6 +13,7 @@ import { defaultFormatJson } from './log-defaults';
  * @property {any} labels
  * @property {{ postMessage: (msg: any) => void }} vscode
  * @property {Map<string, string>} opIdToScriptId
+ * @property {Map<string, string>} latestOpByScript
  * @property {() => boolean} getConnected
  * @property {() => any} getCurrentOrgData
  * @property {(btn: HTMLButtonElement, onCancel: () => void) => string | null} startAction
@@ -27,6 +28,7 @@ export function createExecuteHandler(ctx) {
     labels,
     vscode,
     opIdToScriptId,
+    latestOpByScript,
     getConnected,
     getCurrentOrgData,
     startAction,
@@ -98,7 +100,10 @@ export function createExecuteHandler(ctx) {
           statusHint.textContent = '';
           vscode.postMessage({ type: 'cancelOperation', opId: scriptOpId });
         });
-        if (scriptOpId) opIdToScriptId.set(scriptOpId, script.id);
+        if (scriptOpId) {
+          opIdToScriptId.set(scriptOpId, script.id);
+          latestOpByScript.set(script.id, scriptOpId);
+        }
         vscode.postMessage({
           type: 'executeYamlScript',
           scriptId: script.id,
