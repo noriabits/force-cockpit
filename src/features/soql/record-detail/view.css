@@ -128,6 +128,52 @@
   white-space: nowrap;
 }
 
+/* Each cell is capped at its column's width. table-layout: fixed alone does
+   not hold: with no width on the table the browser falls back to the auto
+   layout, where a th width is only a minimum, so one long text area value
+   stretched its column until the table ran off the panel. Same max-width cap
+   as the SOQL and Monitoring result tables; a long value is clamped to one
+   ellipsized line and a click unwraps it in place (ExpandableCell, styled by
+   .fc-cell-clamped / .fc-cell-expanded in media/main.css). Keep these in step
+   with the th widths above and FITS in record-detail.tsx. */
+.rec-detail-table td.rec-detail-label {
+  max-width: 170px;
+}
+
+.rec-detail-table td.rec-detail-name {
+  max-width: 180px;
+}
+
+.rec-detail-table td.rec-detail-type {
+  max-width: 80px;
+}
+
+.rec-detail-table td.rec-detail-value {
+  max-width: 280px;
+}
+
+.rec-detail-table td.rec-detail-help {
+  max-width: 180px;
+}
+
+/* The value sits in a flex row (value + FLS badge), where the td's own
+   ellipsis cannot reach it: the text is clipped on the flex item instead. */
+.rec-detail-readonly {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Restates media/main.css's expanded rule, and must: `td.fc-cell-expanded`
+   there ties on specificity with `.rec-detail-table td` above, and this
+   stylesheet loads AFTER main.css, so that `white-space: nowrap` won the tie
+   and a click toggled the class while the cell stayed on one line. */
+.rec-detail-table td.fc-cell-expanded {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
 .rec-detail-tr:hover {
   background-color: var(--vscode-list-hoverBackground);
 }
@@ -206,6 +252,11 @@
   font-family: var(--vscode-editor-font-family);
   color: var(--vscode-textLink-foreground);
   white-space: nowrap;
+}
+
+.rec-detail-follow--icon {
+  font-size: 11px;
+  text-decoration: none;
 }
 
 .rec-detail-savebar {

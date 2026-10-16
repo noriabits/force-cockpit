@@ -5,7 +5,7 @@
 // checkbox), stored per field. Comparison happens raw-to-raw against the
 // original value's own raw form, never value-to-value. That is what keeps a
 // datetime from reading as "changed" the moment it is shown: the input works in
-// minutes and local time, Salesforce answers in milliseconds and UTC, and the
+// seconds and local time, Salesforce answers in milliseconds and UTC, and the
 // round-trip is lossy — so an untouched field must never be converted back.
 import type { RecordDetailField } from '../../../../shared/protocol';
 
@@ -39,15 +39,25 @@ export function editorKindFor(field: RecordDetailField): EditorKind {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-/** A Salesforce datetime as a `datetime-local` value, in the viewer's own time zone. */
+/**
+ * A Salesforce datetime as a `datetime-local` value, in the viewer's own time
+ * zone, to the second (the input carries `step="1"`, or it offers minutes only).
+ */
 function toLocalDateTime(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return (
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
   );
 }
+
+/**
+ * A `datetime-local` value with its seconds made explicit. Even with
+ * `step="1"`, browsers report a whole minute as `HH:mm`, dropping `:00` — so
+ * without this an edit that lands back on the original time would read as dirty.
+ */
+const withSeconds = (raw: string) => (/T\d{2}:\d{2}$/.test(raw) ? `${raw}:00` : raw);
 
 /** The original value as its input would hold it. */
 export function toRawValue(field: RecordDetailField, value: unknown): RawValue {
@@ -92,7 +102,11 @@ export function coerceRawValue(
 
 /** True when `raw` differs from what the field held when the record was loaded. */
 export function isDirty(field: RecordDetailField, original: unknown, raw: RawValue): boolean {
-  return raw !== toRawValue(field, original);
+  const before = toRawValue(field, original);
+  if (field.type === 'datetime' && typeof raw === 'string' && typeof before === 'string') {
+    return withSeconds(raw) !== withSeconds(before);
+  }
+  return raw !== before;
 }
 
 interface ReviewRow {

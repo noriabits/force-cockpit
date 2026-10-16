@@ -19,7 +19,8 @@ import type {
 import { FLAG_COLUMNS, FlagCells, FlagHeaders } from '../../../shared/view/field-flags';
 import { accessSummary, accessTooltip } from './access-note';
 import type { RecordDetailController, RecordDetailState } from './record-detail-controller';
-import { displayValue, isDirty, toRawValue } from './record-edits';
+import { displayValue, editorKindFor, isDirty, toRawValue } from './record-edits';
+import { ExpandableCell } from './expandable-cell';
 import { FieldValue } from './field-editor';
 import { RecordCompare } from './record-compare-pane';
 import { Tooltip } from './tooltip';
@@ -146,6 +147,12 @@ function RecordHeader({ state, controller }: Props) {
   );
 }
 
+/**
+ * Characters that fit on one line at each column's max-width (view.css), at
+ * this table's 12px font. A value longer than this is clamped and click-to-expand.
+ */
+const FITS = { label: 26, type: 12, value: 36, name: 24, help: 26 };
+
 function rowClass(dirty: boolean, note: FieldAccessNote | undefined): string {
   if (dirty) return 'rec-detail-tr rec-detail-tr--dirty';
   if (note?.kind === 'readOnly') return 'rec-detail-tr rec-detail-tr--fls-readonly';
@@ -162,10 +169,16 @@ function FieldRow({ field, ...props }: Props & { field: RecordDetailField }) {
   const note = rec.access[field.name];
   return (
     <tr class={rowClass(dirty, note)}>
-      <td>{field.label}</td>
-      <td class="rec-detail-name">{field.name}</td>
-      <td class="rec-detail-type">{field.type}</td>
-      <td class="rec-detail-value">
+      <ExpandableCell class="rec-detail-label" text={field.label} maxChars={FITS.label} />
+      <ExpandableCell class="rec-detail-name" text={field.name} maxChars={FITS.name} />
+      <ExpandableCell class="rec-detail-type" text={field.type} maxChars={FITS.type} />
+      <ExpandableCell
+        class="rec-detail-value"
+        // Only a read-only value is text that can run long; an editor scrolls
+        // within its own box.
+        text={editorKindFor(field) === 'readonly' ? displayValue(field, original) : ''}
+        maxChars={FITS.value}
+      >
         <span class="rec-detail-value-row">
           <FieldValue
             field={field}
@@ -176,13 +189,13 @@ function FieldRow({ field, ...props }: Props & { field: RecordDetailField }) {
           />
           {note && <FlsBadge note={note} />}
         </span>
-      </td>
+      </ExpandableCell>
       <FlagCells field={field} />
-      <td class="rec-detail-help">
-        {field.inlineHelpText && (
-          <Tooltip text={field.inlineHelpText}>{field.inlineHelpText}</Tooltip>
-        )}
-      </td>
+      <ExpandableCell
+        class="rec-detail-help"
+        text={field.inlineHelpText ?? ''}
+        maxChars={FITS.help}
+      />
     </tr>
   );
 }
@@ -191,9 +204,9 @@ function FieldRow({ field, ...props }: Props & { field: RecordDetailField }) {
 function HiddenRow({ field, note }: { field: HiddenField; note: FieldAccessNote }) {
   return (
     <tr class={rowClass(false, note)}>
-      <td>{field.label}</td>
-      <td class="rec-detail-name">{field.name}</td>
-      <td class="rec-detail-type">{field.type}</td>
+      <ExpandableCell class="rec-detail-label" text={field.label} maxChars={FITS.label} />
+      <ExpandableCell class="rec-detail-name" text={field.name} maxChars={FITS.name} />
+      <ExpandableCell class="rec-detail-type" text={field.type} maxChars={FITS.type} />
       <td class="rec-detail-value">
         <FlsBadge note={note} />
       </td>

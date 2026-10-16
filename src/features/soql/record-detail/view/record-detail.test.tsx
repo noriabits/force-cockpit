@@ -294,6 +294,41 @@ describe('Record Detail', () => {
       expect($('.rec-detail-count').textContent).toBe('1 of 5');
     });
 
+    it('clamps a long value to one line and expands it on click, leaving short ones alone', () => {
+      const long = 'A very long description that would otherwise stretch the column. '.repeat(5);
+      const rec = account();
+      rec.fields = [
+        ...rec.fields,
+        field('Description', 'textarea', { updateable: false, inlineHelpText: long }),
+      ];
+      rec.values = { ...rec.values, Description: long };
+      loadRecord(rec);
+      const value = row('Description').querySelector('.rec-detail-value') as HTMLElement;
+      const help = row('Description').querySelector('.rec-detail-help') as HTMLElement;
+
+      expect(value.classList.contains('fc-cell-clamped')).toBe(true);
+      expect(value.textContent).toContain(long.trim());
+      expect(help.classList.contains('fc-cell-clamped')).toBe(true);
+      expect(row('Name').querySelector('.fc-cell-clamped')).toBeNull();
+
+      click(value);
+      expect(value.classList.contains('fc-cell-expanded')).toBe(true);
+      click(value);
+      expect(value.classList.contains('fc-cell-expanded')).toBe(false);
+    });
+
+    it('shows an editable lookup Id once — in its input — with an icon to follow it', () => {
+      const rec = account();
+      rec.fields = rec.fields.map((f) => (f.name === 'OwnerId' ? { ...f, updateable: true } : f));
+      loadRecord(rec);
+      const input = row('OwnerId').querySelector('input.rec-detail-input') as HTMLInputElement;
+      const follow = row('OwnerId').querySelector('.rec-detail-follow') as Element;
+
+      expect(input.value).toBe(USER_ID);
+      expect(follow.textContent).toBe('🔍');
+      expect(row('OwnerId').textContent).not.toContain(USER_ID);
+    });
+
     it('follows a lookup into its own focused tab, leaving the first one loaded', () => {
       loadRecord(account());
       click(row('OwnerId').querySelector('.rec-detail-follow') as Element);

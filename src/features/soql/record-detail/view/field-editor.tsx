@@ -5,6 +5,7 @@
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
 import type { RecordDetailField } from '../../../../shared/protocol';
 import { displayValue, editorKindFor, type RawValue } from './record-edits';
+import { Tooltip } from './tooltip';
 
 interface Props {
   field: RecordDetailField;
@@ -15,21 +16,36 @@ interface Props {
   onFollow: (id: string) => void;
 }
 
-/** A lookup's current value, followable when it is a real record Id. */
-function FollowLink({ value, onFollow }: { value: unknown; onFollow: (id: string) => void }) {
+/**
+ * A lookup's current value, followable when it is a real record Id. `compact`
+ * renders a 🔍 icon (Id in the tooltip) for the editable case: the input beside
+ * it already shows the Id, and a second copy as nowrap text squeezed that input
+ * down to a few characters.
+ */
+function FollowLink({
+  value,
+  onFollow,
+  compact,
+}: {
+  value: unknown;
+  onFollow: (id: string) => void;
+  compact?: boolean;
+}) {
   if (!isSalesforceRecordId(value)) return null;
-  return (
+  const link = (
     <a
       href="#"
-      class="rec-detail-follow"
+      class={compact ? 'rec-detail-follow rec-detail-follow--icon' : 'rec-detail-follow'}
+      aria-label={compact ? `Open ${value}` : undefined}
       onClick={(e) => {
         e.preventDefault();
         onFollow(value);
       }}
     >
-      {value}
+      {compact ? '🔍' : value}
     </a>
   );
+  return compact ? <Tooltip text={`Open ${value}`}>{link}</Tooltip> : link;
 }
 
 function PicklistInput({ field, raw, onChange }: Pick<Props, 'field' | 'raw' | 'onChange'>) {
@@ -97,11 +113,13 @@ export function FieldValue({ field, original, raw, onChange, onFollow }: Props) 
         // unparsable entry, which would read as "cleared" and PATCH a null.
         type={INPUT_TYPE[kind]}
         inputMode={kind === 'number' ? 'decimal' : undefined}
+        // Without step="1" a datetime-local input offers hours and minutes only.
+        step={kind === 'datetime' ? 1 : undefined}
         class="rec-detail-input"
         value={String(raw)}
         onInput={(e) => onChange(e.currentTarget.value)}
       />
-      {isLookup && <FollowLink value={original} onFollow={onFollow} />}
+      {isLookup && <FollowLink value={original} onFollow={onFollow} compact />}
     </span>
   );
 }

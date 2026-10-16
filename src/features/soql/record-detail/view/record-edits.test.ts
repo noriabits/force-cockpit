@@ -64,9 +64,9 @@ describe('toRawValue / displayValue', () => {
     expect(toRawValue(field('A', 'double'), 12.5)).toBe('12.5');
   });
 
-  it('shows a datetime in local time at minute precision', () => {
+  it('shows a datetime in local time to the second', () => {
     const raw = toRawValue(field('A', 'datetime'), '2024-03-05T10:20:30.000+0000');
-    expect(raw).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(raw).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:30$/);
   });
 
   it('serializes compound values rather than printing [object Object]', () => {
@@ -95,6 +95,11 @@ describe('coerceRawValue', () => {
     const out = coerceRawValue(field('A', 'datetime'), '2024-03-05T10:20');
     expect(out).toEqual({ value: new Date('2024-03-05T10:20').toISOString() });
   });
+
+  it('keeps the seconds of an edited datetime', () => {
+    const out = coerceRawValue(field('A', 'datetime'), '2024-03-05T10:20:45');
+    expect(out).toEqual({ value: new Date('2024-03-05T10:20:45').toISOString() });
+  });
 });
 
 describe('isDirty', () => {
@@ -102,6 +107,19 @@ describe('isDirty', () => {
     const f = field('A', 'datetime');
     const original = '2024-03-05T10:20:30.123+0000';
     expect(isDirty(f, original, toRawValue(f, original))).toBe(false);
+  });
+
+  it('treats a whole-minute datetime the browser reports without seconds as clean', () => {
+    const f = field('A', 'datetime');
+    const original = new Date(2024, 2, 5, 10, 20, 0).toISOString();
+    expect(isDirty(f, original, '2024-03-05T10:20')).toBe(false);
+  });
+
+  it('marks a datetime dirty when only its seconds changed', () => {
+    const f = field('A', 'datetime');
+    const original = new Date(2024, 2, 5, 10, 20, 30).toISOString();
+    expect(isDirty(f, original, '2024-03-05T10:20:45')).toBe(true);
+    expect(isDirty(f, original, '2024-03-05T10:20')).toBe(true);
   });
 });
 

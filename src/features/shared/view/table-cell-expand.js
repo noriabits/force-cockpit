@@ -1,19 +1,44 @@
 // @ts-check
 // Click-to-expand for result-table cells holding long values.
 //
-// Both result tables (SOQL results, monitoring dashboard) clamp every cell to a
+// The result tables (SOQL results, monitoring dashboard) clamp every cell to a
 // single ellipsized line, so one 2000-char long text area value can't stretch
 // its column until the table runs off the panel. This is how the full value is
 // read back: tag the cells worth expanding while rendering, then toggle the
 // wrapped class from one delegated click listener on the table body.
+//
+// The Record Detail's field table does the same through the exported class
+// names and predicates rather than the two DOM helpers: Preact owns its cells,
+// so the expanded state lives in the component (expandable-cell.tsx) instead
+// of being toggled onto a node behind the vdom's back.
 //
 // It replaces the hover tooltip the SOQL table used for the same job — a
 // tooltip can't be scrolled, selected or copied from, which is exactly what a
 // long Description or error Message is wanted for. Styling lives in
 // media/main.css (.fc-cell-clamped / .fc-cell-expanded), next to .fc-tooltip.
 
-const CLAMPED_CLASS = 'fc-cell-clamped';
-const EXPANDED_CLASS = 'fc-cell-expanded';
+export const CLAMPED_CLASS = 'fc-cell-clamped';
+export const EXPANDED_CLASS = 'fc-cell-expanded';
+
+/**
+ * Whether a value is too long to fit on one clamped line of `maxChars`.
+ * @param {unknown} value
+ * @param {number} maxChars
+ */
+export function isLongCellValue(value, maxChars) {
+  // String() also folds null/undefined into the empty string.
+  return String(value ?? '').length > maxChars;
+}
+
+/**
+ * True while the user has text selected. A click that ends a drag-selection is
+ * the user copying the value, not asking to expand it — collapsing the cell
+ * under them would drop the selection they just made.
+ */
+export function isSelectingText() {
+  const selection = window.getSelection();
+  return !!selection && !selection.isCollapsed;
+}
 
 /**
  * Tag a cell whose value is too long to fit on one clamped line.
@@ -29,10 +54,7 @@ const EXPANDED_CLASS = 'fc-cell-expanded';
  * @param {number} maxChars Chars that fit on one line at this table's own cap.
  */
 export function markExpandableCell(td, value, maxChars) {
-  // String(): callers narrow `value` through a `value is string` predicate,
-  // which leaves it typed `never` in their else branch — a // @ts-check quirk.
-  // It also folds null/undefined into the empty string.
-  if (String(value ?? '').length > maxChars) td.classList.add(CLAMPED_CLASS);
+  if (isLongCellValue(value, maxChars)) td.classList.add(CLAMPED_CLASS);
 }
 
 /**
@@ -41,11 +63,7 @@ export function markExpandableCell(td, value, maxChars) {
  * @returns {boolean} true when a cell was toggled.
  */
 export function toggleCellExpansion(target) {
-  // A click that ends a drag-selection is the user copying the value, not
-  // asking to expand it — collapsing the cell under them would drop the
-  // selection they just made.
-  const selection = window.getSelection();
-  if (selection && !selection.isCollapsed) return false;
+  if (isSelectingText()) return false;
   const td = target ? target.closest('.' + CLAMPED_CLASS) : null;
   if (!td) return false;
   td.classList.toggle(EXPANDED_CLASS);
