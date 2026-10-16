@@ -5,8 +5,9 @@
 // the table unreadable and pushed it past the panel edge. Cells are now clamped
 // to one line by CSS and unclamped on click, so what the renderer must get
 // right is the tagging (which cells are clamped) and the click routing (a
-// record-id link still opens the record, it does not expand).
-import { describe, expect, it, vi } from 'vitest';
+// record-id link still opens the record, it does not expand). The 🔍 beside a
+// record Id hands it to the SOQL tab's Record Detail instead.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createTableRenderer } = await import('./table-rendering');
 
@@ -16,7 +17,11 @@ const labels = {
   statusNoMatchingRows: 'No matching rows',
   statusRows: (n: number) => `${n} rows`,
   statusFilteredRows: (n: number, total: number) => `${n} of ${total}`,
+  tooltipShowRecordDetail: 'Show every field of this record (editable)',
 };
+
+type TestWindow = { __setTooltip?: unknown; __showRecordDetail?: unknown };
+const testWindow = window as unknown as TestWindow;
 
 const SHORT = 'Closed Won';
 const LONG = 'x'.repeat(200);
@@ -42,6 +47,17 @@ function click(el: Element) {
 }
 
 describe('monitoring table long values', () => {
+  beforeEach(() => {
+    testWindow.__setTooltip = (el: HTMLElement, text: string) => {
+      el.setAttribute('data-tooltip', text);
+      el.setAttribute('aria-label', text);
+    };
+  });
+  afterEach(() => {
+    delete testWindow.__setTooltip;
+    delete testWindow.__showRecordDetail;
+  });
+
   it('clamps only the values too long to fit', () => {
     const { cells } = render([[SHORT, LONG]]);
 
@@ -74,5 +90,28 @@ describe('monitoring table long values', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'openRecord', recordId });
     // The click must not also expand the cell it happened inside.
     expect(cells[0].classList.contains('fc-cell-expanded')).toBe(false);
+  });
+
+  it('hands a record id to the Record Detail from its 🔍, without opening the browser', () => {
+    const recordId = '001000000000001AAA';
+    const showDetail = vi.fn();
+    testWindow.__showRecordDetail = showDetail;
+    const { cells, vscode } = render([[recordId, LONG]]);
+
+    const btn = cells[0].querySelector('.query-record-detail') as HTMLElement;
+    expect(btn.getAttribute('aria-label')).toBe(labels.tooltipShowRecordDetail);
+    click(btn);
+
+    expect(showDetail).toHaveBeenCalledWith(recordId);
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'openRecord' }),
+    );
+    expect(cells[0].classList.contains('fc-cell-expanded')).toBe(false);
+  });
+
+  it('renders no 🔍 for a cell that is not a record id', () => {
+    const { wrapper } = render([[SHORT, LONG]]);
+
+    expect(wrapper.querySelector('.query-record-detail')).toBeNull();
   });
 });

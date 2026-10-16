@@ -32,6 +32,7 @@ window.MonitoringLabels = {
   labelChartType: 'Chart type',
   labelStacked: 'Stacked bars',
   labelNotifyOnIncrease: 'Notify on record count increase',
+  tooltipShowRecordDetail: 'Show every field of this record (editable)',
   labelRefreshInterval: 'Auto-refresh (seconds, 0 = off)',
   placeholderName: 'My Chart',
   placeholderDescription: 'What this chart shows...',

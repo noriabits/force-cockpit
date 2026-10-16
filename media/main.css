@@ -940,6 +940,28 @@ td.fc-cell-expanded {
   cursor: zoom-out;
 }
 
+/* 🔍 → Record Detail, beside a record-Id link in a results table (SOQL
+   results, Monitoring table cards). Takes its space permanently (visibility,
+   not display) so hovering a row never reflows the cell; revealed for the
+   whole row so it can be reached without first hovering the exact Id. A click
+   calls window.__showRecordDetail(id), defined by the Record Detail bundle. */
+.query-record-detail {
+  visibility: hidden;
+  margin-left: 4px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+tr:hover .query-record-detail,
+.query-record-detail:focus-visible {
+  visibility: visible;
+}
+
 /* Card description */
 .card-description {
   font-size: 12px;

@@ -1,6 +1,8 @@
 // @ts-check
 // HTML-table rendering for the monitoring dashboard: header build, sort headers,
-// per-table filter + `X of Y` match counter, and record-id link cells. The
+// per-table filter + `X of Y` match counter, and record-id link cells (a plain
+// click opens Salesforce; the 🔍 beside it opens the SOQL tab's Record Detail
+// through `window.__showRecordDetail`, defined by that bundle). The
 // render-state stash (`wrapper._tableState`) drives both the filter input and
 // sort-header clicks, so the filter text + sort persist across auto-refresh.
 import { isSalesforceRecordId } from '../../../../utils/salesforce';
@@ -26,6 +28,21 @@ export function createTableRenderer(ctx) {
   const win = /** @type {any} */ (window);
 
   /**
+   * The 🔍 shown on row hover (`.query-record-detail`, styled in media/main.css
+   * and shared with the SOQL results table).
+   * @param {string} recordId
+   */
+  function buildDetailButton(recordId) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'query-record-detail';
+    btn.dataset.recordId = recordId;
+    btn.textContent = '🔍';
+    win.__setTooltip(btn, L.tooltipShowRecordDetail);
+    return btn;
+  }
+
+  /**
    * @param {HTMLElement} tbody
    * @param {(string | null)[][]} rows
    * @param {number} sortCol
@@ -46,6 +63,7 @@ export function createTableRenderer(ctx) {
           a.dataset.recordId = cell;
           a.textContent = cell;
           td.appendChild(a);
+          td.appendChild(buildDetailButton(cell));
         } else {
           td.textContent = cell;
           // CSS clamps the cell to one ellipsized line (.monitoring-table-td);
@@ -117,6 +135,11 @@ export function createTableRenderer(ctx) {
 
       scrollEl.addEventListener('click', (event) => {
         const target = /** @type {HTMLElement} */ (event.target);
+        if (target.classList.contains('query-record-detail')) {
+          const recordId = target.getAttribute('data-record-id');
+          if (recordId) win.__showRecordDetail?.(recordId);
+          return;
+        }
         if (target.tagName === 'A' && target.classList.contains('monitoring-record-link')) {
           event.preventDefault();
           const recordId = target.getAttribute('data-record-id');

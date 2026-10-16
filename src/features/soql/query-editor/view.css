@@ -323,26 +323,6 @@
   text-decoration: underline;
 }
 
-/* 🔍 → Record Detail. Takes its space permanently (visibility, not display)
-   so hovering a row never reflows the cell; revealed for the whole row so it
-   can be reached without first hovering the exact Id. */
-.query-record-detail {
-  visibility: hidden;
-  margin-left: 4px;
-  padding: 0 2px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
-  vertical-align: middle;
-}
-
-#results-table tr:hover .query-record-detail,
-.query-record-detail:focus-visible {
-  visibility: visible;
-}
-
 /* SOQL query error box: the verbatim Salesforce message, then any diagnostics
    worked out host-side. The raw message keeps .error-box's pre-wrap so its caret
    line and column marker still line up; the diagnostics below it read as prose. */
