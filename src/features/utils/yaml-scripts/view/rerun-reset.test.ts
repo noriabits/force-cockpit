@@ -75,7 +75,7 @@ describe('re-running a script', () => {
     expect(executeBtn().disabled).toBe(true);
   });
 
-  it('ignores the late output of a run that was cancelled and re-run', () => {
+  it('ignores the late output of a run that was cancelled and re-run', async () => {
     executeBtn().click();
     const first = lastOpId();
     document.querySelector<HTMLButtonElement>('.action-cancel-btn')!.click();
@@ -85,6 +85,8 @@ describe('re-running a script', () => {
     deliver('scriptLogChunk', { opId: first, chunk: 'old run\n' });
     deliver('scriptLogChunk', { opId: second, chunk: 'new run\n' });
     fail(first);
+    // Log chunks are painted once per animation frame.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(output().textContent).toBe('new run\n');
     expect(output().classList.contains('yaml-log-output--error')).toBe(false);

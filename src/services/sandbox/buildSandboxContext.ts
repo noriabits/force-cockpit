@@ -6,6 +6,7 @@ import xmlFormat from 'xml-formatter';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import type { ConnectionManager, DebuggingOptions } from '../../salesforce/connection';
 import { runTerminalCommand } from '../../utils/terminalCommand';
+import { createLineBuffer } from '../../utils/terminalOutput';
 import { isHttpMethod, VALID_METHODS, type RestCallService } from '../rest/RestCallService';
 import { assertApexSuccess, filterUserDebugLines } from '../apex/apexUtils';
 import { xml } from './XmlHelper';
@@ -116,8 +117,15 @@ function makeRunFn(
   signal: AbortSignal | undefined,
   log: (...args: unknown[]) => void,
 ) {
-  return (cmd: string) =>
-    runTerminalCommand(cmd, workspaceRoot, signal, (chunk) => log(chunk.replace(/\n$/, '')));
+  return async (cmd: string) => {
+    // CLI progress output arrives as many tiny chunks; log whole clean lines.
+    const lines = createLineBuffer((line) => log(line));
+    try {
+      return await runTerminalCommand(cmd, workspaceRoot, signal, lines.push);
+    } finally {
+      lines.flush();
+    }
+  };
 }
 
 function xmlEscape(s: string): string {

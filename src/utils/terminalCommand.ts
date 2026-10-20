@@ -34,6 +34,10 @@ export function runTerminalCommand(
   return new Promise((resolve) => {
     const child = spawn(spawnCmd, spawnArgs, {
       cwd: workspaceRoot || undefined,
+      // Output lands in a log pane, not a terminal. CI mode makes CLIs print
+      // append-only lines instead of redrawing in place — `sf project deploy`
+      // otherwise reprints its whole progress block every second.
+      env: { ...process.env, CI: process.env.CI ?? 'true' },
     });
 
     let settled = false;

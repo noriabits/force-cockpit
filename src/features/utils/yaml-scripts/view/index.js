@@ -32,7 +32,7 @@ import {
   const opIdToScriptId = new Map();
   /** @type {Map<string, string>} Maps scriptId → opId of its most recent run */
   const latestOpByScript = new Map();
-  /** @type {Map<string, string>} Maps opId → accumulated log text (memory-based, not DOM) */
+  /** @type {Map<string, string>} Maps opId → streamed log text not yet painted (a paint is queued while present) */
   const scriptLogContent = new Map();
   /** @type {Map<string, () => void>} */
   const executeStateUpdaters = new Map();
@@ -320,13 +320,21 @@ import {
     const output = /** @type {HTMLElement | null} */ (accordion.querySelector('.yaml-log-output'));
     if (!viewer || !output) return;
     viewer.style.display = 'block';
-    // Store log text in memory (not DOM) to avoid O(n²) string copying
-    const next = (scriptLogContent.get(opId) || '') + chunk;
-    scriptLogContent.set(opId, next);
-    // Follow new lines only when the user is already at the bottom (sticky).
-    const wasAtBottom = isScrolledToBottom(output);
-    output.textContent = next;
-    stickToBottom(output, wasAtBottom);
+    // Append at most once per frame: a chatty CLI sends hundreds of chunks a
+    // second, and rewriting the whole <pre> for each one froze the panel.
+    const pending = scriptLogContent.get(opId);
+    scriptLogContent.set(opId, (pending ?? '') + chunk);
+    if (pending !== undefined) return;
+    requestAnimationFrame(() => {
+      const text = scriptLogContent.get(opId);
+      scriptLogContent.delete(opId);
+      // The run may have finished (and painted its final log) meanwhile.
+      if (text === undefined || latestOpByScript.get(scriptId) !== opId) return;
+      // Follow new lines only when the user is already at the bottom (sticky).
+      const wasAtBottom = isScrolledToBottom(output);
+      output.append(text);
+      stickToBottom(output, wasAtBottom);
+    });
   }
 
   /** @param {any} data */
